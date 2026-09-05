@@ -105,6 +105,12 @@ Default mode is preparation only. Execution requires all of:
 
 The guard refuses Ethereum mainnet (`1`) and Base mainnet (`8453`) writes. Deposit and withdraw are preparation-only to avoid token-spend surprises.
 
+## Hackathon deployment notes
+
+- Live Arc Testnet core addresses and verification: [`docs/ARC_DEPLOYMENT.md`](docs/ARC_DEPLOYMENT.md)
+- The Graph provider/submission path: [`docs/THE_GRAPH_TRACK.md`](docs/THE_GRAPH_TRACK.md)
+- Arc RPC compatibility shim for full canonical event coverage: [`infra/arc-rpc-proxy`](infra/arc-rpc-proxy)
+
 ## Example Agent Prompts
 
 Codex:
