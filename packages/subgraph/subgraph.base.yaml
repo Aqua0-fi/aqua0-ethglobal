@@ -47,6 +47,8 @@ dataSources:
       abis:
         - name: VaultRegistry
           file: ./abis/VaultRegistry.json
+        - name: AssetVault
+          file: ./abis/AssetVault.json
       eventHandlers:
         - event: StrategyClassRegistered(indexed bytes32,indexed uint256)
           handler: handleStrategyClassRegistered
