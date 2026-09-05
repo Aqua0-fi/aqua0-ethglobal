@@ -8,6 +8,7 @@ services:
       - "127.0.0.1:8300:3000"
     environment:
       GRAPH_ENDPOINT: ${GRAPH_ENDPOINT}
+      GRAPH_NETWORK: ${GRAPH_NETWORK:-arc-testnet}
       GRAPH_AUTH_TOKEN: ${GRAPH_AUTH_TOKEN:-}
       WRITE_RPC_URL: ${WRITE_RPC_URL:-}
       WRITE_CHAIN_ID: ${WRITE_CHAIN_ID:-}

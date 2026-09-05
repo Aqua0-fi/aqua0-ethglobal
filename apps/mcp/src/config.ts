@@ -18,6 +18,7 @@ export function readMcpConfig(
   const transport = readTransport(env, argv);
   return {
     graphEndpoint,
+    ...(env.GRAPH_NETWORK ? { graphNetwork: env.GRAPH_NETWORK } : {}),
     ...(env.GRAPH_AUTH_TOKEN ? { graphAuthToken: env.GRAPH_AUTH_TOKEN } : {}),
     ...(env.WRITE_RPC_URL ? { writeRpcUrl: env.WRITE_RPC_URL } : {}),
     ...(env.WRITE_CHAIN_ID ? { writeChainId: parsePositiveInt(env.WRITE_CHAIN_ID, "WRITE_CHAIN_ID") } : {}),

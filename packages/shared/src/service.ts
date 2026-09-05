@@ -31,6 +31,7 @@ export type Aqua0ServiceConfig = WriteConfig & {
   graphEndpoint: string;
   graphAuthToken?: string;
   graphTimeoutMs?: number;
+  graphNetwork?: string;
   fetch?: FetchLike;
 };
 
@@ -40,8 +41,8 @@ export type Aqua0Health = {
   graphReachable: boolean;
   graphError?: string;
   graphBlockNumber?: string;
-  network: typeof ARC_TESTNET.graphNetwork;
-  chainId: typeof ARC_TESTNET.chainId;
+  network: string;
+  chainId?: number;
 };
 
 export type Aqua0Info = {
@@ -216,8 +217,8 @@ export class Aqua0Service {
         ...(data._meta?.block?.number !== undefined
           ? { graphBlockNumber: data._meta.block.number.toString() }
           : {}),
-        network: ARC_TESTNET.graphNetwork,
-        chainId: ARC_TESTNET.chainId
+        network: this.#config.graphNetwork ?? ARC_TESTNET.graphNetwork,
+        ...(this.#config.writeChainId ? { chainId: this.#config.writeChainId } : {})
       };
     } catch (error) {
       return {
@@ -225,8 +226,8 @@ export class Aqua0Service {
         graphConfigured: this.#config.graphEndpoint.trim().length > 0,
         graphReachable: false,
         graphError: graphErrorMessage(error),
-        network: ARC_TESTNET.graphNetwork,
-        chainId: ARC_TESTNET.chainId
+        network: this.#config.graphNetwork ?? ARC_TESTNET.graphNetwork,
+        ...(this.#config.writeChainId ? { chainId: this.#config.writeChainId } : {})
       };
     }
   }
