@@ -207,8 +207,11 @@ async function readJsonFile<T>(path: string): Promise<T> {
 
 function parsePositiveInt(value: string, field: string): number {
   const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-    throw new Error(`${field} must be a positive integer`);
+  const max = field === "PORT" ? 65535 : Number.MAX_SAFE_INTEGER;
+  if (!Number.isSafeInteger(parsed) || parsed <= 0 || parsed > max) {
+    throw new Error(
+      field === "PORT" ? "PORT must be an integer from 1 to 65535" : `${field} must be a positive integer`
+    );
   }
   return parsed;
 }

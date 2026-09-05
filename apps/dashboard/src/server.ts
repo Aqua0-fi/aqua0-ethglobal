@@ -207,6 +207,7 @@ function sendJson(response: ServerResponse, status: number, value: unknown): voi
   response.writeHead(status, {
     ...securityHeaders,
     "content-type": "application/json; charset=utf-8",
+    "cache-control": "no-store",
     "content-length": Buffer.byteLength(body).toString()
   });
   response.end(body);
