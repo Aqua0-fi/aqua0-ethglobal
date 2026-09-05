@@ -1,11 +1,13 @@
 const required = ["GRAPH_ENDPOINT"];
 const optional = [
+  "GRAPH_NETWORK",
   "GRAPH_AUTH_TOKEN",
   "WRITE_RPC_URL",
   "WRITE_CHAIN_ID",
   "VAULT_REGISTRY_ADDRESS",
   "MCP_WRITE_MODE",
   "WRITE_PRIVATE_KEY",
+  "MCP_TRANSPORT",
   "HOST",
   "PORT"
 ];
@@ -30,6 +32,15 @@ if (
   process.env.MCP_WRITE_MODE !== "execute"
 ) {
   console.error("MCP_WRITE_MODE must be prepare or execute");
+  process.exit(1);
+}
+
+if (
+  process.env.MCP_TRANSPORT &&
+  process.env.MCP_TRANSPORT !== "stdio" &&
+  process.env.MCP_TRANSPORT !== "http"
+) {
+  console.error("MCP_TRANSPORT must be stdio or http");
   process.exit(1);
 }
 
