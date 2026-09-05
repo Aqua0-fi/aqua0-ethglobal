@@ -85,15 +85,21 @@ function sortLogs(a, b) {
 
 async function handleOne(request) {
   if (!request || request.jsonrpc !== "2.0" || typeof request.method !== "string") {
-    return { jsonrpc: "2.0", id: request?.id ?? null, error: { code: -32600, message: "Invalid Request" } };
+    return {
+      jsonrpc: "2.0",
+      id: request && Object.hasOwn(request, "id") ? request.id : null,
+      error: { code: -32600, message: "Invalid Request" }
+    };
   }
 
+  const isNotification = !Object.hasOwn(request, "id");
   const filter = request.method === "eth_getLogs" ? request.params?.[0] : undefined;
   const topicOr = Array.isArray(filter?.topics?.[0]) ? filter.topics[0] : undefined;
 
   if (!topicOr || topicOr.length <= maxTopicOr) {
     const response = await rpc(request);
-    return { ...response, id: request.id ?? null };
+    if (isNotification) return null;
+    return { ...response, id: request.id };
   }
 
   const logs = [];
@@ -101,25 +107,50 @@ async function handleOne(request) {
     const chunk = topicOr.slice(i, i + maxTopicOr);
     const splitFilter = { ...filter, topics: [chunk, ...(filter.topics?.slice(1) ?? [])] };
     const response = await rpc({ ...request, params: [splitFilter, ...(request.params?.slice(1) ?? [])] });
-    if (response.error) return { jsonrpc: "2.0", id: request.id ?? null, error: response.error };
+    if (response.error) {
+      if (isNotification) return null;
+      return { jsonrpc: "2.0", id: request.id, error: response.error };
+    }
     if (!Array.isArray(response.result)) {
-      return { jsonrpc: "2.0", id: request.id ?? null, error: { code: -32603, message: "Invalid eth_getLogs upstream result" } };
+      if (isNotification) return null;
+      return {
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: -32603, message: "Invalid eth_getLogs upstream result" }
+      };
     }
     logs.push(...response.result);
   }
 
+  if (isNotification) return null;
   const unique = [...new Map(logs.map((log) => [logKey(log), log])).values()].sort(sortLogs);
-  return { jsonrpc: "2.0", id: request.id ?? null, result: unique };
+  return { jsonrpc: "2.0", id: request.id, result: unique };
 }
 
 async function handlePayload(payload) {
   if (Array.isArray(payload)) {
+    if (payload.length === 0) {
+      return { jsonrpc: "2.0", id: null, error: { code: -32600, message: "Invalid Request" } };
+    }
     const out = [];
     // Deliberately sequential: Arc's public RPC is rate-limited and Graph already parallelizes requests.
-    for (const request of payload) out.push(await handleOne(request));
-    return out;
+    for (const request of payload) {
+      const response = await handleOne(request);
+      if (response !== null) out.push(response);
+    }
+    return out.length > 0 ? out : null;
   }
   return handleOne(payload);
+}
+
+function sendJsonRpc(res, payload) {
+  if (payload === null) {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+  res.writeHead(200, { "content-type": "application/json" });
+  res.end(JSON.stringify(payload));
 }
 
 const server = http.createServer(async (req, res) => {
@@ -134,17 +165,30 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+
+  let payload;
   try {
-    const chunks = [];
-    for await (const chunk of req) chunks.push(chunk);
-    const payload = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-    const result = await handlePayload(payload);
-    res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify(result));
+    payload = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    sendJsonRpc(res, {
+      jsonrpc: "2.0",
+      id: null,
+      error: { code: -32700, message: "Parse error" }
+    });
+    return;
+  }
+
+  try {
+    sendJsonRpc(res, await handlePayload(payload));
   } catch (error) {
     const message = error instanceof Error ? error.message : "proxy error";
-    res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32603, message } }));
+    sendJsonRpc(res, {
+      jsonrpc: "2.0",
+      id: null,
+      error: { code: -32603, message }
+    });
   }
 });
 
