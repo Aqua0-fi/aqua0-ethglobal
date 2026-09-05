@@ -259,7 +259,7 @@ export class Aqua0Service {
       vaults: VaultEntity[];
     }>(
       `query Aqua0Balance($lp: Bytes!) {
-        lpVaultPositions(first: 1000, where: { lp: $lp }, orderBy: updatedAtTimestamp, orderDirection: desc) {
+        lpVaultPositions: lpvaultPositions(first: 1000, where: { lp: $lp }, orderBy: updatedAtTimestamp, orderDirection: desc) {
           id vault lp network principal credit deployedByLp freePrincipal frontHeldPrincipal asyncHeld updatedAtBlock updatedAtTimestamp
         }
         vaults(first: 1000) {
@@ -313,7 +313,7 @@ export class Aqua0Service {
       vaults: VaultEntity[];
     }>(
       `query Aqua0Strategies($address: Bytes!) {
-        lpStrategyPositions(first: 1000, where: { lp: $address }, orderBy: updatedAtTimestamp, orderDirection: desc) {
+        lpStrategyPositions: lpstrategyPositions(first: 1000, where: { lp: $address }, orderBy: updatedAtTimestamp, orderDirection: desc) {
           id vault lp strategyId network committed deployedInto composition feeCheckpointRay updatedAtBlock updatedAtTimestamp
         }
         ownedStrategyVaults: strategyVaults(first: 1000, where: { strategist: $address, exists: true }, orderBy: updatedAtTimestamp, orderDirection: desc) {
