@@ -19,11 +19,13 @@ Required config:
 | --- | --- |
 | `GRAPH_ENDPOINT` | Required GraphQL endpoint for the Aqua0 subgraph. |
 | `GRAPH_AUTH_TOKEN` | Optional bearer token for Graph reads. Omitted from `info`. |
+| `GRAPH_NETWORK` | Human-readable network label reported by health/info, e.g. `arc-testnet` or `base`. |
 | `WRITE_RPC_URL` | RPC used to read `classForStrategy` and optionally execute writes. |
 | `WRITE_CHAIN_ID` | Chain id used in strategy key derivation and write guards. |
 | `VAULT_REGISTRY_ADDRESS` | Shape-C `VaultRegistry` address for strategy class reads/writes. |
 | `MCP_WRITE_MODE` | `prepare` or `execute`; defaults to `prepare`. |
 | `WRITE_PRIVATE_KEY` | Secret required only for guarded execution mode. Never logged or returned. |
+| `MCP_TRANSPORT` | `stdio` or `http`; defaults to stdio. |
 | `HOST`, `PORT` | HTTP MCP bind settings. |
 
 ## MCP Tools
@@ -81,7 +83,7 @@ pnpm --filter @aqua0/cli dev create-strategy --strategist 0x... --token0 0x... -
 pnpm --filter @aqua0/cli dev authorize --vault 0x... --strategy-id 123 --backing true
 ```
 
-CLI write commands honor the same `MCP_WRITE_MODE` guard as MCP. In `prepare` mode they return calldata. In `execute` mode they send only if the safety model allows it.
+CLI write commands honor the same `MCP_WRITE_MODE` guard as MCP. In `prepare` mode they return calldata. In `execute` mode they send only when the explicit chain/RPC execution guard passes.
 
 ## Strategy Key
 
