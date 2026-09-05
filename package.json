@@ -1,0 +1,19 @@
+{
+  "name": "aqua0-ethglobal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aqua0 ETHGlobal Continuity Graph MCP workspace",
+  "type": "module",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "check-env": "node scripts/check-env.mjs",
+    "clean": "pnpm -r clean",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}
