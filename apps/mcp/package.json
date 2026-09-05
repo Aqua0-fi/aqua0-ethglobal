@@ -10,8 +10,8 @@
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist",
     "dev": "tsx src/index.ts",
-    "lint": "tsc -p tsconfig.json --noEmit",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "lint": "pnpm --filter @aqua0/shared build && tsc -p tsconfig.json --noEmit",
+    "typecheck": "pnpm --filter @aqua0/shared build && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@aqua0/shared": "workspace:*",
