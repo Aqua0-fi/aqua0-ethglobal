@@ -1,0 +1,208 @@
+specVersion: 1.3.0
+indexerHints:
+  prune: auto
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum/contract
+    name: VaultFactory
+    network: arc-testnet
+    source:
+      address: "0x879C0c90205172a8DD66afB8124994D866372FBa"
+      abi: VaultFactory
+      startBlock: 60613306
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Vault
+        - VaultCreatedEvent
+      abis:
+        - name: VaultFactory
+          file: ./abis/VaultFactory.json
+        - name: AssetVault
+          file: ./abis/AssetVault.json
+        - name: Events
+          file: ./abis/Events.json
+      eventHandlers:
+        - event: VaultCreated(indexed address,indexed address,string,string)
+          handler: handleVaultCreated
+      file: ./src/vault-factory.ts
+  - kind: ethereum/contract
+    name: VaultRegistry
+    network: arc-testnet
+    source:
+      address: "0x9E094b21C4263e0BE5BEffa0f8296B3fd982fFFf"
+      abi: VaultRegistry
+      startBlock: 60613306
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Strategy
+        - VaultRegisteredEvent
+        - VaultDeregisteredEvent
+      abis:
+        - name: VaultRegistry
+          file: ./abis/VaultRegistry.json
+        - name: AssetVault
+          file: ./abis/AssetVault.json
+      eventHandlers:
+        - event: StrategyClassRegistered(indexed bytes32,indexed uint256)
+          handler: handleStrategyClassRegistered
+        - event: VaultRegistered(indexed address,indexed address)
+          handler: handleVaultRegistered
+        - event: VaultDeregistered(indexed address,indexed address)
+          handler: handleVaultDeregistered
+      file: ./src/vault-registry.ts
+  - kind: ethereum/contract
+    name: Composer
+    network: arc-testnet
+    source:
+      address: "0x656F28021a624aDfA0d92dDFdBb20577674aFEC7"
+      abi: Composer
+      startBlock: 60613306
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - ComposerExecutedEvent
+        - FrontLifecycleEvent
+      abis:
+        - name: Composer
+          file: ./abis/Composer.json
+      eventHandlers:
+        - event: ComposerExecuted(indexed address,indexed address,uint8,uint256,int256,uint256)
+          handler: handleComposerExecuted
+      file: ./src/composer.ts
+  - kind: ethereum/contract
+    name: FillerRegistry
+    network: arc-testnet
+    source:
+      address: "0xa8e08346DD7b6809C47A920c365bCC987Ea91297"
+      abi: FillerRegistry
+      startBlock: 60613306
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - FillerParticipant
+        - FillerParticipationSetEvent
+      abis:
+        - name: FillerRegistry
+          file: ./abis/FillerRegistry.json
+      eventHandlers:
+        - event: FillerParticipationSet(indexed address,bool,uint256)
+          handler: handleFillerParticipationSet
+      file: ./src/filler-registry.ts
+templates:
+  - kind: ethereum/contract
+    name: AssetVault
+    network: arc-testnet
+    source:
+      abi: Events
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Vault
+        - LPVaultPosition
+        - Strategy
+        - StrategyVault
+        - LPStrategyPosition
+      abis:
+        - name: Events
+          file: ./abis/Events.json
+        - name: AssetVault
+          file: ./abis/AssetVault.json
+      eventHandlers:
+        - event: VaultDeposit(indexed address,indexed address,indexed address,uint256)
+          handler: handleVaultDeposit
+        - event: VaultWithdraw(indexed address,indexed address,indexed address,address,uint256,uint256,uint256)
+          handler: handleVaultWithdraw
+        - event: ClassRegistered(indexed address,indexed uint256)
+          handler: handleClassRegistered
+        - event: ClassStrategistSet(indexed address,indexed uint256,indexed address)
+          handler: handleClassStrategistSet
+        - event: ClassPaused(indexed address,indexed uint256)
+          handler: handleClassPaused
+        - event: ClassUnpaused(indexed address,indexed uint256)
+          handler: handleClassUnpaused
+        - event: ClassCapitalDeployed(indexed address,indexed uint256,indexed address,uint256)
+          handler: handleClassCapitalDeployed
+        - event: ClassCapitalReturned(indexed address,indexed uint256,indexed address,uint256)
+          handler: handleClassCapitalReturned
+        - event: ClassAdapterSettled(indexed address,indexed uint256,indexed address,int256)
+          handler: handleClassAdapterSettled
+        - event: ClassVenueSettled(indexed address,indexed uint256,indexed address,int256)
+          handler: handleClassVenueSettled
+        - event: StrategyCommitmentSet(indexed address,indexed address,indexed uint256,bool)
+          handler: handleStrategyCommitmentSet
+        - event: StrategyCapitalSourced(indexed address,indexed uint256,indexed address,uint256)
+          handler: handleStrategyCapitalSourced
+        - event: StrategyCapitalReturned(indexed address,indexed uint256,indexed address,uint256)
+          handler: handleStrategyCapitalReturned
+        - event: StrategyDeployShortfall(indexed address,indexed uint256,indexed address,uint256)
+          handler: handleStrategyDeployShortfall
+        - event: StrategyReturnLoss(indexed address,indexed uint256,indexed address,uint256)
+          handler: handleStrategyReturnLoss
+        - event: StrategyPrincipalSold(indexed address,indexed uint256,indexed address,uint256)
+          handler: handleStrategyPrincipalSold
+        - event: StrategyFeeAccrued(indexed address,indexed uint256,indexed address,uint256)
+          handler: handleStrategyFeeAccrued
+        - event: ClassPnLReported(indexed address,indexed uint256,indexed uint256,int256,uint256)
+          handler: handleClassPnLReported
+        - event: ClassGuardianVeto(indexed address,indexed uint256,indexed address,string)
+          handler: handleClassGuardianVeto
+        - event: ClassClampHit(indexed address,indexed uint256,indexed uint256,int256,int256)
+          handler: handleClassClampHit
+        - event: ClassReconciliationMismatch(indexed address,indexed uint256,indexed bytes32,int256,int256,int256)
+          handler: handleClassReconciliationMismatch
+        - event: ClassBridgeSettled(indexed address,indexed uint256,indexed bytes32,bytes32,int256,int256)
+          handler: handleClassBridgeSettled
+        - event: ClassSettlementRequested(indexed address,indexed uint256,indexed address,uint256,uint256,bytes32,uint64,uint64)
+          handler: handleClassSettlementRequested
+        - event: ClassSettlementClaimed(indexed address,indexed uint256,indexed address,uint256,uint256,bool,address)
+          handler: handleClassSettlementClaimed
+        - event: CompositionConverted(indexed address,indexed uint256,indexed address,uint256)
+          handler: handleCompositionConverted
+        - event: FrontLocked(indexed address,indexed uint256,indexed bytes32,address,uint256)
+          handler: handleFrontLocked
+        - event: FrontCommitted(indexed address,indexed uint256,indexed bytes32)
+          handler: handleFrontCommitted
+        - event: FrontReleased(indexed address,indexed uint256,indexed bytes32,uint256)
+          handler: handleFrontReleased
+        - event: FrontCancelled(indexed address,indexed uint256,indexed bytes32,uint256)
+          handler: handleFrontCancelled
+        - event: FrontAborted(indexed address,indexed uint256,indexed bytes32,uint256)
+          handler: handleFrontAborted
+        - event: FrontObligationOpened(indexed address,indexed uint256,indexed bytes32,address,address,uint256,uint256)
+          handler: handleFrontObligationOpened
+        - event: FrontObligationSettled(indexed address,indexed uint256,indexed bytes32,address,uint256,uint256)
+          handler: handleFrontObligationSettled
+        - event: FrontObligationAborted(indexed address,indexed uint256,indexed bytes32,address,uint256,uint256,uint256)
+          handler: handleFrontObligationAborted
+        - event: FrontLandingUnderpaid(indexed address,indexed uint256,indexed bytes32,uint256,uint256)
+          handler: handleFrontLandingUnderpaid
+        - event: FrontLandingCredited(indexed address,indexed uint256,indexed bytes32,bytes32,uint256)
+          handler: handleFrontLandingCredited
+        - event: FrontLandingShortfall(indexed address,indexed uint256,indexed bytes32,bytes32,uint256)
+          handler: handleFrontLandingShortfall
+        - event: FrontingReleaseLimitSet(indexed address,uint256)
+          handler: handleFrontingReleaseLimitSet
+        - event: VenueOutflowLimitSet(indexed address,uint256)
+          handler: handleVenueOutflowLimitSet
+        - event: SegregatedFeesReconciled(indexed address,uint256)
+          handler: handleSegregatedFeesReconciled
+        - event: SetBoundsUpdated(indexed address,uint256,uint256)
+          handler: handleSetBoundsUpdated
+        - event: SettlementRouteSet(indexed address,indexed uint256,bytes32)
+          handler: handleSettlementRouteSet
+        - event: StrategyPnLClaimed(indexed address,indexed uint256,indexed address,address,uint256,uint256)
+          handler: handleStrategyPnLClaimed
+      file: ./src/asset-vault.ts
