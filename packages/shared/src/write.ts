@@ -385,6 +385,7 @@ export async function executeCreateStrategy(
       args: [prepared.strategyKey]
     });
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    assertReceiptSuccess(receipt, "registerStrategyClass", hash);
     receipts.push(formatReceipt("registerStrategyClass", tx.to, hash, receipt));
     classId = await readClassForStrategy(config, prepared.strategyKey);
     if (classId === 0n) {
@@ -401,6 +402,7 @@ export async function executeCreateStrategy(
       args: [classId, getAddress(prepared.normalized.strategist)]
     });
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    assertReceiptSuccess(receipt, "registerStrategy", hash);
     receipts.push(formatReceipt("registerStrategy", vault, hash, receipt));
   }
 
@@ -430,6 +432,7 @@ export async function executeAuthorizeStrategy(
     args: [parseUint(input.strategyId, "strategyId"), input.backing]
   });
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  assertReceiptSuccess(receipt, "setCommitment", hash);
 
   return {
     mode: "execute",
@@ -479,7 +482,10 @@ function makeChain(chainId: number, rpcUrl: string) {
   return defineChain({
     id: chainId,
     name: chainId === ARC_TESTNET.chainId ? "Arc Testnet" : "Local Anvil",
-    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    nativeCurrency:
+      chainId === ARC_TESTNET.chainId
+        ? { name: "USDC", symbol: "USDC", decimals: 6 }
+        : { name: "Ether", symbol: "ETH", decimals: 18 },
     rpcUrls: { default: { http: [rpcUrl] } }
   });
 }
@@ -529,6 +535,16 @@ function isLocalRpcUrl(value: string): boolean {
     );
   } catch {
     return false;
+  }
+}
+
+function assertReceiptSuccess(
+  receipt: { status: "success" | "reverted" },
+  stage: string,
+  hash: Hex
+): void {
+  if (receipt.status !== "success") {
+    throw new Error(`${stage} transaction ${hash} reverted`);
   }
 }
 
