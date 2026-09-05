@@ -72,6 +72,16 @@ It proves the key invariant with real Shape-C bytecode/state: one 100 USDC princ
 
 This is the fallback proof if the venue/FXSwap opcode workstream is not ready for a complete live fill. It is not presented as an Arc transaction.
 
+## Optional live 1 USDC Arc flow
+
+To make the Arc demo show non-zero USDC state, `scripts/prepare-arc-usdc-demo.sh` prints (but never sends) an approval, a 1 USDC Shape-C deposit, and commitment to the already-live ARS class. Sign those three prepared transactions with the demo wallet during the presentation if desired, then wait for The Graph and refresh the dashboard/MCP.
+
+```bash
+./scripts/prepare-arc-usdc-demo.sh
+```
+
+The script is deliberately preparation-only; no private key is read and no transaction is broadcast.
+
 ## 5. End with indexed state
 
 After any real state-changing demo transaction is mined, ask:
