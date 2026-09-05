@@ -8,7 +8,7 @@
     "clean": "rm -rf dist",
     "dev": "pnpm build && node dist/index.js",
     "lint": "pnpm --filter @aqua0/shared build && tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx --test \"test/**/*.test.ts\"",
+    "test": "pnpm --filter @aqua0/shared build && node --import tsx --test \"test/**/*.test.ts\"",
     "typecheck": "pnpm --filter @aqua0/shared build && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
