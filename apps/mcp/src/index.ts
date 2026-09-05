@@ -35,7 +35,7 @@ function createAqua0McpServer(config: McpConfig): McpServer {
       includeConfig: z
         .boolean()
         .optional()
-        .describe("Include public endpoint and write-mode configuration in the response")
+        .describe("Include non-secret endpoint origins and write-mode configuration in the response")
     },
     async ({ includeConfig }) => {
       const info = aqua0.info();

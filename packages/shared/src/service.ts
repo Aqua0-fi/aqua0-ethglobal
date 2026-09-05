@@ -50,8 +50,8 @@ export type Aqua0Info = {
   chain: typeof ARC_TESTNET;
   usdcErc20Interface: typeof USDC_ERC20_INTERFACE_ADDRESS;
   endpoints: {
-    graphEndpoint: string;
-    writeRpcUrl?: string;
+    graphOrigin: string;
+    writeRpcOrigin?: string;
   };
   write: {
     mode: WriteMode;
@@ -238,8 +238,10 @@ export class Aqua0Service {
       chain: ARC_TESTNET,
       usdcErc20Interface: USDC_ERC20_INTERFACE_ADDRESS,
       endpoints: {
-        graphEndpoint: this.#config.graphEndpoint,
-        ...(this.#config.writeRpcUrl ? { writeRpcUrl: this.#config.writeRpcUrl } : {})
+        graphOrigin: publicEndpointOrigin(this.#config.graphEndpoint),
+        ...(this.#config.writeRpcUrl
+          ? { writeRpcOrigin: publicEndpointOrigin(this.#config.writeRpcUrl) }
+          : {})
       },
       write: {
         mode: this.#config.mcpWriteMode ?? "prepare",
@@ -683,6 +685,18 @@ function compactRaw(input: Record<string, string | null | undefined>): Record<st
     }
   }
   return output;
+}
+
+export function publicEndpointOrigin(value: string): string {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return "configured";
+    }
+    return parsed.origin;
+  } catch {
+    return "configured";
+  }
 }
 
 function graphErrorMessage(error: unknown): string {
