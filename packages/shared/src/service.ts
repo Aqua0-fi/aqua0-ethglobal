@@ -134,7 +134,7 @@ type StrategyFeeAccruedEventEntity = {
   vault: string;
   strategyId: string;
   lp?: string | null;
-  assets: string;
+  credited: string;
 };
 
 type V4SwapSettledEventEntity = {
@@ -381,7 +381,7 @@ export class Aqua0Service {
           orderBy: timestamp
           orderDirection: desc
         ) {
-          id txHash blockNumber timestamp network vault strategyId lp assets
+          id txHash blockNumber timestamp network vault strategyId lp credited
         }
         vaults(first: 1000) {
           id address asset name symbol network sharedIdle totalDeployed vaultLiveTvl frontReservedAssets segregatedFees orphanedSegregatedFees paused updatedAtBlock updatedAtTimestamp
@@ -394,8 +394,8 @@ export class Aqua0Service {
     const byStrategy: Record<string, string> = {};
     for (const event of data.strategyFeeAccruedEvents) {
       const vault = normalizeAddress(event.vault);
-      byVault[vault] = addBigIntStrings([byVault[vault], event.assets]);
-      byStrategy[event.strategyId] = addBigIntStrings([byStrategy[event.strategyId], event.assets]);
+      byVault[vault] = addBigIntStrings([byVault[vault], event.credited]);
+      byStrategy[event.strategyId] = addBigIntStrings([byStrategy[event.strategyId], event.credited]);
     }
 
     return {
@@ -404,7 +404,7 @@ export class Aqua0Service {
       periodSeconds: periodSeconds ?? null,
       timestampGte: timestampGte?.toString() ?? null,
       totals: {
-        assets: addBigIntStrings(data.strategyFeeAccruedEvents.map((item) => item.assets)),
+        assets: addBigIntStrings(data.strategyFeeAccruedEvents.map((item) => item.credited)),
         byVault,
         byStrategy
       },
@@ -498,7 +498,7 @@ export class Aqua0Service {
           id vault strategyId network exists strategist paused committedBacking deployedAssets availableFor sharePriceRay settlementRoute updatedAtBlock updatedAtTimestamp
         }
         strategyFeeAccruedEvents(first: 1000, orderBy: timestamp, orderDirection: desc) {
-          id txHash blockNumber timestamp network vault strategyId lp assets
+          id txHash blockNumber timestamp network vault strategyId lp credited
         }
         v4SwapSettledEvents(first: 1000, orderBy: timestamp, orderDirection: desc) {
           id txHash blockNumber timestamp network adapter strategyId swapId token0 delta0 token1 delta1
@@ -535,7 +535,7 @@ export class Aqua0Service {
           data.strategyVaults.map((item) => item.committedBacking)
         ),
         availableFor: addBigIntStrings(data.strategyVaults.map((item) => item.availableFor)),
-        feesAccrued: addBigIntStrings(data.strategyFeeAccruedEvents.map((item) => item.assets))
+        feesAccrued: addBigIntStrings(data.strategyFeeAccruedEvents.map((item) => item.credited))
       },
       vaults: data.vaults.map(formatVault),
       strategyVaults: data.strategyVaults.map((item) => formatStrategyVault(item, vaults)),
