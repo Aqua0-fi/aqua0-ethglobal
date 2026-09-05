@@ -8,6 +8,7 @@ services:
       UPSTREAM_TIMEOUT_MS: "30000"
       RETRY_BASE_MS: "300"
       MAX_RETRIES: "8"
+      MIN_REQUEST_INTERVAL_MS: "300"
       PORT: "8545"
     networks:
       - graph-node

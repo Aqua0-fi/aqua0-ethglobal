@@ -6,6 +6,10 @@ const maxTopicOr = Number(process.env.MAX_TOPIC_OR ?? "8");
 const timeoutMs = Number(process.env.UPSTREAM_TIMEOUT_MS ?? "30000");
 const retryBaseMs = Number(process.env.RETRY_BASE_MS ?? "300");
 const maxRetries = Number(process.env.MAX_RETRIES ?? "8");
+const minRequestIntervalMs = Number(process.env.MIN_REQUEST_INTERVAL_MS ?? "300");
+
+let rpcQueue = Promise.resolve();
+let lastRpcStart = 0;
 
 if (!Number.isSafeInteger(port) || port <= 0 || port > 65535) throw new Error("Invalid PORT");
 if (!Number.isSafeInteger(maxTopicOr) || maxTopicOr <= 0) throw new Error("Invalid MAX_TOPIC_OR");
@@ -16,7 +20,7 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function rpc(req) {
+async function rpcDirect(req) {
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     const body = JSON.stringify({ ...req, id: upstreamId++ });
     const controller = new AbortController();
@@ -46,6 +50,18 @@ async function rpc(req) {
     }
   }
   throw new Error("Upstream retries exhausted");
+}
+
+function rpc(req) {
+  const task = rpcQueue.then(async () => {
+    const waitMs = Math.max(0, minRequestIntervalMs - (Date.now() - lastRpcStart));
+    if (waitMs > 0) await sleep(waitMs);
+    lastRpcStart = Date.now();
+    return rpcDirect(req);
+  });
+  // Keep the global queue alive even if one caller fails.
+  rpcQueue = task.catch(() => undefined);
+  return task;
 }
 
 function logKey(log) {
