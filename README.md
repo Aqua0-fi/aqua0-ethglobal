@@ -112,6 +112,7 @@ The guard refuses Ethereum mainnet (`1`) and Base mainnet (`8453`) writes. Depos
 - Arc RPC compatibility shim for full canonical event coverage: [`infra/arc-rpc-proxy`](infra/arc-rpc-proxy)
 - Architecture diagram: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - Continuity / pre-existing-vs-new scope: [`docs/CONTINUITY.md`](docs/CONTINUITY.md)
+- Judge/demo runbook and public MCP endpoint: [`docs/DEMO.md`](docs/DEMO.md)
 
 ## Example Agent Prompts
 

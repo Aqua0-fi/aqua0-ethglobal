@@ -1,0 +1,53 @@
+{
+  "network": "arc-testnet",
+  "chainId": 5042002,
+  "strategist": "0xBaA361817C8676b4A8a8C5e6fd050253f81f407C",
+  "strategies": [
+    {
+      "label": "FXSwap ARS",
+      "status": "live-class",
+      "strategyKey": "0x9b16e2b3242cc6236f104670890fcc491e9bd1dd25ce777d408790ad7f5d802b",
+      "classId": "1",
+      "token0": "0x3600000000000000000000000000000000000000",
+      "token1": "0xd8dE250970842A581f89E885dA0F5165037714Ef",
+      "vaults": [
+        "0x99c2ab427b29dB1Cc14D228d970596015d1C4429",
+        "0x8a3d6188C58d7877499592E179DfE3bd80c4F460"
+      ],
+      "transactions": [
+        {
+          "stage": "registerStrategyClass",
+          "hash": "0xdb9897c4c4fc59012276468af672921eebbe196812e7c226b9b5290e6e96a1bb",
+          "blockNumber": 60614265
+        },
+        {
+          "stage": "registerStrategy-usdc",
+          "hash": "0x79473bba53fb7109d656f7cc6bbc240345e6ff3727c61bfade4e72c93d2ef552",
+          "blockNumber": 60614270
+        },
+        {
+          "stage": "registerStrategy-argt",
+          "hash": "0x396c456a8ff4c7ed814360f72ef2d60b69381453dfa2e9214dd199641f04ff30",
+          "blockNumber": 60614273
+        }
+      ]
+    },
+    {
+      "label": "FXSwap BRL",
+      "status": "prepared-not-broadcast",
+      "strategyKey": "0x104b36f3ccc46a4d242bf7ff813a87f728eb5c74d6e83c83d2a7ef6834d2dad8",
+      "currentClassId": "0",
+      "token0": "0x3600000000000000000000000000000000000000",
+      "token1": "0xa9482a878A3784663512f0Bf8d0be17aD6DEA38E",
+      "vaults": [
+        "0x99c2ab427b29dB1Cc14D228d970596015d1C4429",
+        "0xEcB132648B781ec5742b582c526243Eeef900785"
+      ],
+      "nextTransaction": {
+        "to": "0x9E094b21C4263e0BE5BEffa0f8296B3fd982fFFf",
+        "functionName": "registerStrategyClass",
+        "data": "0xe27ae8f2104b36f3ccc46a4d242bf7ff813a87f728eb5c74d6e83c83d2a7ef6834d2dad8"
+      }
+    }
+  ]
+}
