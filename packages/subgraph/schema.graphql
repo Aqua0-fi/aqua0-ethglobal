@@ -1,0 +1,502 @@
+type Vault @entity(immutable: false) {
+  id: ID!
+  address: Bytes!
+  asset: Bytes
+  name: String
+  symbol: String
+  network: String!
+  createdAtTxHash: Bytes
+  createdAtBlock: BigInt
+  createdAtTimestamp: BigInt
+  sharedIdle: BigInt
+  totalDeployed: BigInt
+  vaultLiveTvl: BigInt
+  frontReservedAssets: BigInt
+  segregatedFees: BigInt
+  orphanedSegregatedFees: BigInt
+  paused: Boolean
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: BigInt!
+}
+
+type LPVaultPosition @entity(immutable: false) {
+  id: ID!
+  vault: Bytes!
+  lp: Bytes!
+  network: String!
+  principal: BigInt
+  credit: BigInt
+  deployedByLp: BigInt
+  freePrincipal: BigInt
+  frontHeldPrincipal: BigInt
+  asyncHeld: BigInt
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: BigInt!
+}
+
+type Strategy @entity(immutable: false) {
+  id: ID!
+  strategyId: BigInt!
+  strategyKey: Bytes
+  registry: Bytes
+  network: String!
+  firstSeenBlock: BigInt!
+  firstSeenTimestamp: BigInt!
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: BigInt!
+}
+
+type StrategyVault @entity(immutable: false) {
+  id: ID!
+  vault: Bytes!
+  strategyId: BigInt!
+  network: String!
+  exists: Boolean
+  strategist: Bytes
+  paused: Boolean
+  committedBacking: BigInt
+  deployedAssets: BigInt
+  availableFor: BigInt
+  sharePriceRay: BigInt
+  settlementRoute: Bytes
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: BigInt!
+}
+
+type LPStrategyPosition @entity(immutable: false) {
+  id: ID!
+  vault: Bytes!
+  lp: Bytes!
+  strategyId: BigInt!
+  network: String!
+  committed: Boolean
+  deployedInto: BigInt
+  composition: BigInt
+  feeCheckpointRay: BigInt
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: BigInt!
+}
+
+type FillerParticipant @entity(immutable: false) {
+  id: ID!
+  lp: Bytes!
+  network: String!
+  active: Boolean!
+  nonce: BigInt!
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: BigInt!
+}
+
+type VaultCreatedEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  asset: Bytes!
+  vault: Bytes!
+  name: String!
+  symbol: String!
+}
+
+type VaultRegisteredEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  asset: Bytes!
+  vault: Bytes!
+}
+
+type VaultDeregisteredEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  asset: Bytes!
+  vault: Bytes!
+}
+
+type VaultDepositEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  caller: Bytes!
+  receiver: Bytes!
+  assets: BigInt!
+}
+
+type VaultWithdrawalEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  caller: Bytes!
+  receiver: Bytes!
+  owner: Bytes!
+  assets: BigInt!
+}
+
+type StrategyCommitmentSetEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  lp: Bytes!
+  strategyId: BigInt!
+  committed: Boolean!
+}
+
+type StrategyCapitalSourcedEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  strategyId: BigInt!
+  venue: Bytes
+  amount: BigInt!
+}
+
+type StrategyCapitalReturnedEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  strategyId: BigInt!
+  venue: Bytes
+  amount: BigInt!
+}
+
+type StrategyDeployShortfallEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  strategyId: BigInt!
+  shortfall: BigInt!
+}
+
+type StrategyReturnLossEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  strategyId: BigInt!
+  amount: BigInt!
+}
+
+type StrategyPrincipalSoldEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  strategyId: BigInt!
+  lp: Bytes
+  assets: BigInt!
+}
+
+type StrategyFeeAccruedEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  strategyId: BigInt!
+  lp: Bytes
+  assets: BigInt!
+}
+
+type CompositionConvertedEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  strategyId: BigInt!
+  lp: Bytes!
+  assets: BigInt!
+}
+
+type ClassRegisteredEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  strategyId: BigInt!
+}
+
+type ClassStrategistSetEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  strategyId: BigInt!
+  strategist: Bytes!
+}
+
+type ClassPausedEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  strategyId: BigInt!
+}
+
+type ClassUnpausedEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  strategyId: BigInt!
+}
+
+type ClassCapitalDeployedEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  strategyId: BigInt!
+  venue: Bytes!
+  amount: BigInt!
+}
+
+type ClassCapitalReturnedEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  strategyId: BigInt!
+  venue: Bytes!
+  amount: BigInt!
+}
+
+type ClassAdapterSettledEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  strategyId: BigInt!
+  adapter: Bytes!
+  realizedPnL: BigInt!
+}
+
+type ClassPnLReportedEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  strategyId: BigInt!
+  pnl: BigInt!
+}
+
+type ClassVenueSettledEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  strategyId: BigInt!
+  venue: Bytes!
+  netToStrategy: BigInt!
+}
+
+type FrontLifecycleEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  strategyId: BigInt
+  lp: Bytes
+  frontId: Bytes
+  settlementId: Bytes
+  action: String!
+  amount: BigInt
+  shortfall: BigInt
+}
+
+type FrontLandingShortfallEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  strategyId: BigInt!
+  frontId: Bytes!
+  settlementId: Bytes!
+  shortfall: BigInt!
+}
+
+type V4SwapSettledEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  adapter: Bytes!
+  strategyId: BigInt!
+  swapId: Bytes!
+  token0: Bytes!
+  delta0: BigInt!
+  token1: Bytes!
+  delta1: BigInt!
+}
+
+type AquaStrategyShippedEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  adapter: Bytes!
+  strategyId: Bytes!
+  tokens: [Bytes!]!
+  amounts: [BigInt!]!
+}
+
+type AquaStrategyDockedEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  adapter: Bytes!
+  strategyId: Bytes!
+  aquaHash: Bytes!
+  emergency: Boolean!
+}
+
+type AquaStrategyReshippedEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  adapter: Bytes!
+  strategyId: Bytes!
+  oldAquaHash: Bytes!
+  newAquaHash: Bytes!
+  amounts: [BigInt!]!
+}
+
+type AquaStrategyReconciledEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  adapter: Bytes!
+  strategyId: Bytes!
+  tokens: [Bytes!]!
+  shipped: [BigInt!]!
+  venueReturned: [BigInt!]!
+}
+
+type AquaStrategyForceClearedEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  adapter: Bytes!
+  strategyId: Bytes!
+  lastHash: Bytes!
+  dockAttempted: Boolean!
+}
+
+type ComposerExecutedEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  adapter: Bytes!
+  action: Int!
+  amount: BigInt!
+  pnl: BigInt!
+  nonce: BigInt!
+}
+
+type FillerParticipationSetEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  lp: Bytes!
+  active: Boolean!
+  nonce: BigInt!
+}

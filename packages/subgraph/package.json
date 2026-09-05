@@ -1,0 +1,22 @@
+{
+  "name": "@aqua0/subgraph",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "graph codegen subgraph.base.yaml && graph build subgraph.base.yaml",
+    "clean": "rm -rf build generated subgraph.arc.yaml",
+    "codegen": "graph codegen subgraph.base.yaml",
+    "graph:build": "graph build subgraph.base.yaml",
+    "graph:codegen": "graph codegen subgraph.base.yaml",
+    "lint": "graph build subgraph.base.yaml",
+    "typecheck": "graph codegen subgraph.base.yaml && graph build subgraph.base.yaml",
+    "generate:arc": "node scripts/generate-arc-manifest.mjs"
+  },
+  "dependencies": {
+    "@graphprotocol/graph-ts": "^0.38.2"
+  },
+  "devDependencies": {
+    "@graphprotocol/graph-cli": "^0.98.1"
+  }
+}

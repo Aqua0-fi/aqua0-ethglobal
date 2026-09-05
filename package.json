@@ -9,6 +9,8 @@
     "build": "pnpm -r build",
     "check-env": "node scripts/check-env.mjs",
     "clean": "pnpm -r clean",
+    "graph:build": "pnpm --filter @aqua0/subgraph graph:build",
+    "graph:codegen": "pnpm --filter @aqua0/subgraph graph:codegen",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck"
   },

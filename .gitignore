@@ -9,3 +9,5 @@ npm-debug.log*
 yarn-debug.log*
 coverage/
 .DS_Store
+packages/subgraph/build/
+packages/subgraph/generated/
