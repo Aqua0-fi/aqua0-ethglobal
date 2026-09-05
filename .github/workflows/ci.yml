@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "rithik/**"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PUBLIC_ARC_VAULT_FACTORY: "0x879C0c90205172a8DD66afB8124994D866372FBa"
+      PUBLIC_ARC_VAULT_REGISTRY: "0x9E094b21C4263e0BE5BEffa0f8296B3fd982fFFf"
+      PUBLIC_ARC_COMPOSER: "0x656F28021a624aDfA0d92dDFdBb20577674aFEC7"
+      PUBLIC_ARC_FILLER_REGISTRY: "0xa8e08346DD7b6809C47A920c365bCC987Ea91297"
+      PUBLIC_ARC_START_BLOCK: "60613306"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm typecheck
+      - run: pnpm build
+      - run: pnpm lint
+      - run: pnpm --filter @aqua0/subgraph test:required-events
+      - run: pnpm --filter @aqua0/subgraph generate:arc
+      - run: pnpm --filter @aqua0/subgraph exec graph build subgraph.arc.yaml
