@@ -481,78 +481,112 @@ export class Aqua0Service {
   }
 
   async getProtocolSnapshot() {
-    const data = await this.#graph.query<{
-      vaults: VaultEntity[];
-      strategyVaults: StrategyVaultEntity[];
-      strategyFeeAccruedEvents: StrategyFeeAccruedEventEntity[];
-      v4SwapSettledEvents: V4SwapSettledEventEntity[];
-      aquaStrategyShippedEvents: AquaLifecycleEventEntity[];
-      aquaStrategyDockedEvents: AquaLifecycleEventEntity[];
-      aquaStrategyReshippedEvents: AquaLifecycleEventEntity[];
-      aquaStrategyReconciledEvents: AquaLifecycleEventEntity[];
-      aquaStrategyForceClearedEvents: AquaLifecycleEventEntity[];
-    }>(
-      `query Aqua0ProtocolSnapshot {
-        vaults(first: 1000, orderBy: updatedAtTimestamp, orderDirection: desc) {
-          id address asset name symbol network sharedIdle totalDeployed vaultLiveTvl frontReservedAssets segregatedFees orphanedSegregatedFees paused updatedAtBlock updatedAtTimestamp
-        }
-        strategyVaults(first: 1000, where: { exists: true }, orderBy: updatedAtTimestamp, orderDirection: desc) {
-          id vault strategyId network exists strategist paused committedBacking deployedAssets availableFor sharePriceRay settlementRoute updatedAtBlock updatedAtTimestamp
-        }
-        strategyFeeAccruedEvents(first: 1000, orderBy: timestamp, orderDirection: desc) {
-          id txHash blockNumber timestamp network vault strategyId lp credited
-        }
-        v4SwapSettledEvents(first: 1000, orderBy: timestamp, orderDirection: desc) {
-          id txHash blockNumber timestamp network adapter strategyId swapId token0 delta0 token1 delta1
-        }
-        aquaStrategyShippedEvents(first: 1000, orderBy: timestamp, orderDirection: desc) { id txHash blockNumber timestamp network adapter strategyId }
-        aquaStrategyDockedEvents(first: 1000, orderBy: timestamp, orderDirection: desc) { id txHash blockNumber timestamp network adapter strategyId }
-        aquaStrategyReshippedEvents(first: 1000, orderBy: timestamp, orderDirection: desc) { id txHash blockNumber timestamp network adapter strategyId }
-        aquaStrategyReconciledEvents(first: 1000, orderBy: timestamp, orderDirection: desc) { id txHash blockNumber timestamp network adapter strategyId }
-        aquaStrategyForceClearedEvents(first: 1000, orderBy: timestamp, orderDirection: desc) { id txHash blockNumber timestamp network adapter strategyId }
-      }`
-    );
-    const vaults = mapVaults(data.vaults);
+    const [
+      vaultsData,
+      strategyVaultsData,
+      feeEvents,
+      v4Swaps,
+      shipped,
+      docked,
+      reshipped,
+      reconciled,
+      forceCleared
+    ] = await Promise.all([
+      queryAllGraphEntities<VaultEntity>(
+        this.#graph,
+        "vaults",
+        "id address asset name symbol network sharedIdle totalDeployed vaultLiveTvl frontReservedAssets segregatedFees orphanedSegregatedFees paused updatedAtBlock updatedAtTimestamp"
+      ),
+      queryAllGraphEntities<StrategyVaultEntity>(
+        this.#graph,
+        "strategyVaults",
+        "id vault strategyId network exists strategist paused committedBacking deployedAssets availableFor sharePriceRay settlementRoute updatedAtBlock updatedAtTimestamp",
+        ", exists: true"
+      ),
+      queryAllGraphEntities<StrategyFeeAccruedEventEntity>(
+        this.#graph,
+        "strategyFeeAccruedEvents",
+        "id txHash blockNumber timestamp network vault strategyId lp credited"
+      ),
+      queryAllGraphEntities<V4SwapSettledEventEntity>(
+        this.#graph,
+        "v4SwapSettledEvents",
+        "id txHash blockNumber timestamp network adapter strategyId swapId token0 delta0 token1 delta1"
+      ),
+      queryAllGraphEntities<AquaLifecycleEventEntity>(
+        this.#graph,
+        "aquaStrategyShippedEvents",
+        "id txHash blockNumber timestamp network adapter strategyId"
+      ),
+      queryAllGraphEntities<AquaLifecycleEventEntity>(
+        this.#graph,
+        "aquaStrategyDockedEvents",
+        "id txHash blockNumber timestamp network adapter strategyId"
+      ),
+      queryAllGraphEntities<AquaLifecycleEventEntity>(
+        this.#graph,
+        "aquaStrategyReshippedEvents",
+        "id txHash blockNumber timestamp network adapter strategyId"
+      ),
+      queryAllGraphEntities<AquaLifecycleEventEntity>(
+        this.#graph,
+        "aquaStrategyReconciledEvents",
+        "id txHash blockNumber timestamp network adapter strategyId"
+      ),
+      queryAllGraphEntities<AquaLifecycleEventEntity>(
+        this.#graph,
+        "aquaStrategyForceClearedEvents",
+        "id txHash blockNumber timestamp network adapter strategyId"
+      )
+    ]);
+
+    vaultsData.sort(compareUpdatedDesc);
+    strategyVaultsData.sort(compareUpdatedDesc);
+    feeEvents.sort(compareTimestampDesc);
+    v4Swaps.sort(compareTimestampDesc);
+    shipped.sort(compareTimestampDesc);
+    docked.sort(compareTimestampDesc);
+    reshipped.sort(compareTimestampDesc);
+    reconciled.sort(compareTimestampDesc);
+    forceCleared.sort(compareTimestampDesc);
+
+    const vaults = mapVaults(vaultsData);
 
     return {
       source: "graph",
       counts: {
-        vaults: data.vaults.length,
-        activeStrategyVaults: data.strategyVaults.filter((item) => item.exists && !item.paused)
+        vaults: vaultsData.length,
+        activeStrategyVaults: strategyVaultsData.filter((item) => item.exists && !item.paused)
           .length,
-        feeEvents: data.strategyFeeAccruedEvents.length,
-        v4Swaps: data.v4SwapSettledEvents.length,
+        feeEvents: feeEvents.length,
+        v4Swaps: v4Swaps.length,
         aquaLifecycleEvents:
-          data.aquaStrategyShippedEvents.length +
-          data.aquaStrategyDockedEvents.length +
-          data.aquaStrategyReshippedEvents.length +
-          data.aquaStrategyReconciledEvents.length +
-          data.aquaStrategyForceClearedEvents.length
+          shipped.length + docked.length + reshipped.length + reconciled.length + forceCleared.length
       },
       totals: {
-        vaultLiveTvl: addBigIntStrings(data.vaults.map((item) => item.vaultLiveTvl)),
-        sharedIdle: addBigIntStrings(data.vaults.map((item) => item.sharedIdle)),
-        totalDeployed: addBigIntStrings(data.vaults.map((item) => item.totalDeployed)),
+        vaultLiveTvl: addBigIntStrings(vaultsData.map((item) => item.vaultLiveTvl)),
+        sharedIdle: addBigIntStrings(vaultsData.map((item) => item.sharedIdle)),
+        totalDeployed: addBigIntStrings(vaultsData.map((item) => item.totalDeployed)),
         committedBacking: addBigIntStrings(
-          data.strategyVaults.map((item) => item.committedBacking)
+          strategyVaultsData.map((item) => item.committedBacking)
         ),
-        availableFor: addBigIntStrings(data.strategyVaults.map((item) => item.availableFor)),
-        feesAccrued: addBigIntStrings(data.strategyFeeAccruedEvents.map((item) => item.credited))
+        availableFor: addBigIntStrings(strategyVaultsData.map((item) => item.availableFor)),
+        feesAccrued: addBigIntStrings(feeEvents.map((item) => item.credited))
       },
-      vaults: data.vaults.map(formatVault),
-      strategyVaults: data.strategyVaults.map((item) => formatStrategyVault(item, vaults)),
-      recentV4Swaps: data.v4SwapSettledEvents.slice(0, 20).map((event) => ({
+      vaults: vaultsData.map(formatVault),
+      strategyVaults: strategyVaultsData.map((item) => formatStrategyVault(item, vaults)),
+      recentV4Swaps: v4Swaps.slice(0, 20).map((event) => ({
         ...event,
         adapter: normalizeAddress(event.adapter),
         token0: normalizeAddress(event.token0),
         token1: normalizeAddress(event.token1)
       })),
       aquaLifecycle: {
-        shipped: data.aquaStrategyShippedEvents.slice(0, 20),
-        docked: data.aquaStrategyDockedEvents.slice(0, 20),
-        reshipped: data.aquaStrategyReshippedEvents.slice(0, 20),
-        reconciled: data.aquaStrategyReconciledEvents.slice(0, 20),
-        forceCleared: data.aquaStrategyForceClearedEvents.slice(0, 20)
+        shipped: shipped.slice(0, 20),
+        docked: docked.slice(0, 20),
+        reshipped: reshipped.slice(0, 20),
+        reconciled: reconciled.slice(0, 20),
+        forceCleared: forceCleared.slice(0, 20)
       }
     };
   }
@@ -685,6 +719,67 @@ function compactRaw(input: Record<string, string | null | undefined>): Record<st
     }
   }
   return output;
+}
+
+const GRAPH_PAGE_SIZE = 1000;
+const MAX_GRAPH_PAGES = 100;
+
+async function queryAllGraphEntities<T extends { id: string }>(
+  graph: GraphClient,
+  rootField: string,
+  selection: string,
+  extraWhere = ""
+): Promise<T[]> {
+  const all: T[] = [];
+  let cursor = "";
+
+  for (let page = 0; page < MAX_GRAPH_PAGES; page += 1) {
+    const data = await graph.query<Record<string, T[]>>(
+      `query Aqua0SnapshotPage($cursor: ID!) {
+        ${rootField}(first: ${GRAPH_PAGE_SIZE}, where: { id_gt: $cursor${extraWhere} }, orderBy: id, orderDirection: asc) {
+          ${selection}
+        }
+      }`,
+      { cursor }
+    );
+    const items = data[rootField];
+    if (!Array.isArray(items)) {
+      throw new Error(`Graph snapshot query did not return ${rootField}`);
+    }
+    all.push(...items);
+    if (items.length < GRAPH_PAGE_SIZE) {
+      return all;
+    }
+    const nextCursor = items.at(-1)?.id;
+    if (!nextCursor || nextCursor === cursor) {
+      throw new Error(`Graph snapshot pagination stalled for ${rootField}`);
+    }
+    cursor = nextCursor;
+  }
+
+  throw new Error(
+    `Graph snapshot exceeded ${GRAPH_PAGE_SIZE * MAX_GRAPH_PAGES} ${rootField} rows; refusing to return silently truncated totals`
+  );
+}
+
+function compareNumericStringDesc(a: string | null | undefined, b: string | null | undefined): number {
+  const av = a && /^\d+$/.test(a) ? BigInt(a) : 0n;
+  const bv = b && /^\d+$/.test(b) ? BigInt(b) : 0n;
+  return av === bv ? 0 : av > bv ? -1 : 1;
+}
+
+function compareTimestampDesc(
+  a: { timestamp: string },
+  b: { timestamp: string }
+): number {
+  return compareNumericStringDesc(a.timestamp, b.timestamp);
+}
+
+function compareUpdatedDesc(
+  a: { updatedAtTimestamp: string },
+  b: { updatedAtTimestamp: string }
+): number {
+  return compareNumericStringDesc(a.updatedAtTimestamp, b.updatedAtTimestamp);
 }
 
 export function publicEndpointOrigin(value: string): string {
