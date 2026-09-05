@@ -1,0 +1,21 @@
+services:
+  mcp:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.mcp
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8300:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      GRAPH_ENDPOINT: ${GRAPH_ENDPOINT}
+      GRAPH_AUTH_TOKEN: ${GRAPH_AUTH_TOKEN:-}
+      WRITE_RPC_URL: ${WRITE_RPC_URL:-}
+      WRITE_CHAIN_ID: ${WRITE_CHAIN_ID:-}
+      VAULT_REGISTRY_ADDRESS: ${VAULT_REGISTRY_ADDRESS:-}
+      MCP_WRITE_MODE: ${MCP_WRITE_MODE:-prepare}
+      WRITE_PRIVATE_KEY: ${WRITE_PRIVATE_KEY:-}
+      MCP_TRANSPORT: http
+      HOST: 0.0.0.0
+      PORT: 3000
