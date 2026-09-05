@@ -1,0 +1,18 @@
+# Public HTTPS wrapper for the Streamable HTTP MCP.
+# Replace the hostname with a DNS name that points at the AWS host.
+ethglobal-mcp.example.com {
+    # The MCP server is stateless and does not need a long-lived server->client SSE
+    # stream. Returning 405 for GET keeps SDK clients on POST-only Streamable HTTP
+    # and avoids reverse-proxy buffering/multiplexing issues.
+    @mcp_get {
+        method GET
+        path /mcp
+    }
+    respond @mcp_get 405
+
+    reverse_proxy 127.0.0.1:8300
+    encode gzip
+    header {
+        -Server
+    }
+}

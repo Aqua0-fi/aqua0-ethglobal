@@ -18,6 +18,8 @@ https://ethglobal-mcp.18-207-103-187.nip.io/health
 
 The public endpoint is **prepare-only**: it has no signing key and cannot broadcast transactions. Agent analytics are backed by `GRAPH_ENDPOINT` only.
 
+The current public endpoint has been SDK-smoke-tested over HTTPS with `health`, `protocol_snapshot`, `list_opportunities`, `graph_query`, and `prepare_create_strategy`. The reverse-proxy pattern is committed as `deploy/aws/Caddyfile.mcp.example`.
+
 ## 1. Show The Graph as the read layer
 
 Ask a Claude/Codex-style MCP client:
