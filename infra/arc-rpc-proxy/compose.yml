@@ -1,0 +1,19 @@
+services:
+  arc-rpc-proxy:
+    build: .
+    restart: unless-stopped
+    environment:
+      UPSTREAM_RPC: https://rpc.testnet.arc.network
+      MAX_TOPIC_OR: "8"
+      UPSTREAM_TIMEOUT_MS: "30000"
+      RETRY_BASE_MS: "300"
+      MAX_RETRIES: "8"
+      MIN_REQUEST_INTERVAL_MS: "300"
+      PORT: "8545"
+    networks:
+      - graph-node
+
+networks:
+  graph-node:
+    external: true
+    name: graph-node_default

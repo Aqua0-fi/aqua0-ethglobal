@@ -1,0 +1,25 @@
+{
+  "name": "@aqua0/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "aqua0-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "dev": "tsx src/index.ts",
+    "lint": "pnpm --filter @aqua0/shared build && tsc -p tsconfig.json --noEmit",
+    "typecheck": "pnpm --filter @aqua0/shared build && tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@aqua0/shared": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
