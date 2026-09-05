@@ -28,6 +28,7 @@ import {
   FrontObligationSettled,
   FrontReleased,
   FrontingReleaseLimitSet,
+  Paused,
   SegregatedFeesReconciled,
   SetBoundsUpdated,
   SettlementRouteSet,
@@ -39,6 +40,7 @@ import {
   StrategyPnLClaimed,
   StrategyPrincipalSold,
   StrategyReturnLoss,
+  Unpaused,
   VaultDeposit,
   VaultWithdraw,
   VenueOutflowLimitSet
@@ -101,6 +103,14 @@ function refreshLPState(vault: Address, lp: Address, strategyId: BigInt, event: 
 
 function sameAddress(left: Address, right: Address): boolean {
   return left.toHexString() == right.toHexString();
+}
+
+export function handleVaultPaused(event: Paused): void {
+  refreshVault(event.address, event);
+}
+
+export function handleVaultUnpaused(event: Unpaused): void {
+  refreshVault(event.address, event);
 }
 
 export function handleVaultDeposit(event: VaultDeposit): void {

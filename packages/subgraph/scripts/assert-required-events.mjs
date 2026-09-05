@@ -8,6 +8,9 @@ const eventsAbiPath = path.join(subgraphDir, "abis", "Events.json");
 const manifestPath = path.join(subgraphDir, "subgraph.base.yaml");
 
 const requiredEvents = [
+  "PausedAll",
+  "Paused",
+  "Unpaused",
   "VaultWithdraw",
   "StrategyCommitmentSet",
   "StrategyCapitalSourced",

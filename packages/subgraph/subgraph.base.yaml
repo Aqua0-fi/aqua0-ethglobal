@@ -28,6 +28,8 @@ dataSources:
       eventHandlers:
         - event: VaultCreated(indexed address,indexed address,string,string)
           handler: handleVaultCreated
+        - event: PausedAll(indexed address)
+          handler: handlePausedAll
       file: ./src/vault-factory.ts
   - kind: ethereum/contract
     name: VaultRegistry
@@ -174,6 +176,10 @@ templates:
         - name: AssetVault
           file: ./abis/AssetVault.json
       eventHandlers:
+        - event: Paused(address)
+          handler: handleVaultPaused
+        - event: Unpaused(address)
+          handler: handleVaultUnpaused
         - event: VaultDeposit(indexed address,indexed address,indexed address,uint256)
           handler: handleVaultDeposit
         - event: VaultWithdraw(indexed address,indexed address,indexed address,address,uint256,uint256,uint256)

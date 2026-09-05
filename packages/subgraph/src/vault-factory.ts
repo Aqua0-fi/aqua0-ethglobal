@@ -1,4 +1,4 @@
-import { VaultCreated } from "../generated/VaultFactory/VaultFactory";
+import { PausedAll, VaultCreated, VaultFactory } from "../generated/VaultFactory/VaultFactory";
 import { AssetVault as AssetVaultTemplate } from "../generated/templates";
 import { VaultCreatedEvent } from "../generated/schema";
 import { eventId, network, refreshVault } from "./common";
@@ -26,4 +26,13 @@ export function handleVaultCreated(event: VaultCreated): void {
   history.save();
 
   AssetVaultTemplate.create(event.params.vault);
+}
+
+export function handlePausedAll(event: PausedAll): void {
+  const factory = VaultFactory.bind(event.address);
+  const vaults = factory.try_vaults();
+  if (vaults.reverted) return;
+  for (let i = 0; i < vaults.value.length; i += 1) {
+    refreshVault(vaults.value[i], event);
+  }
 }
