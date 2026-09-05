@@ -1,3 +1,10 @@
+import { existsSync } from "node:fs";
+import { loadEnvFile } from "node:process";
+
+if (existsSync(".env")) {
+  loadEnvFile(".env");
+}
+
 const required = ["GRAPH_ENDPOINT"];
 const optional = [
   "GRAPH_NETWORK",

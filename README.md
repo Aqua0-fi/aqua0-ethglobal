@@ -7,6 +7,7 @@ Agentic terminal layer for Aqua0 Shape-C on Arc Testnet. The Graph is the load-b
 ```bash
 pnpm install
 cp .env.example .env
+# Fill GRAPH_ENDPOINT (and any write settings you want). check-env loads .env automatically.
 pnpm check-env
 pnpm typecheck
 pnpm build
