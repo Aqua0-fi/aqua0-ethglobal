@@ -1,49 +1,41 @@
 # Architecture
 
-Aqua0's terminal layer is built around Shape-C: shared-pool `AssetVault` liquidity coordinated through a `VaultRegistry` and indexed by The Graph.
-
-## Load-Bearing Graph Boundary
-
-Analytics flow only through the configured `GRAPH_ENDPOINT`.
-
 ```mermaid
-flowchart TD
-  Contracts[Existing Aqua0 Shape-C contracts]
-  Graph[The Graph subgraph]
-  Shared[packages/shared Graph client and services]
-  MCP[apps/mcp stdio or Streamable HTTP]
-  CLI[apps/cli]
-  Agent[Agentic terminal client]
-  Human[Human terminal operator]
+flowchart LR
+  U[Claude / Codex / terminal user] -->|natural language| M[Aqua0 MCP server]
+  U -->|direct commands| C[Aqua0 CLI]
 
-  Contracts --> Graph
-  Graph --> Shared
-  Shared --> MCP
-  Shared --> CLI
-  MCP --> Agent
-  CLI --> Human
+  M --> S[Typed Aqua0 service]
+  C --> S
+
+  S -->|analytics only| G[The Graph GraphQL]
+  G --> B[Base Shape-C subgraph]
+  G --> A[Arc Shape-C subgraph]
+
+  B --> BN[Base contracts]
+  A --> AN[Arc Testnet Shape-C contracts]
+
+  S -->|prepare / guarded execute| R[Arc JSON-RPC]
+  R --> AN
+
+  AN --> V1[USDC AssetVault]
+  AN --> V2[ARGt AssetVault]
+  AN --> V3[BRAt AssetVault]
+
+  P[Arc RPC topic-splitting proxy] --> ARPC[Official Arc Testnet RPC]
+  A -. indexing RPC .-> P
 ```
 
-The shared service queries current schema entities directly: `Vault`, `LPVaultPosition`, `LPStrategyPosition`, `StrategyVault`, `StrategyFeeAccruedEvent`, `V4SwapSettledEvent`, and Aqua lifecycle event entities. It returns raw integer strings plus indexed vault metadata. It does not infer decimals when the index does not know them.
+## Separation of concerns
 
-## Write Boundary
+- **The Graph is the read model.** Agent analytics never silently switch to RPC when a Graph query fails.
+- **Shape-C contracts are the write model.** Typed tools prepare exact current contract calls; guarded execution is restricted to Arc Testnet or local Anvil.
+- **MCP is the natural-language boundary.** The LLM performs intent interpretation and calls typed tools; Aqua0 does not ship another brittle text parser.
+- **The Arc RPC proxy is indexing infrastructure only.** It preserves full canonical event coverage while adapting the official Arc RPC's `eth_getLogs` topic-OR limit. It does not fabricate or cache chain data.
+- **Secrets stay out of the repository.** Graph query keys and signing keys are environment variables. The AWS MCP currently runs prepare-only.
 
-Write preparation uses minimal ABIs and `viem` encoding. `prepare_create_strategy` reads `classForStrategy(strategyKey)` from `VAULT_REGISTRY_ADDRESS` over `WRITE_RPC_URL`; this read is required because class ids must come from the registry, not local inference.
+## Demo state
 
-Execution is optional and tightly scoped:
+The Arc Testnet core is deployed with one registry/factory/composer/filler stack and three Shape-C vaults: USDC, ARGt, and BRAt. The same USDC vault can participate in multiple strategy classes, which is the onchain form of the shared-backing demo.
 
-- default `MCP_WRITE_MODE=prepare`
-- `create_strategy` and `authorize_strategy` are exposed only in execute mode
-- execution still refuses unless chain id is Arc Testnet `5042002` or the RPC URL is local Anvil
-- Ethereum mainnet `1` and Base mainnet `8453` are always refused
-- `WRITE_PRIVATE_KEY` is never included in `info`, logs, or tool output
-- deposit/withdraw remain prepare-only
-
-## Runtime Layers
-
-| Layer | Responsibility |
-| --- | --- |
-| `packages/shared` | Graph client, raw-unit analytics, strategy key derivation, calldata prep, execution guards. |
-| `apps/mcp` | Typed MCP tools over stdio or Streamable HTTP. |
-| `apps/cli` | Human CLI parity over the same shared service. |
-| `packages/subgraph` | Shape-C schema, mappings, and ABI assets. |
+The local Base-fork test in `scripts/test-shared-backing-fork.sh` deterministically proves the central invariant: a single 100 USDC principal position can commit to both an ARS strategy and a BRL strategy at 100 USDC backing each without splitting the principal into two isolated pools.

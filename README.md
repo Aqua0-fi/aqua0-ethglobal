@@ -110,6 +110,8 @@ The guard refuses Ethereum mainnet (`1`) and Base mainnet (`8453`) writes. Depos
 - Live Arc Testnet core addresses and verification: [`docs/ARC_DEPLOYMENT.md`](docs/ARC_DEPLOYMENT.md)
 - The Graph provider/submission path: [`docs/THE_GRAPH_TRACK.md`](docs/THE_GRAPH_TRACK.md)
 - Arc RPC compatibility shim for full canonical event coverage: [`infra/arc-rpc-proxy`](infra/arc-rpc-proxy)
+- Architecture diagram: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Continuity / pre-existing-vs-new scope: [`docs/CONTINUITY.md`](docs/CONTINUITY.md)
 
 ## Example Agent Prompts
 
