@@ -136,6 +136,7 @@ The guard refuses Ethereum mainnet (`1`) and Base mainnet (`8453`) writes. Depos
 
 ## Hackathon deployment notes
 
+- Live Arc judge dashboard: `https://ethglobal-demo.18-207-103-187.nip.io/`
 - Live Arc Testnet core addresses and verification: [`docs/ARC_DEPLOYMENT.md`](docs/ARC_DEPLOYMENT.md)
 - The Graph provider/submission path: [`docs/THE_GRAPH_TRACK.md`](docs/THE_GRAPH_TRACK.md)
 - Arc RPC compatibility shim for full canonical event coverage: [`infra/arc-rpc-proxy`](infra/arc-rpc-proxy)

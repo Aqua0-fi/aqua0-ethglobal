@@ -4,6 +4,8 @@ This runbook keeps the live claims separate from fallback/local proof so the dem
 
 ## Public MCP
 
+Live judge dashboard: `https://ethglobal-demo.18-207-103-187.nip.io/`
+
 The AWS MCP is exposed over Streamable HTTP at:
 
 ```text

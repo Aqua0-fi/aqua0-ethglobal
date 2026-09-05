@@ -25,7 +25,7 @@ flowchart LR
 - Arc deployment and public addresses: [`docs/ARC_DEPLOYMENT.md`](ARC_DEPLOYMENT.md)
 - Full architecture diagram: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 - The Graph submission notes: [`docs/THE_GRAPH_TRACK.md`](THE_GRAPH_TRACK.md)
-- Dashboard placeholder URL: `https://aqua0.example/dashboard` until the AWS/Caddy public route is assigned.
+- Dashboard placeholder URL: `https://ethglobal-demo.18-207-103-187.nip.io/` until the AWS/Caddy public route is assigned.
 
 ## Local and AWS run
 
