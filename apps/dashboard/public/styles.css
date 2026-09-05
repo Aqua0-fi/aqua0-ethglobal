@@ -1,0 +1,371 @@
+:root {
+  color-scheme: dark;
+  --bg: #081116;
+  --panel: #0d1b22;
+  --panel-2: #102630;
+  --line: #1f3f49;
+  --line-strong: #2f6d76;
+  --text: #eef8f7;
+  --muted: #95adb1;
+  --accent: #53e0c2;
+  --accent-2: #f3c969;
+  --danger: #ff8f8f;
+  --ok: #74e08a;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  margin: 0;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 18% -8%, rgba(83, 224, 194, 0.18), transparent 28rem),
+    linear-gradient(145deg, #081116 0%, #0a151b 52%, #10100d 100%);
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  min-height: 2.6rem;
+  border: 1px solid rgba(83, 224, 194, 0.55);
+  border-radius: 8px;
+  padding: 0.7rem 1rem;
+  color: #041310;
+  background: var(--accent);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+button:hover,
+button:focus-visible {
+  outline: 2px solid rgba(243, 201, 105, 0.75);
+  outline-offset: 2px;
+}
+
+button.secondary {
+  color: var(--text);
+  background: #142a32;
+  border-color: var(--line-strong);
+}
+
+a {
+  color: var(--accent);
+}
+
+pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #dcefeb;
+  background: rgba(0, 0, 0, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 1rem;
+  max-height: 22rem;
+  overflow: auto;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.2rem clamp(1rem, 4vw, 3rem);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.topbar h1,
+h2,
+p {
+  margin: 0;
+}
+
+.topbar h1 {
+  font-size: clamp(1.5rem, 3vw, 2.4rem);
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+
+main {
+  width: min(1440px, 100%);
+  margin: 0 auto;
+  padding: clamp(1rem, 3vw, 2rem);
+}
+
+section {
+  margin-block: 1rem;
+}
+
+.top-actions,
+.panel-head,
+.section-head,
+.preset-row,
+.doc-links {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.top-actions,
+.panel-head,
+.section-head {
+  justify-content: space-between;
+}
+
+.status-grid,
+.two-column {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  gap: 1rem;
+}
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: clamp(1rem, 2vw, 1.25rem);
+  background: linear-gradient(180deg, rgba(16, 38, 48, 0.96), rgba(12, 25, 31, 0.96));
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.22);
+}
+
+.hero-panel {
+  min-height: 24rem;
+}
+
+.raw-panel {
+  min-width: 0;
+}
+
+.eyebrow,
+.label,
+dt,
+.muted {
+  color: var(--muted);
+  font-size: 0.83rem;
+}
+
+.eyebrow {
+  margin-bottom: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 800;
+}
+
+h2 {
+  font-size: 1.1rem;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.metric-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 1.5rem 0;
+}
+
+.metric-row > div,
+.vault-card,
+.strategy-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  padding: 1rem;
+}
+
+.metric-row strong {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: clamp(1.4rem, 4vw, 2.4rem);
+  overflow-wrap: anywhere;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.9rem;
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+  color: #02120f;
+  background: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.pill.bad {
+  color: #250909;
+  background: var(--danger);
+}
+
+.pill.neutral {
+  color: var(--text);
+  background: #1b323b;
+}
+
+.compact-list {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+}
+
+.compact-list div {
+  min-width: 0;
+}
+
+dt {
+  margin-bottom: 0.18rem;
+}
+
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.vault-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.vault-card h3,
+.strategy-card h3 {
+  margin: 0 0 0.3rem;
+  font-size: 1rem;
+}
+
+.vault-card dl,
+.strategy-card dl {
+  margin-top: 0.9rem;
+}
+
+.strategy-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.notice {
+  margin: 0.9rem 0;
+  color: #dcefeb;
+  line-height: 1.5;
+}
+
+.prepare-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+
+.prepare-form label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+input,
+textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.75rem;
+  color: var(--text);
+  background: #071319;
+  outline: none;
+}
+
+input:focus,
+textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(83, 224, 194, 0.18);
+}
+
+.full-span {
+  grid-column: 1 / -1;
+}
+
+.result-block {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1rem;
+}
+
+.architecture {
+  display: grid;
+  gap: 1rem;
+}
+
+.diagram {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.diagram span {
+  position: relative;
+  min-height: 3.2rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: rgba(83, 224, 194, 0.08);
+  text-align: center;
+  padding: 0.5rem;
+  font-weight: 800;
+}
+
+.doc-links {
+  flex-wrap: wrap;
+}
+
+.error-text {
+  color: var(--danger);
+}
+
+@media (max-width: 980px) {
+  .status-grid,
+  .two-column,
+  .vault-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .diagram {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .topbar,
+  .top-actions,
+  .panel-head,
+  .section-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .metric-row,
+  .prepare-form {
+    grid-template-columns: 1fr;
+  }
+
+  .preset-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  button {
+    width: 100%;
+  }
+}

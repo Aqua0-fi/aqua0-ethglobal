@@ -1,0 +1,21 @@
+{
+  "name": "@aqua0/dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "dev": "pnpm build && node dist/index.js",
+    "lint": "pnpm --filter @aqua0/shared build && tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test \"test/**/*.test.ts\"",
+    "typecheck": "pnpm --filter @aqua0/shared build && tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@aqua0/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

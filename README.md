@@ -71,6 +71,32 @@ HTTP exposes:
 | `/health` | JSON health check backed by a live Graph `_meta` query. |
 | `/mcp` | Streamable HTTP MCP endpoint. |
 
+## Arc Judge Dashboard
+
+The Arc bounty web MVP lives in `apps/dashboard`. It is a framework-free TypeScript Node server that serves static HTML/CSS/vanilla JS plus JSON API routes backed by `@aqua0/shared`.
+
+```bash
+GRAPH_ENDPOINT=https://your-subgraph-endpoint \
+WRITE_RPC_URL=https://rpc.testnet.arc.network \
+WRITE_CHAIN_ID=5042002 \
+VAULT_REGISTRY_ADDRESS=0x9E094b21C4263e0BE5BEffa0f8296B3fd982fFFf \
+pnpm --filter @aqua0/dashboard dev
+```
+
+HTTP exposes:
+
+| Path | Purpose |
+| --- | --- |
+| `/` | Judge-facing dashboard for Arc vaults, live Graph data, and prepare-only strategy calldata. |
+| `/api/config` | Sanitized public Arc deployment and ARS/BRL preset config read from `deployments/*.json`. |
+| `/api/health` | `service.health`. |
+| `/api/snapshot` | `getProtocolSnapshot`. |
+| `/api/opportunities` | `listOpportunities`. |
+| `/api/live` | One raw Graph query for `_meta`, `vaults`, `strategies`, and `strategyVaults`. |
+| `/api/prepare-strategy` | POST prepare-only `prepareCreateStrategy`; no transaction execution or private key config. |
+
+AWS loopback compose is in `deploy/aws/dashboard.compose.yml` and binds `127.0.0.1:8400->3000`. Arc qualification notes are in [`docs/ARC_TRACK.md`](docs/ARC_TRACK.md).
+
 ## CLI
 
 ```bash

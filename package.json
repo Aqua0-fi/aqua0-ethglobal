@@ -12,7 +12,7 @@
     "graph:build": "pnpm --filter @aqua0/subgraph graph:build",
     "graph:codegen": "pnpm --filter @aqua0/subgraph graph:codegen",
     "lint": "pnpm -r lint",
-    "test": "pnpm --filter @aqua0/shared test",
+    "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {

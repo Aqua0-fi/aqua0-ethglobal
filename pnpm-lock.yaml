@@ -28,6 +28,19 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  apps/dashboard:
+    dependencies:
+      '@aqua0/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+    devDependencies:
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.13
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
   apps/mcp:
     dependencies:
       '@aqua0/shared':
