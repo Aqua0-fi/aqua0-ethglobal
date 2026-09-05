@@ -47,15 +47,16 @@ const allowedDocs = new Set(["ARCHITECTURE.md", "ARC_DEPLOYMENT.md", "THE_GRAPH_
 export function createDashboardServer(options: DashboardServerOptions) {
   return createServer((request, response) => {
     void handleRequest(request, response, options).catch((error: unknown) => {
-      const apiError =
-        error instanceof ApiError
-          ? error
-          : new ApiError(500, "internal_error", errorMessage(error));
-      sendJson(response, apiError.status, {
-        error: {
-          code: apiError.code,
-          message: apiError.message
-        }
+      if (error instanceof ApiError) {
+        sendJson(response, error.status, {
+          error: { code: error.code, message: error.message }
+        });
+        return;
+      }
+
+      console.error("Dashboard request failed:", errorMessage(error));
+      sendJson(response, 500, {
+        error: { code: "internal_error", message: "Internal server error" }
       });
     });
   });
