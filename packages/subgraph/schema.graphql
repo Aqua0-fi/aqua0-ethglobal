@@ -171,7 +171,7 @@ type StrategyCapitalSourcedEvent @entity(immutable: true) {
   network: String!
   vault: Bytes!
   strategyId: BigInt!
-  venue: Bytes
+  lp: Bytes!
   amount: BigInt!
 }
 
@@ -184,7 +184,7 @@ type StrategyCapitalReturnedEvent @entity(immutable: true) {
   network: String!
   vault: Bytes!
   strategyId: BigInt!
-  venue: Bytes
+  lp: Bytes!
   amount: BigInt!
 }
 
@@ -197,7 +197,8 @@ type StrategyDeployShortfallEvent @entity(immutable: true) {
   network: String!
   vault: Bytes!
   strategyId: BigInt!
-  shortfall: BigInt!
+  lp: Bytes!
+  charged: BigInt!
 }
 
 type StrategyReturnLossEvent @entity(immutable: true) {
@@ -209,7 +210,8 @@ type StrategyReturnLossEvent @entity(immutable: true) {
   network: String!
   vault: Bytes!
   strategyId: BigInt!
-  amount: BigInt!
+  lp: Bytes!
+  loss: BigInt!
 }
 
 type StrategyPrincipalSoldEvent @entity(immutable: true) {
@@ -221,8 +223,8 @@ type StrategyPrincipalSoldEvent @entity(immutable: true) {
   network: String!
   vault: Bytes!
   strategyId: BigInt!
-  lp: Bytes
-  assets: BigInt!
+  lp: Bytes!
+  sold: BigInt!
 }
 
 type StrategyFeeAccruedEvent @entity(immutable: true) {
@@ -234,8 +236,8 @@ type StrategyFeeAccruedEvent @entity(immutable: true) {
   network: String!
   vault: Bytes!
   strategyId: BigInt!
-  lp: Bytes
-  assets: BigInt!
+  lp: Bytes!
+  credited: BigInt!
 }
 
 type CompositionConvertedEvent @entity(immutable: true) {
@@ -344,7 +346,99 @@ type ClassPnLReportedEvent @entity(immutable: true) {
   network: String!
   vault: Bytes!
   strategyId: BigInt!
-  pnl: BigInt!
+  epoch: BigInt!
+  xChainDelta: BigInt!
+  sharePriceRayAfter: BigInt!
+}
+
+type ClassGuardianVetoEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  strategyId: BigInt!
+  guardian: Bytes!
+  reason: String!
+}
+
+type ClassClampHitEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  strategyId: BigInt!
+  epoch: BigInt!
+  requestedDelta: BigInt!
+  clampedDelta: BigInt!
+}
+
+type ClassReconciliationMismatchEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  strategyId: BigInt!
+  route: Bytes!
+  reportedDelta: BigInt!
+  settledDelta: BigInt!
+  clawbackFromUnvested: BigInt!
+}
+
+type ClassBridgeSettledEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  strategyId: BigInt!
+  route: Bytes!
+  settlementId: Bytes!
+  settledDelta: BigInt!
+  lossNetting: BigInt!
+}
+
+type ClassSettlementRequestedEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  strategyId: BigInt!
+  controller: Bytes!
+  requestId: BigInt!
+  assets: BigInt!
+  route: Bytes!
+  requestedAt: BigInt!
+  claimableAt: BigInt!
+}
+
+type ClassSettlementClaimedEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  vault: Bytes!
+  strategyId: BigInt!
+  controller: Bytes!
+  requestId: BigInt!
+  assets: BigInt!
+  composerStruck: Boolean!
+  owner: Bytes!
 }
 
 type ClassVenueSettledEvent @entity(immutable: true) {
@@ -370,10 +464,23 @@ type FrontLifecycleEvent @entity(immutable: true) {
   vault: Bytes!
   strategyId: BigInt
   lp: Bytes
+  owner: Bytes
+  filler: Bytes
+  beneficiary: Bytes
   frontId: Bytes
   settlementId: Bytes
   action: String!
   amount: BigInt
+  amountReturned: BigInt
+  assets: BigInt
+  pledged: BigInt
+  feeOwed: BigInt
+  feePaid: BigInt
+  restored: BigInt
+  unrecovered: BigInt
+  required: BigInt
+  received: BigInt
+  credited: BigInt
   shortfall: BigInt
 }
 

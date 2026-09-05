@@ -4,13 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "graph codegen subgraph.base.yaml && graph build subgraph.base.yaml",
+    "build": "node scripts/assert-required-events.mjs && graph codegen subgraph.base.yaml && graph build subgraph.base.yaml",
     "clean": "rm -rf build generated subgraph.arc.yaml",
     "codegen": "graph codegen subgraph.base.yaml",
     "graph:build": "graph build subgraph.base.yaml",
     "graph:codegen": "graph codegen subgraph.base.yaml",
-    "lint": "graph build subgraph.base.yaml",
-    "typecheck": "graph codegen subgraph.base.yaml && graph build subgraph.base.yaml",
+    "lint": "node scripts/assert-required-events.mjs && graph build subgraph.base.yaml",
+    "test:required-events": "node scripts/assert-required-events.mjs",
+    "typecheck": "node scripts/assert-required-events.mjs && graph codegen subgraph.base.yaml && graph build subgraph.base.yaml",
     "generate:arc": "node scripts/generate-arc-manifest.mjs"
   },
   "dependencies": {

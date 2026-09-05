@@ -23,6 +23,8 @@ dataSources:
           file: ./abis/VaultFactory.json
         - name: AssetVault
           file: ./abis/AssetVault.json
+        - name: Events
+          file: ./abis/Events.json
       eventHandlers:
         - event: VaultCreated(indexed address,indexed address,string,string)
           handler: handleVaultCreated
@@ -153,7 +155,7 @@ templates:
     name: AssetVault
     network: base
     source:
-      abi: AssetVault
+      abi: Events
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -165,11 +167,15 @@ templates:
         - StrategyVault
         - LPStrategyPosition
       abis:
+        - name: Events
+          file: ./abis/Events.json
         - name: AssetVault
           file: ./abis/AssetVault.json
       eventHandlers:
         - event: VaultDeposit(indexed address,indexed address,indexed address,uint256)
           handler: handleVaultDeposit
+        - event: VaultWithdraw(indexed address,indexed address,indexed address,address,uint256,uint256,uint256)
+          handler: handleVaultWithdraw
         - event: ClassRegistered(indexed address,indexed uint256)
           handler: handleClassRegistered
         - event: ClassStrategistSet(indexed address,indexed uint256,indexed address)
@@ -186,8 +192,56 @@ templates:
           handler: handleClassAdapterSettled
         - event: ClassVenueSettled(indexed address,indexed uint256,indexed address,int256)
           handler: handleClassVenueSettled
+        - event: StrategyCommitmentSet(indexed address,indexed address,indexed uint256,bool)
+          handler: handleStrategyCommitmentSet
+        - event: StrategyCapitalSourced(indexed address,indexed uint256,indexed address,uint256)
+          handler: handleStrategyCapitalSourced
+        - event: StrategyCapitalReturned(indexed address,indexed uint256,indexed address,uint256)
+          handler: handleStrategyCapitalReturned
+        - event: StrategyDeployShortfall(indexed address,indexed uint256,indexed address,uint256)
+          handler: handleStrategyDeployShortfall
+        - event: StrategyReturnLoss(indexed address,indexed uint256,indexed address,uint256)
+          handler: handleStrategyReturnLoss
+        - event: StrategyPrincipalSold(indexed address,indexed uint256,indexed address,uint256)
+          handler: handleStrategyPrincipalSold
+        - event: StrategyFeeAccrued(indexed address,indexed uint256,indexed address,uint256)
+          handler: handleStrategyFeeAccrued
+        - event: ClassPnLReported(indexed address,indexed uint256,indexed uint256,int256,uint256)
+          handler: handleClassPnLReported
+        - event: ClassGuardianVeto(indexed address,indexed uint256,indexed address,string)
+          handler: handleClassGuardianVeto
+        - event: ClassClampHit(indexed address,indexed uint256,indexed uint256,int256,int256)
+          handler: handleClassClampHit
+        - event: ClassReconciliationMismatch(indexed address,indexed uint256,indexed bytes32,int256,int256,int256)
+          handler: handleClassReconciliationMismatch
+        - event: ClassBridgeSettled(indexed address,indexed uint256,indexed bytes32,bytes32,int256,int256)
+          handler: handleClassBridgeSettled
+        - event: ClassSettlementRequested(indexed address,indexed uint256,indexed address,uint256,uint256,bytes32,uint64,uint64)
+          handler: handleClassSettlementRequested
+        - event: ClassSettlementClaimed(indexed address,indexed uint256,indexed address,uint256,uint256,bool,address)
+          handler: handleClassSettlementClaimed
         - event: CompositionConverted(indexed address,indexed uint256,indexed address,uint256)
           handler: handleCompositionConverted
+        - event: FrontLocked(indexed address,indexed uint256,indexed bytes32,address,uint256)
+          handler: handleFrontLocked
+        - event: FrontCommitted(indexed address,indexed uint256,indexed bytes32)
+          handler: handleFrontCommitted
+        - event: FrontReleased(indexed address,indexed uint256,indexed bytes32,uint256)
+          handler: handleFrontReleased
+        - event: FrontCancelled(indexed address,indexed uint256,indexed bytes32,uint256)
+          handler: handleFrontCancelled
+        - event: FrontAborted(indexed address,indexed uint256,indexed bytes32,uint256)
+          handler: handleFrontAborted
+        - event: FrontObligationOpened(indexed address,indexed uint256,indexed bytes32,address,address,uint256,uint256)
+          handler: handleFrontObligationOpened
+        - event: FrontObligationSettled(indexed address,indexed uint256,indexed bytes32,address,uint256,uint256)
+          handler: handleFrontObligationSettled
+        - event: FrontObligationAborted(indexed address,indexed uint256,indexed bytes32,address,uint256,uint256,uint256)
+          handler: handleFrontObligationAborted
+        - event: FrontLandingUnderpaid(indexed address,indexed uint256,indexed bytes32,uint256,uint256)
+          handler: handleFrontLandingUnderpaid
+        - event: FrontLandingCredited(indexed address,indexed uint256,indexed bytes32,bytes32,uint256)
+          handler: handleFrontLandingCredited
         - event: FrontLandingShortfall(indexed address,indexed uint256,indexed bytes32,bytes32,uint256)
           handler: handleFrontLandingShortfall
         - event: FrontingReleaseLimitSet(indexed address,uint256)
