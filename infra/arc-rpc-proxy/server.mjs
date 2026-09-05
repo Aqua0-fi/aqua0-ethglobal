@@ -4,28 +4,48 @@ const upstream = process.env.UPSTREAM_RPC ?? "https://rpc.testnet.arc.network";
 const port = Number(process.env.PORT ?? "8545");
 const maxTopicOr = Number(process.env.MAX_TOPIC_OR ?? "8");
 const timeoutMs = Number(process.env.UPSTREAM_TIMEOUT_MS ?? "30000");
+const retryBaseMs = Number(process.env.RETRY_BASE_MS ?? "300");
+const maxRetries = Number(process.env.MAX_RETRIES ?? "8");
 
 if (!Number.isSafeInteger(port) || port <= 0 || port > 65535) throw new Error("Invalid PORT");
 if (!Number.isSafeInteger(maxTopicOr) || maxTopicOr <= 0) throw new Error("Invalid MAX_TOPIC_OR");
 
 let upstreamId = 1;
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function rpc(req) {
-  const body = JSON.stringify({ ...req, id: upstreamId++ });
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(upstream, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body,
-      signal: controller.signal
-    });
-    if (!response.ok) throw new Error(`Upstream HTTP ${response.status}`);
-    return await response.json();
-  } finally {
-    clearTimeout(timer);
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    const body = JSON.stringify({ ...req, id: upstreamId++ });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(upstream, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body,
+        signal: controller.signal
+      });
+      if (response.status === 429 && attempt < maxRetries) {
+        const retryAfter = Number(response.headers.get("retry-after") ?? "0");
+        const backoff = retryAfter > 0 ? retryAfter * 1000 : retryBaseMs * 2 ** attempt;
+        await sleep(Math.min(backoff, 5000));
+        continue;
+      }
+      if (!response.ok) throw new Error(`Upstream HTTP ${response.status}`);
+      const payload = await response.json();
+      if (payload?.error?.code === -32016 && attempt < maxRetries) {
+        await sleep(Math.min(retryBaseMs * 2 ** attempt, 5000));
+        continue;
+      }
+      return payload;
+    } finally {
+      clearTimeout(timer);
+    }
   }
+  throw new Error("Upstream retries exhausted");
 }
 
 function logKey(log) {
