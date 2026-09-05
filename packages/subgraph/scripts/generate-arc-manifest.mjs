@@ -84,6 +84,8 @@ for (const [name, envName] of sources) {
 
 // Dynamic AssetVaults created by the Arc factory must be indexed on Arc too.
 manifest = manifest.replace(/network: base/g, "network: arc-testnet");
+// Keep the short-lived hackathon/testnet history intact; this also makes Arc deployments independent from the Base pruning policy.
+manifest = manifest.replace("  prune: auto", "  prune: never");
 writeFileSync(new URL("../subgraph.arc.yaml", import.meta.url), manifest);
 
 const skipped = optional.filter(([envName]) => !values.has(envName)).map(([, label]) => label);
