@@ -105,6 +105,13 @@ const assetVaultAbi = [
   },
   {
     type: "function",
+    name: "classStrategist",
+    inputs: [{ name: "strategyId", type: "uint256" }],
+    outputs: [{ name: "strategist", type: "address" }],
+    stateMutability: "view"
+  },
+  {
+    type: "function",
     name: "setCommitment",
     inputs: [
       { name: "strategyId", type: "uint256" },
@@ -338,6 +345,33 @@ export async function prepareCreateStrategy(
     };
   }
 
+  const publicClient = createReadClient(config);
+  const legStates = await Promise.all(
+    vaults.map(async (vault) => ({
+      vault,
+      strategist: normalizeAddress(
+        await publicClient.readContract({
+          address: getAddress(vault),
+          abi: assetVaultAbi,
+          functionName: "classStrategist",
+          args: [classId]
+        })
+      )
+    }))
+  );
+  const zero = "0x0000000000000000000000000000000000000000";
+  const conflicting = legStates.find(
+    ({ strategist }) => strategist !== zero && strategist !== key.strategist
+  );
+  if (conflicting) {
+    throw new Error(
+      `Strategy class ${classId} on vault ${conflicting.vault} already belongs to strategist ${conflicting.strategist}`
+    );
+  }
+  const missingVaults = legStates
+    .filter(({ strategist }) => strategist === zero)
+    .map(({ vault }) => vault);
+
   return {
     mode: "prepare",
     strategyKey: key.strategyKey,
@@ -345,8 +379,10 @@ export async function prepareCreateStrategy(
     currentClassId: classId.toString(),
     stage: "registerVaultLegs",
     explanation:
-      "classForStrategy returned an existing class id. Submit registerStrategy on each supplied vault leg.",
-    transactions: vaults.map((vault) => ({
+      missingVaults.length === 0
+        ? "classForStrategy returned an existing class id and every supplied vault leg is already registered to this strategist. No transaction is required."
+        : "classForStrategy returned an existing class id. Submit registerStrategy only for the supplied vault legs that are not already registered to this strategist.",
+    transactions: missingVaults.map((vault) => ({
       to: vault,
       value: "0",
       functionName: "registerStrategy",
@@ -393,17 +429,22 @@ export async function executeCreateStrategy(
     }
   }
 
-  for (const vault of prepared.normalized.vaults) {
+  const legTransactions =
+    prepared.stage === "registerVaultLegs"
+      ? prepared.transactions
+      : (await prepareCreateStrategy(config, input)).transactions;
+  for (const tx of legTransactions) {
+    if (tx.functionName !== "registerStrategy") continue;
     const hash = await wallet.writeContract({
       account,
       abi: assetVaultAbi,
-      address: getAddress(vault),
+      address: getAddress(tx.to),
       functionName: "registerStrategy",
       args: [classId, getAddress(prepared.normalized.strategist)]
     });
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
     assertReceiptSuccess(receipt, "registerStrategy", hash);
-    receipts.push(formatReceipt("registerStrategy", vault, hash, receipt));
+    receipts.push(formatReceipt("registerStrategy", tx.to, hash, receipt));
   }
 
   return {
