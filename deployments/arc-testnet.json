@@ -1,0 +1,37 @@
+{
+  "network": "arc-testnet",
+  "chainId": 5042002,
+  "rpcUrl": "https://rpc.testnet.arc.network",
+  "deployedAt": "2026-09-05T17:30:29Z",
+  "startBlock": 60613306,
+  "deployer": "0xBaA361817C8676b4A8a8C5e6fd050253f81f407C",
+  "sourceContractsCommit": "8a9f1c2",
+  "contracts": {
+    "vaultRegistry": "0x9E094b21C4263e0BE5BEffa0f8296B3fd982fFFf",
+    "vaultFactory": "0x879C0c90205172a8DD66afB8124994D866372FBa",
+    "composer": "0x656F28021a624aDfA0d92dDFdBb20577674aFEC7",
+    "fillerRegistry": "0xa8e08346DD7b6809C47A920c365bCC987Ea91297",
+    "upgradeableBeacon": "0x77C04851838cb7f675e0366CEA253fEf08001C21",
+    "assetVaultImplementation": "0xc2F0D96Ba81C67baFaD6530A6A2C5236c7b66EEd",
+    "aquaAdapter": null,
+    "v4Adapter": null
+  },
+  "assets": {
+    "usdc": "0x3600000000000000000000000000000000000000",
+    "argt": "0xd8dE250970842A581f89E885dA0F5165037714Ef",
+    "brat": "0xa9482a878A3784663512f0Bf8d0be17aD6DEA38E"
+  },
+  "vaults": {
+    "usdc": "0x99c2ab427b29dB1Cc14D228d970596015d1C4429",
+    "argt": "0x8a3d6188C58d7877499592E179DfE3bd80c4F460",
+    "brat": "0xEcB132648B781ec5742b582c526243Eeef900785"
+  },
+  "verification": {
+    "transactions": 28,
+    "failedReceipts": 0,
+    "vaultCount": 3,
+    "factoryHasRegistrarRole": true,
+    "composerWiredToFillerRegistry": true,
+    "composerRoleGrantedToAllVaults": true
+  }
+}

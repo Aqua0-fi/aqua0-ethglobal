@@ -1,0 +1,9 @@
+# Public HTTPS wrapper for the Arc judge dashboard.
+# Replace the hostname with your DNS name and keep the dashboard container loopback-only.
+ethglobal-demo.example.com {
+    reverse_proxy 127.0.0.1:8400
+    encode gzip
+    header {
+        -Server
+    }
+}

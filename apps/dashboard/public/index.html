@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Aqua0 Shape-C / Arc Testnet</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Arc bounty MVP</p>
+        <h1>Aqua0 Shape-C / Arc Testnet</h1>
+      </div>
+      <div class="top-actions" aria-label="Dashboard controls">
+        <span id="last-updated" class="muted">Waiting for data</span>
+        <button id="refresh" type="button">Refresh</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="status-grid" aria-labelledby="live-heading">
+        <div class="panel hero-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">The Graph: live indexed data</p>
+              <h2 id="live-heading">Protocol snapshot</h2>
+            </div>
+            <span id="health-pill" class="pill">Checking</span>
+          </div>
+          <div class="metric-row" aria-label="Protocol totals">
+            <div>
+              <span class="label">Vaults</span>
+              <strong id="metric-vaults">-</strong>
+            </div>
+            <div>
+              <span class="label">Active strategy vaults</span>
+              <strong id="metric-strategies">-</strong>
+            </div>
+            <div>
+              <span class="label">Graph block</span>
+              <strong id="metric-block">-</strong>
+            </div>
+          </div>
+          <dl class="compact-list">
+            <div>
+              <dt>Network</dt>
+              <dd id="network">-</dd>
+            </div>
+            <div>
+              <dt>Vault registry</dt>
+              <dd id="registry">-</dd>
+            </div>
+            <div>
+              <dt>Write mode</dt>
+              <dd>prepare-only, no broadcast</dd>
+            </div>
+          </dl>
+        </div>
+
+        <aside class="panel raw-panel" aria-labelledby="raw-heading">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Graph raw query</p>
+              <h2 id="raw-heading">_meta, vaults, strategies, strategyVaults</h2>
+            </div>
+          </div>
+          <pre id="raw-graph" tabindex="0">Loading live Graph response...</pre>
+        </aside>
+      </section>
+
+      <section aria-labelledby="vaults-heading">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Shape-C shared backing</p>
+            <h2 id="vaults-heading">Arc vaults</h2>
+          </div>
+        </div>
+        <div id="vault-grid" class="vault-grid" aria-live="polite"></div>
+      </section>
+
+      <section class="two-column" aria-label="Strategy and prepare panels">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Live strategy class</p>
+              <h2>ARS / BRL classes and vault legs</h2>
+            </div>
+          </div>
+          <div id="strategy-list" class="strategy-list"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Prepare strategy</p>
+              <h2>Calldata preview</h2>
+            </div>
+            <span class="pill neutral">No execute endpoint</span>
+          </div>
+          <p class="notice">Prepare-only/no broadcast. This panel derives strategyKey, reads currentClassId, and returns the next calldata.</p>
+          <div class="preset-row" role="group" aria-label="Strategy presets">
+            <button id="preset-ars" type="button" class="secondary">ARS preset</button>
+            <button id="preset-brl" type="button" class="secondary">BRL preset</button>
+          </div>
+          <form id="prepare-form" class="prepare-form">
+            <label>
+              Strategist
+              <input id="strategist" name="strategist" autocomplete="off" required />
+            </label>
+            <label>
+              Label
+              <input id="label" name="label" autocomplete="off" required />
+            </label>
+            <label>
+              Token 0
+              <input id="token0" name="token0" autocomplete="off" required />
+            </label>
+            <label>
+              Token 1
+              <input id="token1" name="token1" autocomplete="off" required />
+            </label>
+            <label class="full-span">
+              Vault legs
+              <textarea id="vaults" name="vaults" rows="3" required></textarea>
+            </label>
+            <button type="submit" class="full-span">Prepare calldata</button>
+          </form>
+          <div class="result-block" aria-live="polite">
+            <dl class="compact-list">
+              <div>
+                <dt>strategyKey</dt>
+                <dd id="prepared-key">-</dd>
+              </div>
+              <div>
+                <dt>currentClassId</dt>
+                <dd id="prepared-class">-</dd>
+              </div>
+              <div>
+                <dt>next</dt>
+                <dd id="prepared-next">-</dd>
+              </div>
+            </dl>
+            <pre id="prepared-calldata" tabindex="0">Submit a preset or custom strategy to preview calldata.</pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel architecture" aria-labelledby="architecture-heading">
+        <div>
+          <p class="eyebrow">Architecture</p>
+          <h2 id="architecture-heading">Frontend + backend + Graph read model</h2>
+        </div>
+        <div class="diagram" aria-label="Architecture diagram">
+          <span>Dashboard</span>
+          <span>Node API</span>
+          <span>@aqua0/shared</span>
+          <span>The Graph</span>
+          <span>Arc Testnet</span>
+        </div>
+        <nav class="doc-links" aria-label="Project documentation">
+          <a href="/docs/ARCHITECTURE.md">Architecture diagram</a>
+          <a href="/docs/ARC_DEPLOYMENT.md">Arc deployment</a>
+          <a href="/docs/THE_GRAPH_TRACK.md">The Graph track</a>
+        </nav>
+      </section>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
