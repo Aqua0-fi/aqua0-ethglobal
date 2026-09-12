@@ -22,18 +22,19 @@ export const ARC_TESTNET_DEPLOYMENT = {
     aquaAdapter: "0xbF72D34b804636496c3308796908152b82624Ca5"
   },
   /**
-   * FXSwap venue (optional keys `contracts.fxswapRouter`, `contracts.fxAquaAdapter`,
-   * `contracts.fxOracles.*` in the deployment file): AquaFXSwapVMRouter on the same Aqua, a second
-   * AquaAdapter bound to it (an adapter binds one router immutably), and owner-set ManualFxOracle feeds
-   * quoting FX units per 1 USD. `null` means not deployed; env vars override each address.
+   * Forex venue (optional keys `contracts.forexRouter`, `contracts.forexAquaAdapter`,
+   * `contracts.fxOracles.*` in the deployment file): AquaForexSwapVMRouter (ForexCurve, opcode 34) on the same
+   * Aqua, a second AquaAdapter bound to it (an adapter binds one router immutably), and owner-set ManualFxOracle
+   * feeds quoting FX units per 1 USD. It supersedes the FXSwap venue (`contracts.fxswapRouter`), which stays in
+   * the deployment file as a record. `null` means not deployed; env vars override each address.
    *
    * `redstone` (`contracts.redstone` in the deployment file): RedStone `redstone-primary-prod` pull feeds, one
    * AquaRedStoneMultiFeedAdapter and one Chainlink-style AquaRedStonePriceFeed per symbol. `BRL` quotes USD per
    * 1 BRL, `MXNe` quotes MXN per 1 USD; both have 8 decimals and are refreshed by pushing a signed payload.
    */
   fxVenue: {
-    fxswapRouter: "0xb54AE15d2372F27718f32e9f6990330cdD3edaEB",
-    fxAquaAdapter: "0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5",
+    forexRouter: "0x0661435C2684Dcf62c547bA75a3300f928701E3d",
+    forexAquaAdapter: "0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80",
     fxOracles: {
       arsUsd: "0xc05A3Fb016f973C82b0232EF50336d4C0466E70C",
       brlUsd: "0x1AE6542b9da89Ed2AEf00600710Bba75DbFF5e71",
@@ -47,8 +48,8 @@ export const ARC_TESTNET_DEPLOYMENT = {
       }
     }
   } as {
-    fxswapRouter: string | null;
-    fxAquaAdapter: string | null;
+    forexRouter: string | null;
+    forexAquaAdapter: string | null;
     fxOracles: { arsUsd: string | null; brlUsd: string | null; owner: string | null };
     redstone: { multiFeedAdapter: string | null; feeds: { BRL: string | null; MXNe: string | null } };
   },

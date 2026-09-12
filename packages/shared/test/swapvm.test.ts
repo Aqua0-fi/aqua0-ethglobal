@@ -253,8 +253,8 @@ test("Arc deployment constants stay in sync with deployments/arc-testnet.json (F
   ) as {
     chainId: number;
     contracts: Record<string, unknown> & {
-      fxswapRouter?: string | null;
-      fxAquaAdapter?: string | null;
+      forexRouter?: string | null;
+      forexAquaAdapter?: string | null;
       fxOracles?: { arsUsd?: string | null; brlUsd?: string | null; owner?: string | null } | null;
       redstone?: { multiFeedAdapter?: string | null; feeds?: { BRL?: string | null; MXNe?: string | null } } | null;
     };
@@ -273,8 +273,8 @@ test("Arc deployment constants stay in sync with deployments/arc-testnet.json (F
   }
   const fx = deployment.fxVenue;
   const pairs: Array<[string, string | null | undefined, string | null]> = [
-    ["fxswapRouter", file.contracts.fxswapRouter, fx.fxswapRouter],
-    ["fxAquaAdapter", file.contracts.fxAquaAdapter, fx.fxAquaAdapter],
+    ["forexRouter", file.contracts.forexRouter, fx.forexRouter],
+    ["forexAquaAdapter", file.contracts.forexAquaAdapter, fx.forexAquaAdapter],
     ["fxOracles.arsUsd", file.contracts.fxOracles?.arsUsd, fx.fxOracles.arsUsd],
     ["fxOracles.brlUsd", file.contracts.fxOracles?.brlUsd, fx.fxOracles.brlUsd],
     ["fxOracles.owner", file.contracts.fxOracles?.owner, fx.fxOracles.owner],
@@ -859,8 +859,8 @@ test("venues: forex venue addresses default to the Arc deployment and can be ove
   const venue = resolveSwapVMVenue({ writeChainId: 5042002 });
   assert.equal(venue.forex?.opcode, "forex");
   assert.equal(venue.forex?.name, "forex venue (AquaForexSwapVMRouter)");
-  assert.equal(venue.forex?.router, ARC_TESTNET_DEPLOYMENT.fxVenue.fxswapRouter?.toLowerCase());
-  assert.equal(venue.forex?.adapter, ARC_TESTNET_DEPLOYMENT.fxVenue.fxAquaAdapter?.toLowerCase());
+  assert.equal(venue.forex?.router, ARC_TESTNET_DEPLOYMENT.fxVenue.forexRouter?.toLowerCase());
+  assert.equal(venue.forex?.adapter, ARC_TESTNET_DEPLOYMENT.fxVenue.forexAquaAdapter?.toLowerCase());
   assert.equal(venue.forex?.oracles.ARGt, ARS_FEED.toLowerCase());
   // USDC/BRL reads RedStone's BRL feed (USD per 1 BRL) unless FX_ORACLE_BRL_USD overrides it with a BRL-per-USD feed.
   assert.equal(venue.forex?.oracles.BRAt, ARC_TESTNET_DEPLOYMENT.fxVenue.redstone.feeds.BRL?.toLowerCase());

@@ -199,8 +199,8 @@ export function resolveSwapVMVenue(config: WriteConfig): SwapVMVenue {
  */
 export function resolveFxSwapVenue(config: WriteConfig): ForexVenue | undefined {
   const deployed = ARC_TESTNET_DEPLOYMENT.fxVenue;
-  const router = config.fxswapRouterAddress ?? deployed.fxswapRouter;
-  const adapter = config.fxswapAquaAdapterAddress ?? deployed.fxAquaAdapter;
+  const router = config.fxswapRouterAddress ?? deployed.forexRouter;
+  const adapter = config.fxswapAquaAdapterAddress ?? deployed.forexAquaAdapter;
   if (!router || !adapter) {
     return undefined;
   }

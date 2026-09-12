@@ -38,7 +38,9 @@
       "decimals": 8,
       "deployer": "0x7E61A5EbCCd26d9D91690C6037d7224F5384730D",
       "firstUpdateTx": "0x3ec11cc0830567cb25a5d9b9b1f36c8caa5d966216c552b8a3098fee75d44ecf"
-    }
+    },
+    "forexRouter": "0x0661435C2684Dcf62c547bA75a3300f928701E3d",
+    "forexAquaAdapter": "0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80"
   },
   "assets": {
     "usdc": "0x3600000000000000000000000000000000000000",
@@ -120,6 +122,18 @@
           "status": "verified",
           "match": "partial (compiled with cbor_metadata=false, so no metadata hash to match)",
           "url": "https://testnet.arcscan.app/address/0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5#code"
+        },
+        "0x0661435C2684Dcf62c547bA75a3300f928701E3d": {
+          "name": "AquaForexSwapVMRouter",
+          "status": "verified",
+          "match": "full",
+          "url": "https://testnet.arcscan.app/address/0x0661435C2684Dcf62c547bA75a3300f928701E3d#code"
+        },
+        "0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80": {
+          "name": "AquaAdapter (forex venue)",
+          "status": "verified",
+          "match": "partial (compiled with cbor_metadata=false, so no metadata hash to match)",
+          "url": "https://testnet.arcscan.app/address/0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80#code"
         }
       },
       "vaultCore": {
@@ -169,6 +183,30 @@
           "url": "https://testnet.arcscan.app/address/0xEcB132648B781ec5742b582c526243Eeef900785#code"
         }
       }
+    }
+  },
+  "forexVenue": {
+    "note": "ForexCurve (opcode 34, the Shell v1 / DFX forex curve) venue. Supersedes the FXSwap venue (contracts.fxswapRouter), which was never wired.",
+    "router": {
+      "address": "0x0661435C2684Dcf62c547bA75a3300f928701E3d",
+      "deployTx": "0x26007918f08656de1ff6d62b1645b307756ec08af5a69ded592667319a13b5f7",
+      "runtimeBytes": 24553
+    },
+    "adapter": {
+      "address": "0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80",
+      "admin": "0x7E61A5EbCCd26d9D91690C6037d7224F5384730D",
+      "operatorRole": [
+        "0xcdbd43edb8292def7e8ac99c77860a689cc6d404"
+      ],
+      "oneStrategyPerToken": false
+    },
+    "coreWiring": {
+      "status": "pending (core admin)",
+      "admin": "0xBaA361817C8676b4A8a8C5e6fd050253f81f407C",
+      "calls": [
+        "VaultRegistry.setAdapterAllowed(forexAquaAdapter, true)",
+        "grantRole(VENUE_SETTLER_ROLE, forexAquaAdapter) on the USDC, ARGt and BRAt AssetVaults"
+      ]
     }
   }
 }
