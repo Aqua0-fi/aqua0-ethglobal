@@ -128,3 +128,38 @@ misma batería de tests 1-22 que ya corre contra la curva actual, para comparar 
 - Mento: https://docs.celo.org/legacy/protocol/stability/doto , https://docs.mento.org/mento/economics/stability
 - Lifinity v2: https://docs.lifinity.io/dex/v2
 - Stabull: https://docs.stabull.finance/amm/liquidity
+
+## 4. Resultados de la batería común (`scripts/fxcurves_compare.py`, 2026-09-12)
+
+Estados aleatorios con 20%..80% de BRL en el libro. Libro balanceado de referencia: 1M USDC + 200k BRL a 5.00.
+
+| | B StableSwap A=100 | C Shell α=.5 β=.35 δ=.15 | G DODO k=.05 target fijo |
+|---|---|---|---|
+| exactIn/exactOut inversa | 5e-10 (cancelación float en `y - y2`, en enteros es 1 wei) | 1e-10 | 6e-16 |
+| roundtrip, taker gana | 0 (6 casos a 1.5e-9, ruido float) | 0 | 0 |
+| split gana a single | 0 | 0 | 0 |
+| secuencias cerradas, taker neto > 0 | 0 | 0 | 0 |
+| premium comprando 10% / 50% del BRL | 0.05% / 0.33% | 0% / halt | 0.56% / 5.0% |
+| marginal con 5% de BRL en el libro | 1.24 p | halt (fuera de α) | 5.95 p |
+| marginal con 1% de BRL (target 200k) | 6.2 p | halt | 506 p |
+| salto de oráculo +20%, pérdida al arb | 0.002% del libro | 0 (zona plana re-cotiza) | 0 |
+| oráculo 1% alto, mejor ataque | 0.16% del libro, se lleva 50% de U | 0.16% del libro, 32% de U | 0.03% del libro, 13% de U |
+| oráculo 5% alto | 1.4% del libro, 82% de U | 0.9% del libro, 42% de U | 1.1% del libro, 82% de U |
+| B dust (1e-9) | precio 1.7e14 p | halt | 4e27 p |
+
+Con fee 5 bps (B con `offpeg=5`, C con `ε`): el roundtrip deja -0.1% al taker en ambas, y el ataque con
+error de oráculo de 5 bps deja 0 ganancia (la fee es el piso de tolerancia al oráculo en las tres).
+
+Lectura:
+- Las tres son path independent con target fijo. Lo que las diferencia es la forma del premium y
+  el corte.
+- **Shell/DFX** es la única que acota la pérdida por construcción: fuera de `±α` revierte, dentro
+  de `±β` cotiza al oráculo con slippage 0. La pérdida máxima ante error de oráculo es
+  `(banda β) × error`, lineal y predecible. Costo: revierte mucho (23% de los estados aleatorios
+  con 20-80% de BRL) porque `α=0.5` deja el libro entre 25% y 75%; hay que elegir `α` con el
+  inventario real en mente.
+- **StableSwap+oráculo** no revierte nunca y tiene el mejor slippage en zona normal, pero el
+  premium sube sin cota cuando una reserva se vacía (6.2 p con 1% de BRL, 1.7e14 p con polvo).
+  Hace falta agregarle un halt o un cap, y con eso queda muy cerca de Shell con `β=0`.
+- **DODO fijo** queda bien en los invariantes pero pierde en slippage (10× el de StableSwap para
+  el mismo tamaño) y mantiene la canilla `k·r²` (506 p con 1% de BRL).

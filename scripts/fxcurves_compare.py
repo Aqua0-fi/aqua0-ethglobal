@@ -25,7 +25,7 @@ def ss_D(x, y, A, sqrtf):
         D_P = D * D * D / (4 * x * y)
         Dp = D
         D = (Ann * S + 2 * D_P) * D / ((Ann - 1) * D + 3 * D_P)
-        if abs(D - Dp) <= abs(D) * 1e-15 if isinstance(D, float) else abs(D - Dp) <= abs(D) * Decimal("1e-40"): break
+        if D == Dp or abs(D - Dp) <= abs(D) * (4e-16 if isinstance(D, float) else Decimal("1e-45")): break
     return D
 
 def ss_y(x, D, A, sqrtf):
@@ -41,7 +41,10 @@ def ss_dynfee(x, y, fee, offpeg):
     s2 = (x + y) * (x + y)
     return fee * offpeg / ((offpeg - 1) * 4 * x * y / s2 + 1)
 
-class StableSwapFX:
+class Curve:
+    def begin(self, p, U, B): pass          # called once per scenario; lets a curve fix its target
+
+class StableSwapFX(Curve):
     name = "B stableswap+oracle"
     def __init__(self, A=100, fee=0.0, offpeg=1, dec=False):
         self.A, self.fee, self.offpeg, self.dec = A, fee, offpeg, dec
@@ -75,7 +78,7 @@ class StableSwapFX:
             return (y2 - y) / p, Q
 
 # ------------------------------------------------------------------ C. shell v1 / dfx v2 piecewise
-class ShellFX:
+class ShellFX(Curve):
     name = "C shell/dfx"
     def __init__(self, alpha=0.5, beta=0.35, delta=0.15, maxf=0.25, lam=0.3, eps=0.0):
         self.alpha, self.beta, self.delta, self.maxf, self.lam, self.eps = alpha, beta, delta, maxf, lam, eps
@@ -132,11 +135,12 @@ class ShellFX:
             return inp / p, Q
 
 # ------------------------------------------------------------------ G. current dodo, fixed target (reference)
-class DodoFX:
+class DodoFX(Curve):
     name = "G dodo fixed"
-    def __init__(self, k=0.05, t=0.5): self.k, self.t = k, t
+    def __init__(self, k=0.05, t=0.5): self.k, self.t = k, t; self.B0 = None
+    def begin(self, p, U, B): self.B0 = dodo_target(U, B, p, self.t)   # fixed target for the scenario
     def quote(self, p, U, B, amount, brl_out, exact_in):
-        B0 = dodo_target(U, B, p, self.t)   # fixed at the state where the strategy was set: tests re-derive per state
+        B0 = self.B0 if self.B0 is not None else dodo_target(U, B, p, self.t)
         try: return dodo_quote(p, self.k, self.t, U, B, amount, brl_out, exact_in, B0)
         except (ValueError, AssertionError, ZeroDivisionError) as e: raise Revert(str(e))
 
@@ -152,7 +156,7 @@ def rnd_state():
 def t_inverse(c, n=3000):
     worst = 0; rev = 0
     for _ in range(n):
-        p, U, B = rnd_state()
+        p, U, B = rnd_state(); c.begin(p, U, B)
         try:
             Q = p * B * 10 ** random.uniform(-6, -0.7)
             _, dy = c.quote(p, U, B, Q, True, True); Q2, _ = c.quote(p, U, B, dy, True, False)
@@ -166,7 +170,7 @@ def t_inverse(c, n=3000):
 def t_roundtrip(c, n=3000):
     fails = 0; worst = -1; rev = 0
     for _ in range(n):
-        p, U, B = rnd_state()
+        p, U, B = rnd_state(); c.begin(p, U, B)
         try:
             Q = p * B * 10 ** random.uniform(-6, -0.7)
             _, dy = c.quote(p, U, B, Q, True, True)
@@ -184,7 +188,7 @@ def t_roundtrip(c, n=3000):
 def t_split(c, n=2000):
     fails = 0; worst = -1; rev = 0
     for _ in range(n):
-        p, U, B = rnd_state()
+        p, U, B = rnd_state(); c.begin(p, U, B)
         Q = p * B * 10 ** random.uniform(-3, -0.7); m = random.randint(2, 10)
         try:
             _, d1 = c.quote(p, U, B, Q, True, True)
@@ -199,7 +203,7 @@ def t_split(c, n=2000):
 def t_sequences(c, n=1000):
     fails = 0; worst = -1; rev = 0
     for _ in range(n):
-        p, U, B = rnd_state(); Uc, Bc, pos, usdc = U, B, 0.0, 0.0
+        p, U, B = rnd_state(); c.begin(p, U, B); Uc, Bc, pos, usdc = U, B, 0.0, 0.0
         try:
             for _ in range(random.randint(2, 10)):
                 if random.random() < 0.5:
@@ -217,7 +221,7 @@ def t_sequences(c, n=1000):
 
 def t_impact(c, p=5.0, U=1e6, B=2e5):
     """balanced book. effective premium buying x% of BRL, and marginal after (from a tiny follow-up trade)."""
-    row = []
+    c.begin(p, U, B); row = []
     for x in [0.01, 0.05, 0.10, 0.25, 0.50]:
         try:
             Q, _ = c.quote(p, U, B, x * B, True, False)
@@ -232,7 +236,7 @@ def t_imbalance(c, p=5.0, V=2e6):
     """marginal buy price / p and sell price / p as BRL share of the book goes 5% .. 95%."""
     row = []
     for share in [0.05, 0.15, 0.30, 0.50, 0.70, 0.85, 0.95]:
-        B = share * V / p; U = V - share * V
+        B = share * V / p; U = V - share * V; c.begin(p, U, B)
         try: qb, _ = c.quote(p, U, B, B * 1e-7, True, False); buy = qb / (p * B * 1e-7)
         except Revert: buy = float("nan")
         try: _, qs = c.quote(p, U, B, B * 1e-7, False, True); sell = qs / (p * B * 1e-7)
@@ -273,7 +277,7 @@ def arb_to_oracle(c, p, U, B, iters=40):
     return U, B
 
 def t_oracle_jump(c, p=5.0, U=1e6, B=2e5):
-    row = []
+    c.begin(p, U, B); row = []
     for mv in [0.001, 0.01, 0.05, 0.10, 0.20]:
         pn = p * (1 + mv)
         U2, B2 = arb_to_oracle(c, pn, U, B)
@@ -283,7 +287,7 @@ def t_oracle_jump(c, p=5.0, U=1e6, B=2e5):
 
 def t_oracle_error(c, p_real=5.0, U=1e6, B=2e5):
     """oracle too high by err. attacker sells BRL, best profit over trade size (grid), and share of U taken."""
-    row = []
+    c.begin(p_real, U, B); row = []
     for err in [0.0005, 0.001, 0.005, 0.01, 0.02, 0.05]:
         p_or = p_real * (1 + err); best = (0.0, 0.0, 0.0)
         for dx in [B * 10 ** e for e in [x / 10 for x in range(-30, 21)]]:
@@ -300,7 +304,7 @@ def t_edges(c, p=5.0):
         try: out.append((name, fn()))
         except Revert as e: out.append((name, f"revert: {e}"))
         except Exception as e: out.append((name, f"EXC {type(e).__name__}: {e}"))
-    U, B = 1e6, 2e5
+    U, B = 1e6, 2e5; c.begin(p, U, B)
     run("buy 99.9% BRL",        lambda: f"Q/(p dy)={c.quote(p,U,B,B*0.999,True,False)[0]/(p*B*0.999):.4g}")
     run("buy 100% BRL",         lambda: c.quote(p,U,B,B,True,False))
     run("Q = 1000x book",       lambda: f"dy/B={c.quote(p,U,B,1e3*(U+p*B),True,True)[1]/B:.6f}")
