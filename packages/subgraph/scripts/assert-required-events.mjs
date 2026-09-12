@@ -73,7 +73,11 @@ const assetVaultTemplateHasEventsAbi =
     manifest
   );
 
-// Aqua venue: adapter strategy lifecycle and router fills must stay wired to their own ABIs.
+// Aqua venue: adapter strategy lifecycle (Base manifest) and router fills (Arc-only router fragment, plus the
+// generated Arc manifest when it declares the router) must stay wired to their source ABIs.
+const arcRouterFragmentPath = path.join(subgraphDir, "manifests", "aqua-swapvm-router.arc.yaml");
+const arcManifestPath = path.join(subgraphDir, "subgraph.arc.yaml");
+const arcManifest = fs.existsSync(arcManifestPath) ? fs.readFileSync(arcManifestPath, "utf8") : "";
 const venueRequirements = [
   {
     abiFile: "AquaAdapter.json",
@@ -85,11 +89,19 @@ const venueRequirements = [
       "AdapterStrategyReconciled",
       "AdapterStrategyForceCleared",
       "AdapterOneStrategyPerTokenSet"
-    ]
+    ],
+    manifests: [["subgraph.base.yaml", manifest]]
   },
-  { abiFile: "AquaSwapVMRouter.json", events: ["Swapped"] }
+  {
+    abiFile: "AquaSwapVMRouter.json",
+    events: ["Swapped"],
+    manifests: [
+      ["manifests/aqua-swapvm-router.arc.yaml", fs.readFileSync(arcRouterFragmentPath, "utf8")],
+      ...(/\n    name: AquaSwapVMRouter\n/.test(arcManifest) ? [["subgraph.arc.yaml", arcManifest]] : [])
+    ]
+  }
 ];
-for (const { abiFile, events } of venueRequirements) {
+for (const { abiFile, events, manifests } of venueRequirements) {
   const venueAbi = JSON.parse(fs.readFileSync(path.join(subgraphDir, "abis", abiFile), "utf8"));
   const venueEvents = new Map(venueAbi.filter((item) => item.type === "event").map((event) => [event.name, event]));
   for (const name of events) {
@@ -99,9 +111,18 @@ for (const { abiFile, events } of venueRequirements) {
       continue;
     }
     const signature = eventSignature(event);
-    if (!manifest.includes(`- event: ${signature}`)) missingFromManifest.push(signature);
+    for (const [label, text] of manifests) {
+      if (!text.includes(`- event: ${signature}`)) missingFromManifest.push(`${label}: ${signature}`);
+    }
   }
   requiredEvents.push(...events);
+}
+
+// Base must not index 1inch's shared router; the router data source is Arc-only.
+const baseDeclaresRouter = /\n    name: AquaSwapVMRouter\n/.test(manifest);
+if (baseDeclaresRouter) {
+  console.error("subgraph.base.yaml must not declare the AquaSwapVMRouter data source (Arc-only).");
+  process.exit(1);
 }
 
 if (missingFromAbi.length > 0 || missingFromManifest.length > 0 || !assetVaultTemplateHasEventsAbi) {

@@ -45,7 +45,7 @@ pnpm --filter @aqua0/subgraph generate:arc
 ### Aqua venue entities
 
 - `AquaVenueAdapter`, `AquaStrategy` (`<adapter>-<strategyId>`, with `classId`/`strategy` and `status`), `AquaOrder` (`<maker>-<orderHash>`; a fresh ship's hash is the strategy id, a reship activates `newAquaHash`).
-- `AquaFill` from the address-scoped router `Swapped` event. Fills whose maker is an indexed adapter and whose order hash maps to a shipped strategy link the strategy, class, `vaultIn`/`vaultOut`, the `ClassVenueSettledEvent`s the maker hooks booked, and the per-LP `StrategyPrincipalSoldEvent`s / `StrategyFeeAccruedEvent`s that served the swap (`lps`, `principalSold` in tokenOut units, `feesCredited` in tokenIn units).
+- `AquaFill` from the address-scoped router `Swapped` event. The router data source is Arc-only: it is not in `subgraph.base.yaml` (Base does not index 1inch's shared router) and `generate:arc` appends it from `manifests/aqua-swapvm-router.arc.yaml` when `PUBLIC_ARC_AQUA_SWAPVM_ROUTER` is set. Fills whose maker is an indexed adapter and whose order hash maps to a shipped strategy link the strategy, class, `vaultIn`/`vaultOut`, the `ClassVenueSettledEvent`s the maker hooks booked, and the per-LP `StrategyPrincipalSoldEvent`s / `StrategyFeeAccruedEvent`s that served the swap (`lps`, `principalSold` in tokenOut units, `feesCredited` in tokenIn units).
 - `AquaLPFillStats` (per LP) and `AquaLPVaultFillStats` (per vault+LP, asset units) aggregate fills and swap fees.
 
 Arc's public RPC limits large topic-OR `eth_getLogs` requests. The AWS Graph Node therefore uses the compatibility shim in `../../infra/arc-rpc-proxy`, which splits only oversized log-filter topic lists and otherwise passes JSON-RPC through unchanged.

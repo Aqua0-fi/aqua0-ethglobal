@@ -5,14 +5,23 @@ import { readFileSync, writeFileSync } from "node:fs";
 // Core sources (required): VaultFactory, VaultRegistry, Composer, FillerRegistry + PUBLIC_ARC_START_BLOCK.
 // Optional sources are dropped when their address env is unset.
 // Every source may override its start block with `<ADDRESS_ENV>_START_BLOCK`; otherwise PUBLIC_ARC_START_BLOCK applies.
+//
+// Base-carried sources are rewritten from subgraph.base.yaml. Arc-only sources (`fragment`) are not in the Base
+// manifest and are appended from manifests/<fragment> when their address env is set.
 const sources = [
   { name: "VaultFactory", env: "PUBLIC_ARC_VAULT_FACTORY", required: true },
   { name: "VaultRegistry", env: "PUBLIC_ARC_VAULT_REGISTRY", required: true },
   { name: "Composer", env: "PUBLIC_ARC_COMPOSER", required: true },
   { name: "FillerRegistry", env: "PUBLIC_ARC_FILLER_REGISTRY", required: true },
   { name: "AquaAdapter", env: "PUBLIC_ARC_AQUA_ADAPTER", required: false },
-  { name: "AquaSwapVMRouter", env: "PUBLIC_ARC_AQUA_SWAPVM_ROUTER", required: false },
-  { name: "V4Adapter", env: "PUBLIC_ARC_V4_ADAPTER", required: false }
+  { name: "V4Adapter", env: "PUBLIC_ARC_V4_ADAPTER", required: false },
+  // Arc-only: Base does not index 1inch's shared router.
+  {
+    name: "AquaSwapVMRouter",
+    env: "PUBLIC_ARC_AQUA_SWAPVM_ROUTER",
+    required: false,
+    fragment: "aqua-swapvm-router.arc.yaml"
+  }
 ];
 
 const env = (name) => process.env[name]?.trim() || undefined;
@@ -71,12 +80,25 @@ function sourceBlockRegex(name) {
   );
 }
 
+const arcOnlyBlocks = [];
 for (const source of sources) {
+  const target = resolved.get(source.name);
+
+  if (source.fragment) {
+    if (sourceBlockRegex(source.name).test(manifest)) {
+      fail(`${source.name} is Arc-only and must not be declared in subgraph.base.yaml`);
+    }
+    if (!target) continue;
+    const fragment = readFileSync(new URL(`../manifests/${source.fragment}`, import.meta.url), "utf8");
+    arcOnlyBlocks.push(
+      fragment.replace("{{ADDRESS}}", target.address).replace("{{START_BLOCK}}", target.startBlock)
+    );
+    continue;
+  }
+
   const re = sourceBlockRegex(source.name);
   const match = manifest.match(re);
   if (!match) fail(`Could not find ${source.name} data source in subgraph.base.yaml`);
-
-  const target = resolved.get(source.name);
   if (!target) {
     manifest = manifest.replace(re, "");
     continue;
@@ -86,6 +108,11 @@ for (const source of sources) {
     .replace(/address: "0x[a-fA-F0-9]{40}"/, `address: "${target.address}"`)
     .replace(/startBlock: [0-9]+/, `startBlock: ${target.startBlock}`);
   manifest = manifest.replace(re, block);
+}
+
+if (arcOnlyBlocks.length > 0) {
+  if (!/\ntemplates:/.test(manifest)) fail("Could not find templates: section in subgraph.base.yaml");
+  manifest = manifest.replace(/\ntemplates:/, `\n${arcOnlyBlocks.join("")}templates:`);
 }
 
 // Dynamic AssetVaults created by the Arc factory must be indexed on Arc too.

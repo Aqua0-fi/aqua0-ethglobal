@@ -1,0 +1,26 @@
+  - kind: ethereum/contract
+    name: AquaSwapVMRouter
+    network: arc-testnet
+    source:
+      address: "{{ADDRESS}}"
+      abi: AquaSwapVMRouter
+      startBlock: {{START_BLOCK}}
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - AquaFill
+        - AquaOrder
+        - AquaStrategy
+        - AquaVenueAdapter
+        - AquaLPFillStats
+        - AquaLPVaultFillStats
+        - AquaSwapSettlementBuffer
+      abis:
+        - name: AquaSwapVMRouter
+          file: ./abis/AquaSwapVMRouter.json
+      eventHandlers:
+        - event: Swapped(bytes32,address,address,address,address,uint256,uint256)
+          handler: handleSwapped
+      file: ./src/aqua-swapvm-router.ts
