@@ -11,3 +11,4 @@ coverage/
 .DS_Store
 packages/subgraph/build/
 packages/subgraph/generated/
+__pycache__/
