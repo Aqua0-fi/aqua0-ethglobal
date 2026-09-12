@@ -14,7 +14,9 @@
     "typecheck": "pnpm --filter @aqua0/shared build && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@aqua0/shared": "workspace:*"
+    "@aqua0/keeper": "workspace:*",
+    "@aqua0/shared": "workspace:*",
+    "@aqua0/signals": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.19.2",
