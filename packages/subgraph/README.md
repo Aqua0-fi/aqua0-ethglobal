@@ -51,9 +51,9 @@ The adapter, router, FX adapter, FX router and `PUBLIC_ARC_V4_ADAPTER` sources a
 - `AquaVenueAdapter`, `AquaStrategy` (`<adapter>-<strategyId>`, with `classId`/`strategy` and `status`), `AquaOrder` (`<maker>-<orderHash>`; a fresh ship's hash is the strategy id, a reship activates `newAquaHash`).
 - `AquaFill` from the address-scoped router `Swapped` event. The router data source is Arc-only: it is not in `subgraph.base.yaml` (Base does not index 1inch's shared router) and `generate:arc` appends it from `manifests/aqua-swapvm-router.arc.yaml` when `PUBLIC_ARC_AQUA_SWAPVM_ROUTER` is set. Fills whose maker is an indexed adapter and whose order hash maps to a shipped strategy link the strategy, class, `vaultIn`/`vaultOut`, the `ClassVenueSettledEvent`s the maker hooks booked, and the per-LP `StrategyPrincipalSoldEvent`s / `StrategyFeeAccruedEvent`s that served the swap (`lps`, `principalSold` in tokenOut units, `feesCredited` in tokenIn units).
 - `AquaLPFillStats` (per LP) and `AquaLPVaultFillStats` (per vault+LP, asset units) aggregate fills and swap fees.
-- Two Arc venues are indexed side by side: pegged (`AquaAdapter` + `AquaSwapVMRouter`) and FXSwap (`FXAquaAdapter` + `AquaFXSwapVMRouter`, cloned from the same adapter block and router template). Each Arc data source carries a `venue` context (`pegged` / `fxswap`) stamped on `AquaVenueAdapter.venue`, `AquaStrategy.venue` and `AquaFill.venue`; `AquaFill.router` and `AquaVenueAdapter.swapVMRouter` keep the raw addresses. Entity ids include the adapter address, and fills attach only the settlements tagged with their own maker adapter, so both venues can share vaults and strategy classes. None of the Arc-only venue sources exist in `subgraph.base.yaml`.
+- Two Arc venues are indexed side by side: pegged (`AquaAdapter` + `AquaSwapVMRouter`) and forex (the AquaAdapter bound to `AquaForexSwapVMRouter`, as the data sources `FXAquaAdapter` and `AquaFXSwapVMRouter`, cloned from the same adapter block and router template). Each Arc data source carries a `venue` context (`pegged`, or `fxswap` for the forex venue) stamped on `AquaVenueAdapter.venue`, `AquaStrategy.venue` and `AquaFill.venue`; `AquaFill.router` and `AquaVenueAdapter.swapVMRouter` keep the raw addresses. Entity ids include the adapter address, and fills attach only the settlements tagged with their own maker adapter, so both venues can share vaults and strategy classes. None of the Arc-only venue sources exist in `subgraph.base.yaml`.
 
-Arc's public RPC limits large topic-OR `eth_getLogs` requests. The AWS Graph Node therefore uses the compatibility shim in `../../infra/arc-rpc-proxy`, which splits only oversized log-filter topic lists and otherwise passes JSON-RPC through unchanged.
+Arc's public RPC limits large topic-OR `eth_getLogs` requests. A self-hosted Graph Node, kept as a development fallback, therefore uses the compatibility shim in `../../infra/arc-rpc-proxy`, which splits only oversized log-filter topic lists and otherwise passes JSON-RPC through unchanged.
 
 ## Development
 
@@ -73,7 +73,7 @@ pnpm graph:build
 
 ## Subgraph Studio / Graph provider
 
-The Graph Continuity submission should use a real Graph provider endpoint for the judge-facing MCP. The repository helper is:
+The live Arc subgraph is on Subgraph Studio (`aqua-0-ethglobal-arc-testnet`, record in `../../deployments/graph-studio-arc-testnet.json`), and the hosted MCP and dashboard read it. Deploy with:
 
 ```sh
 GRAPH_STUDIO_SLUG=<studio-slug> \
@@ -83,4 +83,4 @@ GRAPH_STUDIO_DEPLOY_KEY=<secret-deploy-key> \
 
 `NETWORK=arc` (the default) deploys `subgraph.arc.yaml` (regenerated first when `PUBLIC_ARC_*` is set); `NETWORK=base` deploys the Base manifest. Credentials may also come from the gitignored `.secrets/graph-studio.env`. `DRY_RUN=1` builds and prints the deploy command without a key.
 
-The deploy key stays outside git. After deployment, set the MCP's `GRAPH_ENDPOINT` to the provider query endpoint and rerun the public MCP smoke. See `../../docs/THE_GRAPH_TRACK.md`.
+The deploy key stays outside git. CI redeploys to Studio when `packages/subgraph` changes on `main` (`.github/workflows/deploy.yml`). See `../../docs/THE_GRAPH_TRACK.md`.

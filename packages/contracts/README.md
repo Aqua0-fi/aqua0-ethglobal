@@ -3,11 +3,11 @@
 Foundry package that puts 1inch Aqua + SwapVM on Arc Testnet and connects them to the live Aqua0 vault core
 recorded in [`deployments/arc-testnet.json`](../../deployments/arc-testnet.json).
 
-- `lib/swap-vm` — 1inch swap-vm **v1.0.2** (git submodule). Pinned because it is the build 1inch's own router
+- `lib/swap-vm`: 1inch swap-vm **v1.0.2** (git submodule). Pinned because it is the build 1inch's own router
   runs elsewhere and the one Aqua0's `AquaAdapter` is tested against. It pins `@1inch/aqua` 0.1.0.
-- `script/DeployAquaVenue.s.sol` — deploys `AquaRouter` (Aqua) and a stock `AquaSwapVMRouter`.
-- `script/deploy-arc-aqua-venue.sh` — step 1: venue + Aqua0 `AquaAdapter` + wiring + verification.
-- `script/ArcFxStrategies.s.sol`, `script/run-arc-fx-strategies.sh` — step 2: one USDC deposit backing a
+- `script/DeployAquaVenue.s.sol`: deploys `AquaRouter` (Aqua) and a stock `AquaSwapVMRouter`.
+- `script/deploy-arc-aqua-venue.sh`: step 1, venue + Aqua0 `AquaAdapter` + wiring + verification.
+- `script/ArcFxStrategies.s.sol`, `script/run-arc-fx-strategies.sh`: step 2, one USDC deposit backing a
   USDC/ARGt and a USDC/BRAt strategy, each shipped through the adapter and filled once.
 - `script/DeployForexVenue.s.sol`, `script/deploy-arc-forex-venue.sh`: the forex venue, an
   `AquaForexSwapVMRouter` (ForexCurve, opcode 34) and a second `AquaAdapter` bound to it.
@@ -23,7 +23,7 @@ git submodule update --init packages/contracts/lib/swap-vm
 `AquaAdapter` is pre-existing Aqua0 code and is compiled from a local Aqua0 contracts checkout
 (`AQUA0_CONTRACTS_DIR`).
 
-## Step 1 — venue and adapter
+## Step 1: venue and adapter
 
 ```bash
 # Dry run on a local fork (impersonates the core admin for the wiring)
@@ -43,7 +43,7 @@ The deployer also turns off the adapter's `oneStrategyPerToken` knob. Left on, a
 strategy cannot back a second, which is precisely the shared-backing property the demo shows. The vault's
 settle-time debit and venue outflow limit remain the capital bound.
 
-## Step 2 — two FX strategies on one USDC deposit
+## Step 2: two FX strategies on one USDC deposit
 
 ```bash
 MODE=fork DEPLOYER=0x... KEYSTORE_ACCOUNT=<keystore-name> KEYSTORE_PASSWORD_FILE=<path-to-password-file> \
@@ -91,6 +91,65 @@ Tests: `test/ForexCurve.t.sol`, `test/ForexCurveInvariants.t.sol`, `test/ForexCu
 vectors in `test/fixtures/fxforex-vectors-wad.json`, matched within a few wei of a 100-digit re-solve) and
 `test/fork/ForexCurveArcFork.t.sol` (skipped with `FOREX_SKIP_FORK=true` or `FXSWAP_SKIP_FORK=true`). 41 Foundry
 tests pass without the fork test.
+
+## ForexCurve maths
+
+```text
+x = USDC balance,  y = p · FX balance        p = USDC per 1 FX unit, from the oracle
+g = x + y,  ideal I = g / 2
+
+distance past the band:  m = I(1 − β) − b  (below)   or   m = b − I(1 + β)  (above)
+inventory fee per asset: μ = min(δ · m / I, maxFee) · m,  0 inside the band
+ψ = μ_x + μ_y,  ω = ψ before the trade
+
+retained by the pool:    s = ψ' − ω         if the fee grows (the taker pays it)
+                         s = λ · (ψ' − ω)   if it shrinks (the taker gets λ of it back)
+```
+
+- **Balances** are scaled to 18 decimals (`rate = 10^(18 − decimals)`) and valued in USDC at the oracle price, so the curve sits at the live FX rate.
+- **Solver.** Multiplying by `g + s` makes `s` a quadratic in each piece (each asset's regime, and `c` = 1 or `λ`), solved exactly instead of DFX's 32-step iteration. Inside the band `s = 0` and the price is the oracle. Rounding always favours the maker.
+- **Halt and invariant.** As in DFX: a balance may end beyond `±α` of the new ideal only if it already was and the excursion does not grow, and the utility `g − ψ` may not drop.
+- **Fee.** `ε` applies to the output (exact in) or the input (exact out). The strategy declares it to the adapter as `feePpb`; no SwapVM flat fee is stacked on it.
+- **Oracle kind.** Only `0`, a Chainlink-style `latestRoundData` feed: the RedStone BRL feed or the ARS `ManualFxOracle`.
+
+```mermaid
+flowchart TD
+  Q["Router runs the maker program: amountIn of token X for token Y"] --> O["Read the price from the oracle declared in the program"]
+  O --> CHK{"Fresh and inside the min and max price band?"}
+  CHK -->|"no"| REV["Revert: stale or out-of-band price, no fill"]
+  CHK -->|"yes"| SC["Scale balances by token decimals and value them in USDC at the oracle price"]
+  SC --> BAND{"Does the trade take the book past the flat band?"}
+  BAND -->|"no"| FLAT["Oracle price, no slippage"]
+  BAND -->|"yes"| FEE["Solve the inventory fee in closed form; a rebalancing trade gets a share back"]
+  FLAT --> HALT{"Would the book end past the halt band?"}
+  FEE --> HALT
+  HALT -->|"yes"| HREV["Revert: halt, no fill"]
+  HALT -->|"no"| EPS["Apply the proportional fee"]
+  EPS --> OUT["amountOut in token units, rounded in the maker's favour"]
+  OUT --> HOOK["Maker hooks settle through the Aqua0 vaults"]
+```
+
+### Program arguments (123 bytes)
+
+Big-endian and packed. Source: `src/instructions/ForexCurve.sol`.
+
+| Offset | Size | Field | Meaning |
+| --- | --- | --- | --- |
+| 0 | 1 | `oracleKind` | `0` = Chainlink-style feed, the only kind accepted |
+| 1 | 1 | `flags` | bit 0 = invert price (the feed quotes FX units per 1 USDC); bit 1 = the quote token (USDC) is the greater address |
+| 2 | 20 | `oracle` | Price feed address |
+| 22 | 1 | `oracleDecimals` | Feed decimals; `0` = read `decimals()` every swap |
+| 23 | 4 | `maxStaleness` | Max answer age in seconds, `> 0` |
+| 27 | 16 | `minPrice` | Lowest accepted answer, WAD, in the feed's orientation |
+| 43 | 16 | `maxPrice` | Highest accepted answer, WAD |
+| 59 | 8 | `alpha` | Halt band, WAD, `0 < α < 1` |
+| 67 | 8 | `beta` | Flat band half-width, WAD, `0 ≤ β < α` |
+| 75 | 8 | `delta` | Inventory fee slope, WAD |
+| 83 | 8 | `maxFee` | Inventory fee cap, WAD, below 0.5 |
+| 91 | 8 | `lambda` | Share of a shrinking fee returned to the taker, WAD, `≤ 1` |
+| 99 | 8 | `epsilon` | Proportional fee, WAD, `< 0.1` |
+| 107 | 8 | `rateLt` | Decimals multiplier of the lower-address token |
+| 115 | 8 | `rateGt` | Decimals multiplier of the greater-address token |
 
 ## RedStone FX feeds
 

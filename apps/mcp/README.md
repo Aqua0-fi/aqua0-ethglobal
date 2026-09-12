@@ -1,6 +1,6 @@
 # @aqua0/mcp
 
-The Aqua0 MCP server. Your AI agent reads Aqua0's vaults and fills from The Graph, creates USDC/FX market-making strategies on 1inch Aqua and SwapVM, quotes and swaps, and benchmarks a strategy against the onchain market. It runs on **Arc Testnet**.
+The Aqua0 MCP server. Your AI agent reads Aqua0's vaults and fills from The Graph, creates USDC/FX market-making strategies on 1inch Aqua and SwapVM, quotes and swaps, checks the autonomous keeper, and benchmarks a strategy against the onchain market. It runs on **Arc Testnet**.
 
 One USDC deposit backs several strategies at once. Fills draw liquidity from the Aqua0 vaults just in time, and USDC/BRL and USDC/ARS strategies price from an FX oracle through the forex curve (SwapVM opcode 34).
 
@@ -14,7 +14,7 @@ One USDC deposit backs several strategies at once. Fills draw liquidity from the
 claude mcp add aqua0 -- npx -y @aqua0/mcp
 ```
 
-Or install the Claude Code plugin, which adds the hosted MCP server and the Aqua0 agent skill in one step:
+Or install the Claude Code plugin, which adds the Aqua0 agent skill and the hosted MCP server (prepare-only, no signing key) in one step:
 
 ```text
 /plugin marketplace add Aqua0-fi/aqua0-ethglobal
@@ -52,6 +52,8 @@ claude mcp add aqua0 -e MCP_WRITE_MODE=execute -e WRITE_PRIVATE_KEY=0xYOUR_TESTN
 
 ## Tools
 
+25 tools, plus `authorize_strategy` in execute mode (26).
+
 | Tool | What it does |
 | --- | --- |
 | `health`, `info` | Server, Graph and chain status |
@@ -63,14 +65,18 @@ claude mcp add aqua0 -e MCP_WRITE_MODE=execute -e WRITE_PRIVATE_KEY=0xYOUR_TESTN
 | `get_shared_backing` | Show one USDC deposit backing several strategies at once |
 | `get_fx_prices`, `set_fx_price` | Read the FX feeds (RedStone signed BRL prices, a hand-set ARS feed); move the ARS demo feed as its owner |
 | `benchmark_fx_strategy` | Compare a strategy with the onchain market for the same currency: one query over Messari standardized DEX subgraphs on The Graph Network, composed with the Aqua0 subgraph |
-| `login`, `whoami`, `logout` | Privy sign-in with a Circle wallet (local stdio server only) |
+| `get_signals` | Book health for the live forex strategies: spread, tilt and oracle age, the same signals the keeper buys, read for free |
+| `keeper_status` | What the autonomous FX book keeper did: last rebalance, recent ticks and spend. It reads the keeper's local journal (`AQUA0_KEEPER_JOURNAL`), so run the server on the machine running the keeper |
+| `login`, `whoami`, `logout` | Privy sign-in with a Circle wallet (local stdio server) |
 | `prepare_create_strategy`, `prepare_authorize_strategy`, `prepare_deposit`, `prepare_withdraw` | Calldata builders for the lower-level vault calls |
+| `authorize_strategy` | Execute mode only: send a vault commitment directly |
 
 Things to ask your agent:
 
 - "Deposit 2 USDC and create a USDC to Brazilian real strategy."
 - "Quote 0.1 USDC to BRL, then swap it."
 - "Does one deposit back both of my strategies?"
+- "Is the BRL book healthy? Did the keeper rebalance it?"
 - "How does my USDC/BRL strategy compare with the onchain market?"
 
 ## Environment variables
@@ -83,6 +89,7 @@ Things to ask your agent:
 | `WRITE_RPC_URL`, `WRITE_CHAIN_ID` | Arc Testnet, `5042002` | Chain for quotes and writes |
 | `MCP_WRITE_MODE` | `prepare` | `execute` sends transactions |
 | `WRITE_PRIVATE_KEY` | none | Local signer for execute mode |
+| `AQUA0_KEEPER_JOURNAL` | `~/.aqua0/keeper/journal.jsonl` | Keeper journal that `keeper_status` reads |
 
 Contract addresses default to the Arc Testnet deployment and can be overridden; see the repository.
 
