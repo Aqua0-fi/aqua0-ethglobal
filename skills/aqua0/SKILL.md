@@ -50,6 +50,7 @@ Codex takes the same variables with `codex mcp add aqua0 --env KEY=value ... -- 
 | Compare a strategy with the onchain market | `benchmark_fx_strategy {pair, feeBps?, lookbackDays?, chains?}` → report `verdict.summary`, the top `pools` and `aqua0.arcTestnet` | One Messari standardized query across Uniswap v3, Curve, SushiSwap and Velodrome subgraphs on six chains, plus the Aqua0 subgraph's forex strategies and fills. Say which pools are `standardized: false` (fallback), and name any source with status `failed` or `partial`. To look beyond these subgraphs, The Graph's Subgraph MCP can run in the same client to discover more; the two servers are not integrated. |
 | Prepare for an external wallet | `prepare_create_strategy`, `prepare_authorize_strategy`, `prepare_deposit`, `prepare_withdraw` | Calldata only. Deposit and withdraw take raw units. |
 | Inspect configuration | `info {includeConfig:true}` | Shows the write mode, chain and `write.signer` (`local` or `circle` plus its address), with secrets redacted. |
+| Check book health and the keeper | "is the book healthy?" → `get_signals {pair?}`; "did the keeper rebalance?" / "show the keeper's spend" → `keeper_status {last?}` | Both read-only. `get_signals` reads the same oracle and book signals the keeper buys (spread near 30 bps is flat; above 150 bps the keeper rebalances). `keeper_status` reads the keeper's journal, so it works while the keeper runs in another terminal: report `summary`, `lastRebalance` (spreads before and after, Arcscan links) and `spend`. |
 
 ## Natural language → tool calls
 
