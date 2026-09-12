@@ -37,7 +37,7 @@ A smoke test through the public MCP used `health`, `protocol_snapshot`, `list_op
 | --- | --- | --- |
 | Arc Testnet Aqua0 vault core: VaultFactory, VaultRegistry, Composer, FillerRegistry, AssetVault template | `subgraph.arc.yaml`, generated from `subgraph.base.yaml` by `pnpm --filter @aqua0/subgraph generate:arc` | **Live** on Subgraph Studio |
 | Pegged AquaAdapter lifecycle events: `AquaStrategyShippedEvent`, `AquaStrategyDockedEvent`, `AquaStrategyReshippedEvent`, `AquaStrategyReconciledEvent` | Arc manifest | **Live** on Subgraph Studio, including both strategies shipped on Arc on 2026-09-12 |
-| Both Arc Aqua venues: the pegged AquaAdapter + AquaSwapVMRouter and the FXSwap AquaAdapter + AquaFXSwapVMRouter, as `AquaVenueAdapter`, `AquaStrategy`, `AquaOrder`, `AquaFill` (each with a `venue` label, `pegged` or `fxswap`), `AquaLPFillStats`, `AquaLPVaultFillStats` (fees per LP) | Arc manifest; router data sources are Arc-only | **Built, not yet deployed**: Studio runs the earlier schema, and the redeploy from this branch is pending |
+| Both Arc Aqua venues: the pegged AquaAdapter + AquaSwapVMRouter and the forex AquaAdapter + AquaForexSwapVMRouter, as `AquaVenueAdapter`, `AquaStrategy`, `AquaOrder`, `AquaFill` (each with a `venue` label, `pegged` or `fxswap`), `AquaLPFillStats`, `AquaLPVaultFillStats` (fees per LP) | Arc manifest; router data sources are Arc-only | **Built, not yet deployed**: Studio runs the earlier schema, and the redeploy from this branch is pending |
 | Base Aqua0 vault deployment, including AquaAdapter and V4Adapter (pre-existing Aqua0 deployment) | `subgraph.base.yaml` | Provider-ready manifest |
 
 [`packages/subgraph/schema.graphql`](../packages/subgraph/schema.graphql) covers:

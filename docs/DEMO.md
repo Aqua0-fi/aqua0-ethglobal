@@ -6,8 +6,8 @@ The demo is a conversation in an agentic terminal (Claude Code, Codex or any MCP
 | --- | --- |
 | Pegged flow on Arc Testnet: deposit, two strategies on one USDC, one swap each, shared-backing read | **Live** |
 | RedStone BRL and MXNe price feeds on Arc, read with `get_fx_prices` | **Live** |
-| FXSwap venue on Arc (router, FXSwap AquaAdapter, hand-set ARS/USD feed) | **Deployed, awaiting wiring** |
-| FXSwap flow through the MCP service path: USDC/BRL priced from RedStone, `set_fx_price` → `quote_swap` on ARS | **Fork-proven** |
+| Forex venue on Arc (`AquaForexSwapVMRouter` and its AquaAdapter, verified on Arcscan) | **Deployed, awaiting wiring** |
+| Forex-curve flow through the MCP service path: USDC/BRL priced from RedStone, flat band, inventory fee and halt band, `set_fx_price` → `quote_swap` on ARS | **Fork-proven** |
 | Graph reads from Subgraph Studio | **Live** (earlier schema; Aqua venue entities **Built, not yet deployed**) |
 | Public MCP endpoint and dashboard | **Live** on the earlier 12-tool prepare-only build |
 
@@ -49,7 +49,7 @@ claude mcp add aqua0 \
   -- node <repo>/apps/mcp/dist/index.js
 ```
 
-The pegged venue, FXSwap venue and FX feed addresses default to the Arc deployment. Override `FXSWAP_ROUTER_ADDRESS`, `FXSWAP_AQUA_ADAPTER_ADDRESS` and `FX_ORACLE_ARS_USD` only for a fork. Leave `FX_ORACLE_BRL_USD` unset so BRL prices from RedStone; setting it replaces RedStone with a hand-set BRL-per-USD feed.
+The pegged venue, forex venue and FX feed addresses default to the Arc deployment. Override `FXSWAP_ROUTER_ADDRESS` and `FXSWAP_AQUA_ADAPTER_ADDRESS` (the forex router and adapter; the names are kept) and `FX_ORACLE_ARS_USD` only for a fork. Leave `FX_ORACLE_BRL_USD` unset so BRL prices from RedStone; setting it replaces RedStone with a hand-set BRL-per-USD feed.
 
 **To transact live**, the presenter restarts the server with `MCP_WRITE_MODE=execute` and a throwaway `WRITE_PRIVATE_KEY` in the server's environment, never in the chat. The signer must:
 - be an address without contract code (an EIP-7702-delegated address is rejected through ERC-1271);
@@ -92,7 +92,7 @@ Deposit once first: *"Deposit 2 USDC."* → `deposit {"token":"USDC","amount":"2
 5. sign EIP-712;
 6. call `AquaAdapter.shipStrategyWithFee`.
 
-Until the FXSwap adapter is wired, the response carries an `opcodeNote` saying it used the pegged venue, a `[FlatFeeAmountIn 30 bps][PeggedSwap]` program at a fixed price. Say so out loud. The live run registered class 2, strategy `0x384f3266…3c3c` ([ship tx](https://testnet.arcscan.app/tx/0x97d5fea443f9090f6b9dd2432036bdfbc2ed58d636e8ac802742d2e499968471)). A re-run reports every step as skipped. **Live**.
+Until the forex adapter is wired, the response carries an `opcodeNote` saying it used the pegged venue, a `[FlatFeeAmountIn 30 bps][PeggedSwap]` program at a fixed price. Say so out loud. The live run registered class 2, strategy `0x384f3266…3c3c` ([ship tx](https://testnet.arcscan.app/tx/0x97d5fea443f9090f6b9dd2432036bdfbc2ed58d636e8ac802742d2e499968471)). A re-run reports every step as skipped. **Live**.
 
 ### Step 3: USDC / Brazilian real strategy on the same USDC
 
@@ -118,55 +118,59 @@ Closing line: *"One capital, Argentine pesos and Brazilian reais, both live on A
 
 > "What's the real BRL rate right now?"
 
-`get_fx_prices {"pair":"BRL"}` shows the latest RedStone price signed by 3 of its 5 primary-prod signers (signing time, the three signer values, also as BRL per USD) and the value stored on-chain. The pegged strategy above sits at a fixed 5.5 BRL per USD whatever that rate does; FXSwap strategies trade at the signed price (Part 2). **Live**.
+`get_fx_prices {"pair":"BRL"}` shows the latest RedStone price signed by 3 of its 5 primary-prod signers (signing time, the three signer values, also as BRL per USD) and the value stored on-chain. The pegged strategy above sits at a fixed 5.5 BRL per USD whatever that rate does; forex strategies trade at the signed price (Part 2). **Live**.
 
-## Part 2: FXSwap flow, once the adapter is wired
+## Part 2: forex-curve flow, once the adapter is wired
 
-The FXSwap venue is **Deployed, awaiting wiring** on Arc:
-- router `0xb54AE15d2372F27718f32e9f6990330cdD3edaEB`;
-- FXSwap AquaAdapter `0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5`;
+The forex venue is **Deployed, awaiting wiring** on Arc:
+- `AquaForexSwapVMRouter` `0x0661435C2684Dcf62c547bA75a3300f928701E3d` (ForexCurve, opcode 34), verified on Arcscan;
+- forex AquaAdapter `0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80`, verified on Arcscan, with `OPERATOR_ROLE` granted to the shared Circle operator;
 - ARS/USD `ManualFxOracle` `0xc05A3Fb016f973C82b0232EF50336d4C0466E70C` at 1400, owned by the demo wallet;
 - RedStone BRL feed `0xac4D10eE7FF790c2E505fBBD6A72d15D7Cbc1796` (USD per 1 BRL), **Live**, updated only from signed RedStone prices.
 
-The core admin must allowlist the adapter and grant it `VENUE_SETTLER_ROLE` on the three vaults (see [`ARC_DEPLOYMENT.md`](ARC_DEPLOYMENT.md#pending-wiring-for-the-fxswap-adapter)). Until then, run this part on a fork and present it as **Fork-proven**. Step 1 also works live on Arc.
+The core admin must allowlist the adapter and grant it `VENUE_SETTLER_ROLE` on the three vaults (see [`ARC_DEPLOYMENT.md`](ARC_DEPLOYMENT.md#pending-wiring-for-the-forex-adapter)). Until then, run this part on a fork and present it as **Fork-proven**. Step 1 also works live on Arc.
 
 | # | Say | Tool call |
 | --- | --- | --- |
 | 1 | "What's the real BRL rate right now?" | `get_fx_prices {"pair":"BRL"}` |
-| 2 | "Create a peso strategy that tracks the oracle." | `create_strategy {"pair":"USDC/ARS","opcode":"fxswap"}` |
-| 3 | "Same USDC with reais, at the real rate." | `create_strategy {"pair":"usdc to brl","opcode":"fxswap"}` |
+| 2 | "Create a peso strategy that tracks the oracle." | `create_strategy {"pair":"USDC/ARS","opcode":"forex"}` |
+| 3 | "Same USDC with reais, at the real rate." | `create_strategy {"pair":"usdc to brl","opcode":"forex"}` |
 | 4 | "How many reais for 0.1 USDC right now?" | `quote_swap {"pair":"USDC/BRL","amount":"0.1"}` |
 | 5 | "Swap it." | `swap {"pair":"USDC/BRL","amount":"0.1"}` |
 | 6 | "How many pesos for 0.1 USDC? Show the oracle price and spread." | `quote_swap {"pair":"USDC/ARS","amount":"0.1"}` |
-| 7 | "Push the ARS/USD price up 5% and quote again." | `set_fx_price {"pair":"ARS","changePercent":5}`, then `quote_swap {"pair":"USDC/ARS","amount":"0.1"}` |
-| 8 | "Is my USDC still backing both?" | `get_shared_backing {}` |
+| 7 | "And for 0.3 USDC? And 0.8?" | `quote_swap {"pair":"USDC/ARS","amount":"0.3"}`, then `quote_swap {"pair":"USDC/ARS","amount":"0.8"}` |
+| 8 | "Push the ARS/USD price up 5% and quote again." | `set_fx_price {"pair":"ARS","changePercent":5}`, then `quote_swap {"pair":"USDC/ARS","amount":"0.1"}` |
+| 9 | "Is my USDC still backing both?" | `get_shared_backing {}` |
 
-At steps 3 to 5, say where the BRL price comes from. `create_strategy` sizes the BRL leg from the live RedStone price and sets FXSwap's invert-price flag (the feed quotes USD per BRL). `quote_swap` applies the latest signed payload as an `eth_call` state override and sends nothing. `swap` first pushes that payload on-chain (about 130k gas), because there is no keeper. BRL is never set by hand.
+At steps 3 to 5, say where the BRL price comes from. `create_strategy` sizes the BRL leg from the live RedStone price. The feed quotes USD per BRL, which is already the curve's USDC-per-BRL price, so the invert-price flag stays off. `quote_swap` applies the latest signed payload as an `eth_call` state override and sends nothing. `swap` first pushes that payload on-chain (about 130k gas), because there is no keeper. BRL is never set by hand.
 
-At step 7, name the trust assumption: the ARS feed is an owner-set demo oracle, because RedStone has no ARS feed. FXSwap strategies trade at whatever their feed says within their price band and staleness window.
+At steps 6 and 7, explain the curve. Each strategy ships 1 USDC plus its value in FX, so the book starts at an even split. While each balance stays within 15% of its ideal (half the book's value), the price is the oracle less the 30 bps fee. Past that flat band an inventory fee grows with the imbalance, capped at 25%, and 30% of it goes back to trades that rebalance the book. A trade that would leave a balance more than 50% from its ideal reverts: that is the halt band, and the 0.8 USDC quote hits it.
 
-Expected figures from the fork proof (`FX_VENUE=deployed` [`scripts/test-arc-fork-fxswap.sh`](../scripts/test-arc-fork-fxswap.sh)):
-- one 2 USDC deposit backs FXSwap USDC/ARS and USDC/BRL;
-- USDC/BRL: `swap` pushes the signed RedStone BRL price, then 0.1 USDC → 0.513529 BRAt at oracle 5.155131 BRAt per USDC (RedStone BRL 0.194026 USD per BRL), spread about 38 bps. That is exactly what `quote_swap` returned beforehand with nothing sent. The strategy has the invert-price flag and a 1 hour max staleness;
-- USDC/ARS: 0.1 USDC → 139.462 ARGt at oracle 1400, with an effective spread of about 38 bps;
-- the feed owner moves ARS/USD +5% and the quote rises 4.79%;
-- a non-owner update is refused.
+At step 8, name the trust assumption: the ARS feed is an owner-set demo oracle, because RedStone has no ARS feed. Forex strategies trade at whatever their feed says within their price band and staleness window.
+
+Expected results from the fork proof ([`scripts/test-arc-fork-forex.sh`](../scripts/test-arc-fork-forex.sh)):
+- one 2 USDC deposit backs forex USDC/ARS and USDC/BRL;
+- inside the flat band a swap costs 30 bps;
+- a trade past the flat band paid 666 bps, the inventory fee;
+- a trade past the halt band reverts with `ForexCurveUpperHalt()`;
+- the feed owner moves ARS/USD +5% and the quote moves by exactly 5%;
+- USDC/BRL: `swap` pushes a signed RedStone BRL price, then fills at its quote;
+- quotes agree with the reference `scripts/fxforex_math.py` to about 1e-16.
 
 The live BRL rate moves, so a new run gives slightly different BRL figures.
 
-Strategy defaults: A 100, γ 0.1, fee 10 bps rising to 1% with imbalance. ARS: band half to double 1400 ARS per USD, max feed age 7 days. BRL: band 0.0909–0.3636 USD per BRL, max feed age 1 hour.
+Strategy defaults: `α` 0.5 (halt band), `β` 0.15 (flat band), `δ` 0.5 (fee slope), `maxFee` 0.25, `λ` 0.3 (rebate share), fee `ε` 30 bps. ARS: band half to double 1400 ARS per USD, max feed age 7 days. BRL: band 0.0909–0.3636 USD per BRL, max feed age 1 hour.
 
 ```bash
 pnpm install && pnpm build
-./scripts/test-arc-fork-fxswap.sh                    # fresh FX venue deployed on the fork
-FX_VENUE=deployed ./scripts/test-arc-fork-fxswap.sh  # the real Arc FX contracts, on the fork
+./scripts/test-arc-fork-forex.sh   # deploys the forex venue on an Arc fork and runs the flow
 ```
 
-For a live conversation on the fork, start the fork the way the script does (`REUSE_ANVIL=1` keeps it up), then point a local execute-mode MCP at it with `WRITE_RPC_URL=http://127.0.0.1:8579`.
+For a live conversation on the fork, start `anvil --fork-url https://rpc.testnet.arc.network --port 8580` yourself and run the script with `REUSE_ANVIL=1`, so the fork stays up. Then point a local execute-mode MCP at `WRITE_RPC_URL=http://127.0.0.1:8580`, with `FXSWAP_ROUTER_ADDRESS` and `FXSWAP_AQUA_ADAPTER_ADDRESS` set to the router and adapter the script prints.
 
 ## Fallbacks
 
-- **FXSwap adapter not wired:** use the pegged venue for the live part. Say explicitly that this curve sits at a fixed price and does not track a moving FX rate, and show FXSwap on the fork.
+- **Forex adapter not wired:** use the pegged venue for the live part. Say explicitly that this curve sits at a fixed price and does not track a moving FX rate, and show the forex curve on the fork.
 - **Arc RPC or execute key unavailable:** run [`scripts/test-arc-fork-strategies.sh`](../scripts/test-arc-fork-strategies.sh) and point at the recorded live hashes in [`deployments/arc-testnet-strategies.json`](../deployments/arc-testnet-strategies.json).
 - **Public endpoint only:** use the read steps and `prepare_*` tools, and say that the strategy and swap tools run in the local build.
 

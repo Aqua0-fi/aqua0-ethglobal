@@ -89,35 +89,37 @@ The same flow is repeatable on a local fork, with real Arc bytecode and state. O
 1. **Foundry path:** [`packages/contracts/script/run-arc-fx-strategies.sh`](../packages/contracts/script/run-arc-fx-strategies.sh) runs [`ArcFxStrategies.s.sol`](../packages/contracts/script/ArcFxStrategies.s.sol).
 2. **MCP service path:** [`scripts/test-arc-fork-strategies.sh`](../scripts/test-arc-fork-strategies.sh) drives `deposit`, `create_strategy` (twice), `quote_swap`, `swap` and `get_shared_backing` through the CLI and asserts the result.
 
-## 5. FXSwap venue: Deployed, awaiting wiring
+## 5. Forex venue: Deployed, awaiting wiring
 
-Deployed with [`packages/contracts/script/deploy-arc-fx-venue.sh`](../packages/contracts/script/deploy-arc-fx-venue.sh), which runs [`DeployFXVenue.s.sol`](../packages/contracts/script/DeployFXVenue.s.sol) (broadcast: [`run-latest.json`](../packages/contracts/broadcast/DeployFXVenue.s.sol/5042002/run-latest.json)) and then deploys a second AquaAdapter bound to the new router, since an adapter binds exactly one router.
+Deployed with [`packages/contracts/script/deploy-arc-forex-venue.sh`](../packages/contracts/script/deploy-arc-forex-venue.sh), which runs [`DeployForexVenue.s.sol`](../packages/contracts/script/DeployForexVenue.s.sol) and then deploys a second AquaAdapter bound to the new router, since an adapter binds exactly one router. It deploys no feeds: forex strategies read the RedStone BRL feed ([section 6](#6-redstone-price-feeds-live)) and the ARS/USD `ManualFxOracle` below. Record: `forexVenue` in [`deployments/arc-testnet.json`](../deployments/arc-testnet.json).
 
 | Contract | Address | Notes |
 | --- | --- | --- |
-| `AquaFXSwapVMRouter` | [`0xb54AE15d2372F27718f32e9f6990330cdD3edaEB`](https://testnet.arcscan.app/address/0xb54AE15d2372F27718f32e9f6990330cdD3edaEB) | FXSwap = opcode 34, 24,434 bytes (under EIP-170). EIP-712 name `AquaSwapVMRouter`, version `1.0.2-fx`, bound to the existing Aqua. Start block 61725474. |
-| Aqua0 `AquaAdapter`, FXSwap venue | [`0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5`](https://testnet.arcscan.app/address/0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5) | Bound to the FXSwap router. Start block 61725501. |
+| `AquaForexSwapVMRouter` | [`0x0661435C2684Dcf62c547bA75a3300f928701E3d`](https://testnet.arcscan.app/address/0x0661435C2684Dcf62c547bA75a3300f928701E3d) | ForexCurve = opcode 34, 24,553 bytes (under EIP-170). EIP-712 name `AquaSwapVMRouter`, version `1.0.2-forex`, bound to the existing Aqua. Deploy tx [`0x26007918…b5f7`](https://testnet.arcscan.app/tx/0x26007918f08656de1ff6d62b1645b307756ec08af5a69ded592667319a13b5f7), block 61762912. Verified on Arcscan (full match). |
+| Aqua0 `AquaAdapter`, forex venue | [`0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80`](https://testnet.arcscan.app/address/0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80) | Bound to the forex router, `oneStrategyPerToken` off. `OPERATOR_ROLE` granted to the shared Circle operator `0xcdbd…d404`. Verified on Arcscan (partial match: compiled without CBOR metadata). |
 | `ManualFxOracle` ARS/USD | [`0xc05A3Fb016f973C82b0232EF50336d4C0466E70C`](https://testnet.arcscan.app/address/0xc05A3Fb016f973C82b0232EF50336d4C0466E70C) | Answer 1400; owner is the demo wallet |
 | `ManualFxOracle` BRL/USD | [`0x1AE6542b9da89Ed2AEf00600710Bba75DbFF5e71`](https://testnet.arcscan.app/address/0x1AE6542b9da89Ed2AEf00600710Bba75DbFF5e71) | Answer 5.50; owner is the demo wallet. No longer the default: BRL prices from RedStone ([section 6](#6-redstone-price-feeds-live)). Set `FX_ORACLE_BRL_USD` to use it. |
 
-The `ManualFxOracle` feeds are Chainlink-compatible and owner-set by hand. FXSwap strategies trade at whatever their feed reports, bounded by each strategy's price band and staleness window.
+The two `ManualFxOracle` feeds were deployed with the earlier FXSwap venue (`AquaFXSwapVMRouter` `0xb54AE15d2372F27718f32e9f6990330cdD3edaEB` and its AquaAdapter `0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5`), which the forex venue supersedes and which was never wired.
 
-### Pending wiring for the FXSwap adapter
+The `ManualFxOracle` feeds are Chainlink-compatible and owner-set by hand. Forex strategies trade at whatever their feed reports, bounded by each strategy's price band and staleness window.
+
+### Pending wiring for the forex adapter
 
 The core admin holds `DEFAULT_ADMIN_ROLE` on the registry and `CAPITAL_ADMIN_ROLE` on the vaults. It must send these calls, or grant admin roles so the team can send them:
 
-1. `VaultRegistry.setAdapterAllowed(0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5, true)`
-2. `grantRole(keccak256("VENUE_SETTLER_ROLE"), 0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5)` on the USDC AssetVault
+1. `VaultRegistry.setAdapterAllowed(0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80, true)`
+2. `grantRole(keccak256("VENUE_SETTLER_ROLE"), 0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80)` on the USDC AssetVault
 3. The same on the ARGt AssetVault
 4. The same on the BRAt AssetVault
 
-`deploy-arc-fx-venue.sh` with `MODE=arc` prints the exact calldata. With `MODE=fork` it impersonates the admin and sends the calls on a local fork. The strategist also needs `OPERATOR_ROLE` on this adapter.
+`deploy-arc-forex-venue.sh` with `MODE=arc` prints the exact calldata. With `MODE=fork` it impersonates the admin and sends the calls on a local fork. The shared Circle operator already holds `OPERATOR_ROLE` on this adapter; any other address that sends ships on it needs that role too.
 
-Until the wiring lands there are no live FXSwap strategies on Arc. The MCP's `create_strategy` then falls back to the pegged venue and explains why in `opcodeNote`. The full FXSwap flow is **Fork-proven** against these exact contracts, with USDC/BRL on the RedStone feed, by `FX_VENUE=deployed ./scripts/test-arc-fork-fxswap.sh`. Details are in the [README](../README.md#fxswap-in-brief).
+Until the wiring lands there are no live forex strategies on Arc. The MCP's `create_strategy` then falls back to the pegged venue and explains why in `opcodeNote`. The forex flow is **Fork-proven** by [`scripts/test-arc-fork-forex.sh`](../scripts/test-arc-fork-forex.sh), which deploys the same router and adapter code on a fork, wires them as the impersonated admins and prices USDC/BRL from the RedStone feed. Details are in the [README](../README.md#forex-curve-in-brief).
 
 ## 6. RedStone price feeds: Live
 
-USDC/BRL FXSwap strategies price from RedStone signed market data instead of a hand-set feed. RedStone's `redstone-primary-prod` gateways are free, need no API key and are verified on Arc Testnet. The alternatives did not fit:
+USDC/BRL forex strategies price from RedStone signed market data instead of a hand-set feed. RedStone's `redstone-primary-prod` gateways are free, need no API key and are verified on Arc Testnet. The alternatives did not fit:
 - Pyth's Hermes now needs an API key, and the free tier is not entitled to FX feeds;
 - Chainlink Data Feeds exist only on Arc mainnet;
 - Circle StableFX covers only USDC/EURC.
@@ -135,11 +137,11 @@ Deployed by `0x7E61A5EbCCd26d9D91690C6037d7224F5384730D` with [`DeployRedStoneFe
 First on-chain update: [`0x3ec11cc0…4ecf`](https://testnet.arcscan.app/tx/0x3ec11cc0830567cb25a5d9b9b1f36c8caa5d966216c552b8a3098fee75d44ecf) stored BRL at 0.19402073 USD and MXNe at 16.97382 MXN per USD.
 
 How it works:
-- **Read.** FXSwap reads a feed as oracle kind 0 (Chainlink-style `latestRoundData`). `updatedAt` is the block time of the last push.
+- **Read.** ForexCurve reads a feed as oracle kind 0 (Chainlink-style `latestRoundData`), the only kind it accepts. `updatedAt` is the block time of the last push.
 - **Push.** Anyone can call `updateDataFeedsValuesPartial(bytes32[])` with a signed payload appended to the calldata. The adapter stores a value only if 3 of RedStone's 5 primary-prod signers agree, the data is newer than the stored value, and it is at most 3 minutes old. Reads revert after 30 hours without an update.
 - **No keeper.** The MCP and CLI `swap` push the latest signed payload right before swapping (about 130k gas). In prepare mode that push is the first prepared transaction.
 - **Quote.** `quote_swap` sends nothing. It fetches the latest signed payload, decodes it the way the adapter aggregates it (median), and runs the router quote as an `eth_call` with a state override that places that value in the adapter's storage. Arc's RPC supports state overrides.
-- **Create.** `create_strategy` for USDC/BRL sizes the default FX ship amount from the live RedStone price and sets FXSwap's invert-price flag, because the feed quotes USD per BRL. The default band is 0.0909–0.3636 USD per BRL (half to double 5.5 BRL per USD) and the default max staleness is 1 hour. The hand-set ARS feed keeps 7 days.
+- **Create.** `create_strategy` for USDC/BRL sizes the default FX ship amount from the live RedStone price. The feed quotes USD per BRL, which is already the curve's USDC-per-BRL price, so the invert-price flag stays off. The default band is 0.0909–0.3636 USD per BRL (half to double 5.5 BRL per USD) and the default max staleness is 1 hour. The hand-set ARS feed keeps 7 days.
 - **Inspect.** `get_fx_prices {"pair":"BRL"}` shows the latest signed price (signing time, the three signer values, also inverted to BRL per USD) and the value stored on-chain. Without a pair it also lists MXNe. `set_fx_price` refuses the RedStone feed.
 - **Override.** `FX_ORACLE_BRL_USD`, if set, replaces RedStone for BRL with a BRL-per-USD feed, such as the old `ManualFxOracle` above.
 
@@ -148,8 +150,8 @@ Sources: [`AquaRedStoneFeeds.sol`](../packages/contracts/src/oracles/AquaRedSton
 | Scope | Status |
 | --- | --- |
 | Feeds deployed, updated on-chain, readable with `get_fx_prices` | **Live** |
-| FXSwap USDC/BRL through the MCP on these feeds (`FX_VENUE=deployed ./scripts/test-arc-fork-fxswap.sh`): `swap` pushed the signed BRL price, then 0.1 USDC → 0.513529 BRAt at oracle 5.155131 BRAt per USDC, exactly the state-override quote | **Fork-proven** |
-| FXSwap strategies on Arc using these feeds | **Deployed, awaiting wiring** (section 5) |
+| Forex USDC/BRL through the MCP on these feeds ([`scripts/test-arc-fork-forex.sh`](../scripts/test-arc-fork-forex.sh)): `swap` pushed a signed BRL price, then filled at its quote | **Fork-proven** |
+| Forex strategies on Arc using these feeds | **Deployed, awaiting wiring** (section 5) |
 
 ## 7. Arc subgraph
 
@@ -165,10 +167,10 @@ PUBLIC_ARC_AQUA_ADAPTER=0xbF72D34b804636496c3308796908152b82624Ca5 \
 PUBLIC_ARC_AQUA_ADAPTER_START_BLOCK=61679229 \
 PUBLIC_ARC_AQUA_SWAPVM_ROUTER=0xb20bc70b485eC1352C190d26fCaB1959d219F763 \
 PUBLIC_ARC_AQUA_SWAPVM_ROUTER_START_BLOCK=61679223 \
-PUBLIC_ARC_FX_AQUA_ADAPTER=0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5 \
-PUBLIC_ARC_FX_AQUA_ADAPTER_START_BLOCK=61725501 \
-PUBLIC_ARC_FXSWAP_ROUTER=0xb54AE15d2372F27718f32e9f6990330cdD3edaEB \
-PUBLIC_ARC_FXSWAP_ROUTER_START_BLOCK=61725474 \
+PUBLIC_ARC_FX_AQUA_ADAPTER=0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80 \
+PUBLIC_ARC_FX_AQUA_ADAPTER_START_BLOCK=61762912 \
+PUBLIC_ARC_FXSWAP_ROUTER=0x0661435C2684Dcf62c547bA75a3300f928701E3d \
+PUBLIC_ARC_FXSWAP_ROUTER_START_BLOCK=61762912 \
 pnpm --filter @aqua0/subgraph generate:arc
 ```
 
