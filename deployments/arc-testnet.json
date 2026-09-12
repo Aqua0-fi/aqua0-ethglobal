@@ -198,7 +198,10 @@
       "operatorRole": [
         "0xcdbd43edb8292def7e8ac99c77860a689cc6d404"
       ],
-      "oneStrategyPerToken": false
+      "oneStrategyPerToken": false,
+      "deployTx": "0xe53f6ca0c3929cb6566fa1205f10437b1a3eb2436b699ba2a4083046dcb54bc3",
+      "setOneStrategyPerTokenTx": "0x5fdaea440e47095bbabd32eb78ba7eeb3ff5d03f4fb82eecea47d4f5a8e28fb1",
+      "operatorRoleGrantTx": "0x50c38bc1bfd2dec897388d1bafa6c6384b958c1d134dcd8272b43f3fd48d39fc"
     },
     "coreWiring": {
       "status": "pending (core admin)",
