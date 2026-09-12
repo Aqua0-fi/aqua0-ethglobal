@@ -12,8 +12,8 @@ import { ForexCurveMathHarness } from "./ForexCurveVectors.t.sol";
 /// @notice Fuzzed properties of the forex curve from the reference's own checks (`fxforex_math.t2_invariants`,
 ///         `t3_inverse`): utility g − ψ never drops, inside the band the price is the oracle (o = −a), round trips,
 ///         split trades and closed sequences never leave the taker a gain, and exact in / exact out invert each other.
-/// @dev Parameter sets are the reference's (with MAX lowered to a valid value where α = 0.9) plus a fuzzed valid set with
-///      α up to 1 and MAX within 1% of ForexCurveArgsBuilder.maxFeeLimit(α).
+/// @dev Parameter sets are the reference's (dfx_prod, conservative, no_flat_zone, cap_regime) plus a fuzzed valid set with
+///      α up to 1 and MAX within 1% of ForexCurveArgsBuilder.maxFeeLimit (just below 1/2).
 ///      States are log-uniform in price (0.01 .. 1e4 quote per local) and book size (1e3 .. 1e9 quote units), with the
 ///      local share inside the halts; trades span 1e-7 of the book up to α of it. ε = 0, so only the curve and the
 ///      rounding are under test. Tolerances are the rounding of integer states: a local amount converts to numeraire
@@ -41,12 +41,13 @@ contract ForexCurveInvariantsTest is Test {
         uint256 i = seed % 5;
         if (i == 0) return ForexCurveMath.Params(0.5e18, 0.35e18, 0.5e18, 0.25e18, 1e18, 0); // DFX production
         if (i == 1) return ForexCurveMath.Params(0.5e18, 0.15e18, 0.5e18, 0.25e18, 0.3e18, 0); // recommended
-        if (i == 2) return ForexCurveMath.Params(0.9e18, 0, 0.15e18, 0.05e18, 0.3e18, 0); // no flat zone
+        if (i == 2) return ForexCurveMath.Params(0.9e18, 0, 0.15e18, 0.25e18, 0.3e18, 0); // no flat zone
         if (i == 3) return ForexCurveMath.Params(0.5e18, 0.35e18, 3e18, 0.25e18, 0.3e18, 0); // capped fee regime
         return _nearFeeBound(uint256(keccak256(abi.encode(seed))));
     }
 
-    /// @dev α in [0.5, 1) (a third of the time within 0.01 of 1), MAX within 1% of its limit, any β < α, δ, λ
+    /// @dev α in [0.5, 1) (a third of the time within 0.01 of 1), MAX within 1% of its limit (just below 1/2), any β < α,
+    ///      δ, λ
     function _nearFeeBound(uint256 r) internal pure returns (ForexCurveMath.Params memory p) {
         p.alpha = r % 3 == 0 ? 1e18 - 1 - (r >> 8) % 1e16 : 0.5e18 + (r >> 8) % 0.5e18;
         uint256 limit = ForexCurveArgsBuilder.maxFeeLimit(p.alpha);
@@ -106,26 +107,91 @@ contract ForexCurveInvariantsTest is Test {
         ForexCurveArgsBuilder.validate(args);
     }
 
-    /// @dev A trade that moves at least the book value g (exact in) or takes it (exact out) never clears, from any
-    ///      state, including states already past the halts, with any valid parameters
-    /// forge-config: default.fuzz.runs = 2048
-    function testFuzz_BookSizedTradeNeverSucceeds(
-        uint256 setSeed,
+    /// @dev Any valid parameters, weighted to the corners the old α-dependent maxFee bound excluded: the reference's
+    ///      no_flat_zone set, α 0.99 / MAX 0.49 / δ 18 and α 0.95 / MAX 0.45 / δ 5, then α anywhere up to 1e18 − 1
+    ///      (a third of the time within 0.01 of 1), MAX up to 0.5e18 − 1 (half the time within 0.01 of it), δ up to the
+    ///      uint64 maximum (half the time within 1 of it), any β < α and λ ≤ 1
+    function _anyValid(uint256 r) internal pure returns (ForexCurveMath.Params memory p) {
+        uint256 i = r % 5;
+        if (i == 0) return ForexCurveMath.Params(0.9e18, 0, 0.15e18, 0.25e18, 0.3e18, 0);
+        if (i == 1) return ForexCurveMath.Params(0.99e18, 0, 18e18, 0.49e18, (r >> 8) % (1e18 + 1), 0);
+        if (i == 2) return ForexCurveMath.Params(0.95e18, 0, 5e18, 0.45e18, (r >> 8) % (1e18 + 1), 0);
+        r = uint256(keccak256(abi.encode(r)));
+        p.alpha = r % 3 == 0 ? 1e18 - 1 - (r >> 2) % 1e16 : 1 + (r >> 2) % (1e18 - 1);
+        p.maxFee = (r >> 64) % 2 == 0 ? 0.5e18 - 1 - (r >> 65) % 0.01e18 : (r >> 65) % 0.5e18;
+        p.beta = p.alpha * ((r >> 128) % 4) / 10;
+        p.delta = (r >> 136) % 2 == 0 ? type(uint64).max - (r >> 137) % 1e18 : (r >> 137) % type(uint64).max;
+        p.lambda = (r >> 200) % (1e18 + 1);
+    }
+
+    /// @dev What every trade that clears must satisfy, from any state (including states already past the halts), with
+    ///      any valid parameters. Book-sized trades (1x to 3x the book value g) are allowed to clear.
+    ///      - the pool's value net of fees x + y − ψ does not drop;
+    ///      - the taker never gets more than the oracle value of its input plus λ of the fee reduction: the retention
+    ///        s = a + o (numeraire kept by the pool) is at least −λ·(ω − ψ')⁺.
+    ///      Both are exact with ψ rounded down (the solver's own ω): the solver rounds ψ' up and nudges s toward the maker.
+    /// forge-config: default.fuzz.runs = 4096
+    function testFuzz_ClearedTradeKeepsPoolValueAndNeverOverpays(
+        uint256 paramSeed,
         uint256 vSeed,
         uint256 shareSeed,
         uint256 sizeSeed,
         bool knownIsQuote,
         bool intoPool
     ) public view {
-        ForexCurveMath.Params memory params = _set(setSeed);
+        ForexCurveMath.Params memory params = _anyValid(paramSeed);
         uint256 v = _logUniform(vSeed, 1e21, 6);
         uint256 share = bound(shareSeed, 1e12, 1e18 - 1e12);
         (uint256 x, uint256 y) = (v * (1e18 - share) / 1e18, v * share / 1e18);
-        uint256 size = (x + y) + (x + y) * (sizeSeed % 2e18) / 1e18;
+        uint256 g = x + y;
+        // Half the time a book-sized trade, otherwise 1e-7 of the book up to the book
+        uint256 size = sizeSeed % 2 == 0 ? g + g * ((sizeSeed >> 1) % 2e18) / 1e18 : _size(g, 1e18, sizeSeed >> 1);
         int256 a = intoPool ? int256(size) : -int256(size);
-        try h.trade(params, x, y, knownIsQuote, a) returns (int256) {
-            revert("a trade of the book's size cleared");
-        } catch { }
+        int256 o;
+        try h.trade(params, x, y, knownIsQuote, a) returns (int256 out) {
+            o = out;
+        } catch {
+            return;
+        }
+        _checkClearedTrade(params, x, y, knownIsQuote, a, o);
+    }
+
+    function _checkClearedTrade(
+        ForexCurveMath.Params memory params,
+        uint256 x,
+        uint256 y,
+        bool knownIsQuote,
+        int256 a,
+        int256 o
+    ) internal view returns (bool bookSized) {
+        (int256 nx, int256 ny) = knownIsQuote ? (int256(x) + a, int256(y) + o) : (int256(x) + o, int256(y) + a);
+        int256 omega = h.psi(params, x, y);
+        int256 psiAfter = h.psi(params, uint256(nx), uint256(ny));
+        assertGe(nx + ny - psiAfter, int256(x + y) - omega, "pool value x + y - psi dropped");
+        int256 rebate = psiAfter < omega ? int256(uint256(omega - psiAfter) * params.lambda / 1e18) : int256(0);
+        assertGe(a + o, -rebate, "taker got more than its input's oracle value plus the lambda rebate");
+        bookSized = (a < 0 ? -a : a) >= int256(x + y);
+    }
+
+    /// @dev The corner the old bound excluded is live: with α 0.99, MAX 0.49 and δ 18 some trades of at least the book's
+    ///      value clear, and each keeps the pool value and the taker bound
+    function test_BookSizedTradesCanClearAndStillHoldTheInvariant() public view {
+        ForexCurveMath.Params memory params = ForexCurveMath.Params(0.99e18, 0, 18e18, 0.49e18, 0.3e18, 0);
+        uint256 v = 1e24;
+        uint256 bookSizedCleared;
+        for (uint256 i = 1; i < 10; ++i) {
+            (uint256 x, uint256 y) = (v * (10 - i) / 10, v * i / 10);
+            for (uint256 m; m < 4; ++m) {
+                int256 size = int256(v + v * m / 2);
+                for (uint256 d; d < 4; ++d) {
+                    (bool knownIsQuote, int256 a) = (d < 2, d % 2 == 0 ? size : -size);
+                    try h.trade(params, x, y, knownIsQuote, a) returns (int256 o) {
+                        if (_checkClearedTrade(params, x, y, knownIsQuote, a, o)) ++bookSizedCleared;
+                    } catch { }
+                }
+            }
+        }
+        assertGt(bookSizedCleared, 0, "no book-sized trade cleared");
     }
 
     /// @dev At α = 1/2 and MAX just below 1/2 the residual slope 1 − dψ/ds gets close to zero (quadratic fees near the cap,

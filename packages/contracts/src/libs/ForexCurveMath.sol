@@ -70,7 +70,7 @@ library ForexCurveMath {
     /// @param beta Flat band half-width, 0 ≤ β < α
     /// @param delta Fee slope outside the band, < 2^64
     /// @param maxFee Fee rate cap (the reference's MAX), < 1/2 so the residual is increasing in s (ForexCurveArgsBuilder
-    ///        also requires < (1 − α)/(2α), see ForexCurveArgsBuilder.maxFeeLimit)
+    ///        enforces it, see ForexCurveArgsBuilder.maxFeeLimit)
     /// @param lambda Share of a shrinking fee returned to the taker, ≤ 1
     /// @param epsilon Proportional fee on the output (exact in) or input (exact out), < 1
     struct Params {
