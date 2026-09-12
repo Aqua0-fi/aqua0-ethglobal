@@ -12,7 +12,7 @@
  * classes on both venues, and read or (owner only) move the FX feeds.
  *
  * Every write has a prepare path (calldata / EIP-712 typed data, nothing sent) and an execute path that only
- * runs behind `assertExecutionAllowed` (MCP_WRITE_MODE=execute, key set, Arc or local RPC).
+ * runs behind `assertExecutionAllowed` (MCP_WRITE_MODE=execute, signer configured, Arc or local RPC).
  */
 import {
   encodeFunctionData,
@@ -22,9 +22,9 @@ import {
   keccak256,
   toBytes,
   toHex,
-  type Hex
+  type Hex,
+  type StateOverride
 } from "viem";
-import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 
 import {
   aquaAdapterAbi,
@@ -37,6 +37,14 @@ import {
 } from "./abis.js";
 import { ARC_TESTNET_DEPLOYMENT } from "./constants.js";
 import { normalizeAddress, normalizeBytes32 } from "./graph.js";
+import {
+  REDSTONE_FEED_DECIMALS,
+  fetchRedstoneUpdate,
+  redstoneDataFeedId,
+  redstoneMultiFeedAdapterAbi,
+  redstoneStateOverride,
+  type RedstoneUpdate
+} from "./redstone.js";
 import {
   ARC_TOKENS,
   FXSWAP,
@@ -62,6 +70,7 @@ import {
   type AmountUnit,
   type AmountValue,
   type DecodedInstruction,
+  type FxFeedQuote,
   type FxPair,
   type FxSwapArgs,
   type StrategyOpcode,
@@ -76,11 +85,11 @@ import {
   createExecutionClients,
   createReadClient,
   deriveStrategyKey,
-  normalizePrivateKey,
   requireWriteChainId,
   type WriteConfig,
   type WriteMode
 } from "./write.js";
+import { resolveSignerAddress, type WriteSigner } from "./signer.js";
 
 type ReadClient = ReturnType<typeof createReadClient>;
 type ExecutionClients = Awaited<ReturnType<typeof createExecutionClients>>;
@@ -94,7 +103,13 @@ const FEED_ENV: Readonly<Record<string, string>> = {
 };
 
 export const FX_FEED_RISK =
-  "The Arc demo feeds are ManualFxOracle contracts: only the feed owner can set the price, by hand. Every FXSwap strategy on a feed prices swaps from it, bounded only by that strategy's price band and staleness window. Treat it as a demo oracle, not a market feed.";
+  "FXSwap trusts its feed, bounded only by each strategy's price band and staleness window. USDC/BRL strategies read RedStone's BRL feed: prices signed off-chain by RedStone's primary-prod signers (3 of 5 must agree), verified by the adapter contract and pushed on-chain by whoever swaps (the swap tool pushes one first). USDC/ARS strategies read a ManualFxOracle that only its owner sets by hand, because RedStone has no ARS feed: treat that one as a demo oracle.";
+
+/** RedStone strategies default to a 1 hour staleness window: the swapper pushes a fresh signed price right before swapping. */
+const REDSTONE_DEFAULT_MAX_STALENESS = 3_600;
+
+const REDSTONE_WHO_CAN_SET =
+  "Nobody sets it by hand. Anyone can push a RedStone payload signed by 3 of its 5 primary-prod signers (the adapter verifies the signatures); swap pushes one right before swapping, and quote_swap prices with the latest signed payload without sending anything.";
 
 // ---------------------------------------------------------------------------------------------
 // venues
@@ -106,10 +121,21 @@ export type AquaVenue = {
   router: Lowercase<string>;
 };
 
+/** An FX feed FXSwap reads with `latestRoundData`, and where its price comes from. */
+export type FxFeed = {
+  address: Lowercase<string>;
+  /** `manual`: owner-set ManualFxOracle. `redstone`: AquaRedStonePriceFeed over signed RedStone data. */
+  source: "manual" | "redstone";
+  quote: FxFeedQuote;
+  redstone?: { feedId: string; adapter: Lowercase<string> };
+};
+
 export type FxSwapVenue = AquaVenue & {
   opcode: "fxswap";
-  /** Feed per FX token symbol (ARGt, BRAt). Aqua0 feeds quote FX units per 1 USD. */
+  /** Feed address per FX token symbol (ARGt, BRAt). */
   oracles: Partial<Record<string, Lowercase<string>>>;
+  /** The same feeds with their source and orientation. */
+  feeds: Partial<Record<string, FxFeed>>;
 };
 
 export type SwapVMVenue = {
@@ -157,7 +183,11 @@ export function resolveSwapVMVenue(config: WriteConfig): SwapVMVenue {
   };
 }
 
-/** FXSwap venue from env overrides, then the Arc deployment; undefined until both router and adapter are known. */
+/**
+ * FXSwap venue from env overrides, then the Arc deployment; undefined until both router and adapter are known.
+ * USDC/ARS reads the ARS/USD ManualFxOracle. USDC/BRL reads RedStone's BRL feed (USD per 1 BRL) unless
+ * FX_ORACLE_BRL_USD points at another, BRL-per-USD feed.
+ */
 export function resolveFxSwapVenue(config: WriteConfig): FxSwapVenue | undefined {
   const deployed = ARC_TESTNET_DEPLOYMENT.fxVenue;
   const router = config.fxswapRouterAddress ?? deployed.fxswapRouter;
@@ -165,26 +195,55 @@ export function resolveFxSwapVenue(config: WriteConfig): FxSwapVenue | undefined
   if (!router || !adapter) {
     return undefined;
   }
+  const feeds: Partial<Record<string, FxFeed>> = {};
   const ars = config.fxOracleArsUsdAddress ?? deployed.fxOracles.arsUsd;
-  const brl = config.fxOracleBrlUsdAddress ?? deployed.fxOracles.brlUsd;
+  if (ars) {
+    feeds.ARGt = manualFeed(ars);
+  }
+  const redstoneBrl = deployedRedstoneFeeds().find((feed) => feed.redstone?.feedId === "BRL");
+  const brl = config.fxOracleBrlUsdAddress
+    ? manualFeed(config.fxOracleBrlUsdAddress)
+    : (redstoneBrl ?? (deployed.fxOracles.brlUsd ? manualFeed(deployed.fxOracles.brlUsd) : undefined));
+  if (brl) {
+    feeds.BRAt = brl;
+  }
   return {
     opcode: "fxswap",
     name: "FXSwap venue (AquaFXSwapVMRouter)",
     adapter: normalizeAddress(adapter),
     router: normalizeAddress(router),
-    oracles: {
-      ...(ars ? { ARGt: normalizeAddress(ars) } : {}),
-      ...(brl ? { BRAt: normalizeAddress(brl) } : {})
-    }
+    oracles: Object.fromEntries(Object.entries(feeds).map(([symbol, feed]) => [symbol, feed?.address])),
+    feeds
   };
 }
 
-/** Address of the configured signer (never the key itself), or undefined when none is configured. */
-export function configuredSignerAddress(config: WriteConfig): Lowercase<string> | undefined {
-  if (!config.writePrivateKey || !/^0x[0-9a-fA-F]{64}$/.test(config.writePrivateKey)) {
-    return undefined;
-  }
-  return normalizeAddress(privateKeyToAccount(config.writePrivateKey as Hex).address);
+/** RedStone feeds deployed on Arc Testnet (BRL: USD per 1 BRL, MXNe: MXN per 1 USD). */
+export function deployedRedstoneFeeds(): FxFeed[] {
+  const { multiFeedAdapter, feeds } = ARC_TESTNET_DEPLOYMENT.fxVenue.redstone;
+  const entries: Array<[string, string | null, FxFeedQuote]> = [
+    ["BRL", feeds.BRL, "usdPerFx"],
+    ["MXNe", feeds.MXNe, "fxPerUsd"]
+  ];
+  return entries.flatMap(([feedId, address, quote]) =>
+    multiFeedAdapter && address
+      ? [
+          {
+            address: normalizeAddress(address),
+            source: "redstone" as const,
+            quote,
+            redstone: { feedId, adapter: normalizeAddress(multiFeedAdapter) }
+          }
+        ]
+      : []
+  );
+}
+
+/**
+ * Address of the configured signer (never a secret), or undefined when none is configured: the WRITE_PRIVATE_KEY
+ * account, or the Circle wallet (resolved once, provisioned on first use, then cached).
+ */
+export async function configuredSignerAddress(config: WriteConfig): Promise<Lowercase<string> | undefined> {
+  return resolveSignerAddress(config);
 }
 
 /** Tools execute only when MCP_WRITE_MODE=execute and the caller did not ask for a dry run. */
@@ -429,7 +488,7 @@ export async function prepareCreateFxStrategy(
   const pair = resolvePair(input.pair);
   const strategist = input.strategist
     ? normalizeAddress(input.strategist)
-    : configuredSignerAddress(config);
+    : await configuredSignerAddress(config);
   if (!strategist) {
     throw new Error(
       "strategist is required in prepare mode (no WRITE_PRIVATE_KEY signer is configured to default to)"
@@ -639,7 +698,7 @@ export async function prepareFxDeposit(config: WriteConfig, input: FxDepositInpu
     parseTokenAmount(input.amount, token.decimals, { unit: input.unit, field: "amount" }),
     "amount"
   );
-  const receiver = input.receiver ? normalizeAddress(input.receiver) : configuredSignerAddress(config);
+  const receiver = input.receiver ? normalizeAddress(input.receiver) : await configuredSignerAddress(config);
   if (!receiver) {
     throw new Error("receiver is required in prepare mode (no WRITE_PRIVATE_KEY signer is configured)");
   }
@@ -752,7 +811,7 @@ type LiveStrategy = {
 export async function quoteFxSwap(config: WriteConfig, input: FxSwapInput) {
   const venue = resolveSwapVMVenue(config);
   const client = createReadClient(config);
-  const taker = input.taker ? normalizeAddress(input.taker) : configuredSignerAddress(config);
+  const taker = input.taker ? normalizeAddress(input.taker) : await configuredSignerAddress(config);
   const strategy = await resolveLiveStrategy(client, venue, input, taker);
   const { tokenIn, tokenOut } = resolveSwapDirection(strategy.pair, input.tokenIn);
   const amountIn = requirePositive(
@@ -760,16 +819,27 @@ export async function quoteFxSwap(config: WriteConfig, input: FxSwapInput) {
     "amount"
   );
   const blockNumber = await client.getBlockNumber();
-  const reference = await readReferencePrice(client, strategy, blockNumber);
+  const reference = await readReferencePrice(client, venue, strategy, blockNumber);
   let amountOut: bigint;
   try {
-    amountOut = await quoteOnRouter(client, strategy, tokenIn, tokenOut, amountIn, taker, blockNumber);
+    amountOut = await quoteOnRouter(
+      client,
+      strategy,
+      tokenIn,
+      tokenOut,
+      amountIn,
+      taker,
+      blockNumber,
+      reference?.redstone?.stateOverride
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(reference?.warning ? `${message}. ${reference.warning}` : message);
   }
   return {
-    source: `${routerContractName(strategy.venue)}.quote via eth_call at block ${blockNumber} (read-only; nothing is sent)`,
+    source: reference?.redstone
+      ? `${routerContractName(strategy.venue)}.quote via eth_call at block ${blockNumber} with the latest signed RedStone ${reference.redstone.feedId} price applied as a state override (read-only; nothing is sent)`
+      : `${routerContractName(strategy.venue)}.quote via eth_call at block ${blockNumber} (read-only; nothing is sent)`,
     chainId: venue.chainId,
     blockNumber: blockNumber.toString(),
     router: strategy.venue.router,
@@ -779,6 +849,7 @@ export async function quoteFxSwap(config: WriteConfig, input: FxSwapInput) {
     rate: formatRate(amountIn, tokenIn, amountOut, tokenOut),
     pricing: pricingSummary(strategy.pair, tokenIn, amountIn, tokenOut, amountOut, reference),
     ...(reference?.oracle ? { oracle: reference.oracle } : {}),
+    ...(reference?.redstone ? { redstone: redstoneSummary(reference.redstone) } : {}),
     ...(reference?.warning ? { warnings: [reference.warning] } : {})
   };
 }
@@ -786,7 +857,7 @@ export async function quoteFxSwap(config: WriteConfig, input: FxSwapInput) {
 export async function prepareFxSwap(config: WriteConfig, input: FxSwapInput) {
   const venue = resolveSwapVMVenue(config);
   const client = createReadClient(config);
-  const taker = input.taker ? normalizeAddress(input.taker) : configuredSignerAddress(config);
+  const taker = input.taker ? normalizeAddress(input.taker) : await configuredSignerAddress(config);
   if (!taker) {
     throw new Error("taker is required in prepare mode (no WRITE_PRIVATE_KEY signer is configured)");
   }
@@ -798,7 +869,7 @@ export async function prepareFxSwap(config: WriteConfig, input: FxSwapInput) {
   );
   const warnings: string[] = [];
   const blockNumber = await client.getBlockNumber();
-  const reference = await readReferencePrice(client, strategy, blockNumber).catch((error: unknown) => {
+  const reference = await readReferencePrice(client, venue, strategy, blockNumber).catch((error: unknown) => {
     warnings.push(error instanceof Error ? error.message : String(error));
     return undefined;
   });
@@ -807,7 +878,16 @@ export async function prepareFxSwap(config: WriteConfig, input: FxSwapInput) {
   }
   let quoted: bigint | undefined;
   try {
-    quoted = await quoteOnRouter(client, strategy, tokenIn, tokenOut, amountIn, taker, blockNumber);
+    quoted = await quoteOnRouter(
+      client,
+      strategy,
+      tokenIn,
+      tokenOut,
+      amountIn,
+      taker,
+      blockNumber,
+      reference?.redstone?.stateOverride
+    );
   } catch (error) {
     warnings.push(error instanceof Error ? error.message : String(error));
   }
@@ -828,8 +908,14 @@ export async function prepareFxSwap(config: WriteConfig, input: FxSwapInput) {
       ? {}
       : { pricing: pricingSummary(strategy.pair, tokenIn, amountIn, tokenOut, quoted, reference) }),
     ...(reference?.oracle ? { oracle: reference.oracle } : {}),
-    explanation: `Send from ${taker}: approve the ${routerContractName(strategy.venue)}, then swap. Skip the approve if the router allowance already covers the amount. Nothing was executed.`,
+    ...(reference?.redstone ? { redstone: redstoneSummary(reference.redstone) } : {}),
+    explanation: `Send from ${taker}: ${
+      reference?.redstone
+        ? "push the signed RedStone price first (anyone may send it; it expires about 3 minutes after signing, so prepare again if it is older), then "
+        : ""
+    }approve the ${routerContractName(strategy.venue)}, then swap. Skip the approve if the router allowance already covers the amount. Nothing was executed.`,
     transactions: [
+      ...(reference?.redstone ? [redstoneUpdateStep(reference.redstone)] : []),
       prepareStep(`approve ${tokenIn.symbol}`, tokenIn.address, mintableErc20Abi, "approve", [
         getAddress(strategy.venue.router),
         amountIn
@@ -872,8 +958,9 @@ export async function executeFxSwap(config: WriteConfig, input: FxSwapInput) {
       `Signer ${ctx.signer} holds ${formatUnits(balance, tokenIn.decimals)} ${tokenIn.symbol}; swapping ${formatUnits(amountIn, tokenIn.decimals)} needs more`
     );
   }
+  const pushedRedstone = await pushRedstonePrice(ctx, venue, strategy);
   const blockNumber = await client.getBlockNumber();
-  const reference = await readReferencePrice(client, strategy, blockNumber);
+  const reference = await readReferencePrice(client, venue, strategy, blockNumber, { onChainFeed: pushedRedstone });
   let quoted: bigint;
   try {
     quoted = await quoteOnRouter(client, strategy, tokenIn, tokenOut, amountIn, ctx.signer, blockNumber);
@@ -938,7 +1025,7 @@ export type SharedBackingInput = {
 export async function readSharedBacking(config: WriteConfig, input: SharedBackingInput = {}) {
   const venue = resolveSwapVMVenue(config);
   const client = createReadClient(config);
-  const lp = input.address ? normalizeAddress(input.address) : configuredSignerAddress(config);
+  const lp = input.address ? normalizeAddress(input.address) : await configuredSignerAddress(config);
   if (!lp) {
     throw new Error("address is required (no WRITE_PRIVATE_KEY signer is configured to default to)");
   }
@@ -1179,7 +1266,7 @@ export async function readFxPrices(config: WriteConfig, input: FxPricesInput = {
   const block = await client.getBlock();
   const feeds = await Promise.all(
     pairs.map(async (pair) => {
-      const feed = venue.fxswap?.oracles[pair.fx.symbol];
+      const feed = venue.fxswap?.feeds[pair.fx.symbol];
       if (!feed) {
         return {
           pair: pair.name,
@@ -1187,28 +1274,73 @@ export async function readFxPrices(config: WriteConfig, input: FxPricesInput = {
           note: `No ${pair.fx.fiat}/USD feed configured; set ${FEED_ENV[pair.fx.symbol] ?? "the feed env var"}`
         };
       }
-      const reading = await readFxOracle(client, feed, pair, block.number);
-      const reference = FXSWAP_REFERENCE_PRICE_WAD[pair.fx.symbol];
-      return {
-        configured: true,
-        ...describeOracle(reading),
-        ...(reference === undefined
+      const band = defaultBandInFeed(pair, feed.quote);
+      const unit = feedUnit(pair.fx.fiat, feed.quote);
+      const bandSummary = (priceWad: bigint | undefined) =>
+        band === undefined
           ? {}
           : {
               defaultStrategyBand: {
-                min: `${formatWad(reference / 2n)} ${pair.fx.fiat} per 1 USD`,
-                max: `${formatWad(reference * 2n)} ${pair.fx.fiat} per 1 USD`,
-                inBand: reading.feedPriceWad >= reference / 2n && reading.feedPriceWad <= reference * 2n
+                min: `${formatWad(band.min)} ${unit}`,
+                max: `${formatWad(band.max)} ${unit}`,
+                ...(priceWad === undefined ? {} : { inBand: priceWad >= band.min && priceWad <= band.max })
               }
-            }),
+            };
+      if (feed.source === "redstone") {
+        const [onChain, signed] = await Promise.all([
+          readFxOracle(client, feed.address, pair, block.number, { feed })
+            .then((reading) => describeOracle(reading))
+            .catch((error: unknown) => ({ error: `not readable on-chain: ${errorText(error)}` })),
+          describeRedstoneSigned(feed, pair.fx.fiat, block.timestamp).catch((error: unknown) => ({
+            summary: { error: errorText(error) },
+            priceWad: undefined
+          }))
+        ]);
+        return {
+          configured: true,
+          pair: pair.name,
+          feed: feed.address,
+          source: "RedStone redstone-primary-prod",
+          latestSignedPrice: signed.summary,
+          onChain,
+          ...bandSummary(signed.priceWad),
+          whoCanSet: REDSTONE_WHO_CAN_SET
+        };
+      }
+      const reading = await readFxOracle(client, feed.address, pair, block.number, { feed });
+      return {
+        configured: true,
+        ...describeOracle(reading),
+        ...bandSummary(reading.feedPriceWad),
         whoCanSet: reading.owner
           ? `only the feed owner ${reading.owner} (set_fx_price)`
           : "unknown (the feed has no owner())"
       };
     })
   );
+  const usedFeeds = new Set(Object.values(venue.fxswap?.feeds ?? {}).map((feed) => feed?.address));
+  const otherRedstoneFeeds = input.pair
+    ? []
+    : await Promise.all(
+        deployedRedstoneFeeds()
+          .filter((feed) => !usedFeeds.has(feed.address))
+          .map(async (feed) => {
+            const feedId = feed.redstone?.feedId ?? "";
+            const fiat = feedId.replace(/e$/, "");
+            const signed = await describeRedstoneSigned(feed, fiat, block.timestamp)
+              .then((result) => result.summary)
+              .catch((error: unknown) => ({ error: errorText(error) }));
+            return {
+              feedId,
+              feed: feed.address,
+              source: "RedStone redstone-primary-prod",
+              latestSignedPrice: signed,
+              note: `Live on Arc Testnet, but no Aqua0 vault trades ${fiat} yet; a USDC/${fiat} vault would price from this feed.`
+            };
+          })
+      );
   return {
-    source: "rpc",
+    source: "rpc + RedStone gateways",
     chainId: venue.chainId,
     blockNumber: block.number.toString(),
     blockTimestamp: block.timestamp.toString(),
@@ -1216,6 +1348,7 @@ export async function readFxPrices(config: WriteConfig, input: FxPricesInput = {
       ? { router: venue.fxswap.router, adapter: venue.fxswap.adapter }
       : null,
     feeds,
+    ...(otherRedstoneFeeds.length > 0 ? { otherRedstoneFeeds } : {}),
     risk: FX_FEED_RISK
   };
 }
@@ -1236,7 +1369,7 @@ export async function prepareSetFxPrice(config: WriteConfig, input: SetFxPriceIn
   const { pair, feed } = resolveFeedTarget(venue, input);
   const reading = await readFxOracle(client, feed, pair);
   const newAnswer = computeNewAnswer(reading, input);
-  const signer = configuredSignerAddress(config);
+  const signer = await configuredSignerAddress(config);
   const warnings = feedMoveWarnings(pair, reading, newAnswer);
   if (reading.owner && signer && signer !== reading.owner) {
     warnings.push(`The configured signer ${signer} is not the feed owner ${reading.owner}; only the owner can send this.`);
@@ -1393,8 +1526,10 @@ export async function readVenueReadiness(
 type ExecContext = {
   chainId: number;
   publicClient: ExecutionClients["publicClient"];
-  wallet: ExecutionClients["wallet"];
-  account: PrivateKeyAccount;
+  /** Sends and signs: the WRITE_PRIVATE_KEY account or the Circle wallet. */
+  writer: WriteSigner;
+  /** `account` for simulateContract. */
+  account: WriteSigner["account"];
   signer: Lowercase<string>;
   steps: StrategyStep[];
 };
@@ -1413,12 +1548,21 @@ type FxOracleReading = {
   decimals: number;
   roundId: bigint;
   answer: bigint;
-  /** Feed answer scaled to 18 decimals, in the feed's orientation (FX units per 1 USD for Aqua0 feeds). */
+  /** Feed answer scaled to 18 decimals, in the feed's orientation (`quote`). */
   feedPriceWad: bigint;
   updatedAt: bigint;
   blockNumber: bigint;
   blockTimestamp: bigint;
   owner: Lowercase<string> | null;
+  quote: FxFeedQuote;
+  source: FxFeed["source"];
+};
+
+type RedstoneQuoteOverride = {
+  feedId: string;
+  adapter: Lowercase<string>;
+  update: RedstoneUpdate;
+  stateOverride: StateOverride;
 };
 
 type ReferencePrice = {
@@ -1426,19 +1570,20 @@ type ReferencePrice = {
   /** Whole FX units per 1 whole USDC, WAD. */
   fxPerUsdcWad: bigint;
   oracle?: ReturnType<typeof describeOracle>;
+  /** RedStone feeds in read-only calls: the signed payload applied through an eth_call state override. */
+  redstone?: RedstoneQuoteOverride;
   warning?: string;
 };
 
 async function createExecContext(config: WriteConfig): Promise<ExecContext> {
   assertExecutionAllowed(config);
-  const { publicClient, wallet } = await createExecutionClients(config);
-  const account = privateKeyToAccount(normalizePrivateKey(config.writePrivateKey));
+  const { publicClient, signer: writer } = await createExecutionClients(config);
   return {
     chainId: requireWriteChainId(config),
     publicClient,
-    wallet,
-    account,
-    signer: normalizeAddress(account.address),
+    writer,
+    account: writer.account,
+    signer: writer.address,
     steps: []
   };
 }
@@ -1458,7 +1603,7 @@ async function sendTransaction(
     const extra = hint ? await hint().catch(() => undefined) : undefined;
     throw new Error(`${stage} would revert: ${describeContractError(error)}${extra ? `. ${extra}` : ""}`);
   }
-  const hash = await ctx.wallet.writeContract(request as never);
+  const hash = await ctx.writer.writeContract(request as never);
   const receipt = await ctx.publicClient.waitForTransactionReceipt({ hash });
   assertReceiptSuccess(receipt, stage, hash);
   ctx.steps.push({
@@ -1504,19 +1649,175 @@ function routerContractName(aquaVenue: AquaVenue): string {
   return aquaVenue.opcode === "fxswap" ? "AquaFXSwapVMRouter" : "AquaSwapVMRouter";
 }
 
-function requireFxSwapFeed(venue: SwapVMVenue, pair: FxPair): { fxVenue: FxSwapVenue; feed: Lowercase<string> } {
+function requireFxSwapFeed(
+  venue: SwapVMVenue,
+  pair: FxPair
+): { fxVenue: FxSwapVenue; feed: Lowercase<string>; info: FxFeed } {
   if (!venue.fxswap) {
     throw new Error(
       'FXSwap venue not configured: set FXSWAP_ROUTER_ADDRESS and FXSWAP_AQUA_ADAPTER_ADDRESS. Meanwhile use opcode "pegged".'
     );
   }
-  const feed = venue.fxswap.oracles[pair.fx.symbol];
-  if (!feed) {
+  const info = venue.fxswap.feeds[pair.fx.symbol];
+  if (!info) {
     throw new Error(
       `No ${pair.fx.fiat}/USD feed configured for FXSwap ${pair.name}: set ${FEED_ENV[pair.fx.symbol] ?? "its feed env var"}`
     );
   }
-  return { fxVenue: venue.fxswap, feed };
+  return { fxVenue: venue.fxswap, feed: info.address, info };
+}
+
+function manualFeed(address: string): FxFeed {
+  return { address: normalizeAddress(address), source: "manual", quote: "fxPerUsd" };
+}
+
+/** The feed an FXSwap program reads: a configured feed, a deployed RedStone feed, or else an FX-per-USD feed. */
+function feedForAddress(venue: SwapVMVenue, address: string): FxFeed {
+  const wanted = normalizeAddress(address);
+  const known = [...Object.values(venue.fxswap?.feeds ?? {}), ...deployedRedstoneFeeds()].find(
+    (feed) => feed?.address === wanted
+  );
+  return known ?? manualFeed(wanted);
+}
+
+/** Program params with the feed's defaults: RedStone strategies get a 1 hour staleness window unless one is given. */
+function fxSwapParamsForFeed(feed: FxFeed, params: StrategyParamsInput): StrategyParamsInput {
+  return feed.source === "redstone" && params.maxStaleness === undefined
+    ? { ...params, maxStaleness: REDSTONE_DEFAULT_MAX_STALENESS }
+    : params;
+}
+
+function feedUnit(fiat: string, quote: FxFeedQuote): string {
+  return quote === "usdPerFx" ? `USD per 1 ${fiat}` : `${fiat} per 1 USD`;
+}
+
+/** The default-band reference price (1400 ARS / 5.5 BRL per USD) in the feed's orientation. */
+function referenceFeedPriceWad(pair: FxPair, quote: FxFeedQuote): bigint | undefined {
+  const fxPerUsd = FXSWAP_REFERENCE_PRICE_WAD[pair.fx.symbol];
+  return fxPerUsd === undefined || quote === "fxPerUsd" ? fxPerUsd : (WAD * WAD) / fxPerUsd;
+}
+
+function defaultBandInFeed(pair: FxPair, quote: FxFeedQuote): { min: bigint; max: bigint } | undefined {
+  const reference = referenceFeedPriceWad(pair, quote);
+  return reference === undefined ? undefined : { min: reference / 2n, max: reference * 2n };
+}
+
+/** For a RedStone feed: the latest signed payload and the eth_call override that stores it as of `blockTimestamp`. */
+async function redstoneQuoteOverride(feed: FxFeed, blockTimestamp: bigint): Promise<RedstoneQuoteOverride | undefined> {
+  if (feed.source !== "redstone" || !feed.redstone) {
+    return undefined;
+  }
+  const { feedId, adapter } = feed.redstone;
+  let update: RedstoneUpdate;
+  try {
+    update = await fetchRedstoneUpdate([feedId]);
+  } catch (error) {
+    throw new Error(`Could not fetch the signed RedStone ${feedId} price from RedStone's gateways: ${errorText(error)}`);
+  }
+  return { feedId, adapter, update, stateOverride: redstoneStateOverride(adapter, update.prices, blockTimestamp) };
+}
+
+/** Reads a feed as a swap sent now would see it: RedStone feeds with their latest signed price applied. */
+async function readLiveFeed(
+  client: ReadClient,
+  feed: FxFeed,
+  pair: FxPair,
+  blockNumber?: bigint
+): Promise<{ reading: FxOracleReading; redstone?: RedstoneQuoteOverride }> {
+  const block = blockNumber === undefined ? await client.getBlock() : await client.getBlock({ blockNumber });
+  const redstone = await redstoneQuoteOverride(feed, block.timestamp);
+  const reading = await readFxOracle(client, feed.address, pair, block.number, {
+    feed,
+    ...(redstone ? { stateOverride: redstone.stateOverride } : {})
+  });
+  return { reading, ...(redstone ? { redstone } : {}) };
+}
+
+async function describeRedstoneSigned(
+  feed: FxFeed,
+  fiat: string,
+  blockTimestamp: bigint
+): Promise<{ summary: Record<string, unknown>; priceWad: bigint | undefined }> {
+  const feedId = feed.redstone?.feedId;
+  if (!feedId) {
+    throw new Error(`${feed.address} is not a RedStone feed`);
+  }
+  const update = await fetchRedstoneUpdate([feedId]);
+  const price = update.prices[0];
+  if (!price) {
+    throw new Error(`RedStone returned no ${feedId} price`);
+  }
+  const priceWad = scaleToWad(price.value, REDSTONE_FEED_DECIMALS);
+  const signedAt = price.dataTimestampMs / 1000n;
+  return {
+    priceWad,
+    summary: {
+      price: `${formatWad(priceWad)} ${feedUnit(fiat, feed.quote)}`,
+      ...(feed.quote === "usdPerFx" && priceWad > 0n
+        ? { fxPerUsd: `${formatWad((WAD * WAD) / priceWad)} ${fiat} per 1 USD` }
+        : {}),
+      answer: price.value.toString(),
+      decimals: REDSTONE_FEED_DECIMALS,
+      signedAt: new Date(Number(price.dataTimestampMs)).toISOString(),
+      ageSeconds: (blockTimestamp > signedAt ? blockTimestamp - signedAt : 0n).toString(),
+      signerValues: price.signerValues.map((value) => value.toString())
+    }
+  };
+}
+
+function redstoneSummary(redstone: RedstoneQuoteOverride) {
+  const price = redstone.update.prices[0];
+  return {
+    feedId: redstone.feedId,
+    adapter: redstone.adapter,
+    signedAt: price ? new Date(Number(price.dataTimestampMs)).toISOString() : null,
+    answer: price?.value.toString() ?? null,
+    signerValues: price?.signerValues.map((value) => value.toString()) ?? [],
+    note: "Priced with RedStone's latest signed payload (3 of 5 primary-prod signers) through an eth_call state override, so nothing was sent; swap pushes a payload like it on-chain right before swapping."
+  };
+}
+
+function redstoneUpdateStep(redstone: RedstoneQuoteOverride): PreparedStep {
+  return {
+    stage: `push RedStone ${redstone.feedId} price`,
+    to: redstone.adapter,
+    value: "0",
+    data: redstone.update.calldata,
+    functionName: "updateDataFeedsValuesPartial",
+    args: [[redstoneDataFeedId(redstone.feedId)]],
+    note: "Signed RedStone payload appended to the calldata; the adapter accepts it for about 3 minutes after signing. Anyone may send it."
+  };
+}
+
+/** Before swapping on a RedStone-priced FXSwap strategy, push the latest signed price on-chain. Returns whether it did. */
+async function pushRedstonePrice(ctx: ExecContext, venue: SwapVMVenue, strategy: LiveStrategy): Promise<boolean> {
+  for (const instruction of strategy.instructions) {
+    if (instruction.name !== "FXSwap") {
+      continue;
+    }
+    const feed = feedForAddress(venue, instruction.args.oracle);
+    if (feed.source !== "redstone" || !feed.redstone) {
+      return false;
+    }
+    const { feedId, adapter } = feed.redstone;
+    const { update } = (await redstoneQuoteOverride(feed, 0n)) as RedstoneQuoteOverride;
+    await sendTransaction(ctx, `push RedStone ${feedId} price`, adapter, () =>
+      ctx.publicClient.simulateContract({
+        account: ctx.account,
+        address: getAddress(adapter),
+        abi: redstoneMultiFeedAdapterAbi,
+        functionName: "updateDataFeedsValuesPartial",
+        args: [[redstoneDataFeedId(feedId)]],
+        dataSuffix: update.payload
+      })
+    );
+    return true;
+  }
+  return false;
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 /**
@@ -1576,15 +1877,19 @@ async function buildStrategySpec(
   if (opcode === "pegged") {
     return { spec: buildPeggedStrategySpec(venue.pegged.adapter, pair, params), aquaVenue: venue.pegged };
   }
-  const { fxVenue, feed } = requireFxSwapFeed(venue, pair);
-  const oracle = await readFxOracle(client, feed, pair);
+  const { fxVenue, feed, info } = requireFxSwapFeed(venue, pair);
+  const { reading: oracle } = await readLiveFeed(client, info, pair);
   if (oracle.answer <= 0n) {
     throw new Error(`The ${pair.fx.fiat}/USD feed ${feed} reports a non-positive answer (${oracle.answer})`);
   }
-  const spec = buildFxSwapStrategySpec(fxVenue.adapter, pair, feed, params, { oraclePriceWad: oracle.feedPriceWad });
+  const spec = buildFxSwapStrategySpec(fxVenue.adapter, pair, feed, fxSwapParamsForFeed(info, params), {
+    oraclePriceWad: oracle.feedPriceWad,
+    feedQuote: info.quote
+  });
   if (oracle.feedPriceWad < spec.band.minPrice || oracle.feedPriceWad > spec.band.maxPrice) {
+    const unit = feedUnit(pair.fx.fiat, info.quote);
     throw new Error(
-      `The ${pair.fx.fiat}/USD feed is at ${formatWad(oracle.feedPriceWad)}, outside this strategy's price band ${formatWad(spec.band.minPrice)}..${formatWad(spec.band.maxPrice)}: every swap would revert (FXSwapOraclePriceOutOfBand). Adjust minPrice/maxPrice or use bandPercent.`
+      `The ${pair.fx.fiat}/USD feed is at ${formatWad(oracle.feedPriceWad)} ${unit}, outside this strategy's price band ${formatWad(spec.band.minPrice)}..${formatWad(spec.band.maxPrice)} ${unit}: every swap would revert (FXSwapOraclePriceOutOfBand). Adjust minPrice/maxPrice or use bandPercent.`
     );
   }
   return { spec, aquaVenue: fxVenue, oracle };
@@ -1601,12 +1906,13 @@ function specForRecognition(
     if (aquaVenue.opcode === "pegged") {
       return buildPeggedStrategySpec(aquaVenue.adapter, pair, params);
     }
-    const feed = venue.fxswap?.oracles[pair.fx.symbol];
+    const feed = venue.fxswap?.feeds[pair.fx.symbol];
     if (!feed || params.bandPercent !== undefined) {
       return undefined;
     }
-    return buildFxSwapStrategySpec(aquaVenue.adapter, pair, feed, params, {
-      oraclePriceWad: FXSWAP_REFERENCE_PRICE_WAD[pair.fx.symbol] ?? WAD
+    return buildFxSwapStrategySpec(aquaVenue.adapter, pair, feed.address, fxSwapParamsForFeed(feed, params), {
+      oraclePriceWad: referenceFeedPriceWad(pair, feed.quote) ?? WAD,
+      feedQuote: feed.quote
     });
   } catch {
     return undefined;
@@ -1720,7 +2026,7 @@ async function shipStrategy(
     );
   }
   const deadline = block.timestamp + SWAPVM.shipDeadlineSeconds;
-  const signature = await ctx.account.signTypedData(
+  const signature = await ctx.writer.signTypedData(
     buildShipTypedData({
       chainId: ctx.chainId,
       adapter: aquaVenue.adapter,
@@ -1840,15 +2146,18 @@ async function resolveLiveStrategy(
     let spec: StrategySpec | undefined;
     let specError: string | undefined;
     try {
-      spec =
-        aquaVenue.opcode === "pegged"
-          ? buildPeggedStrategySpec(aquaVenue.adapter, pair, params)
-          : buildFxSwapStrategySpec(aquaVenue.adapter, pair, requireFxSwapFeed(venue, pair).feed, params, {
-              oraclePriceWad:
-                params.bandPercent === undefined
-                  ? (FXSWAP_REFERENCE_PRICE_WAD[pair.fx.symbol] ?? WAD)
-                  : (await readFxOracle(client, requireFxSwapFeed(venue, pair).feed, pair)).feedPriceWad
-            });
+      if (aquaVenue.opcode === "pegged") {
+        spec = buildPeggedStrategySpec(aquaVenue.adapter, pair, params);
+      } else {
+        const { feed, info } = requireFxSwapFeed(venue, pair);
+        spec = buildFxSwapStrategySpec(aquaVenue.adapter, pair, feed, fxSwapParamsForFeed(info, params), {
+          oraclePriceWad:
+            params.bandPercent === undefined
+              ? (referenceFeedPriceWad(pair, info.quote) ?? WAD)
+              : (await readLiveFeed(client, info, pair)).reading.feedPriceWad,
+          feedQuote: info.quote
+        });
+      }
     } catch (error) {
       specError = error instanceof Error ? error.message : String(error);
     }
@@ -2031,7 +2340,8 @@ async function quoteOnRouter(
   tokenOut: TokenInfo,
   amountIn: bigint,
   taker: string | undefined,
-  blockNumber?: bigint
+  blockNumber?: bigint,
+  stateOverride?: StateOverride
 ): Promise<bigint> {
   try {
     const { result } = await client.simulateContract({
@@ -2046,7 +2356,8 @@ async function quoteOnRouter(
         buildTakerTraitsAndData()
       ],
       ...(taker ? { account: getAddress(taker) } : {}),
-      ...(blockNumber === undefined ? {} : { blockNumber })
+      ...(blockNumber === undefined ? {} : { blockNumber }),
+      ...(stateOverride ? { stateOverride } : {})
     });
     return result[1];
   } catch (error) {
@@ -2058,15 +2369,23 @@ async function readFxOracle(
   client: ReadClient,
   feed: string,
   pair: FxPair,
-  blockNumber?: bigint
+  blockNumber?: bigint,
+  options: { feed?: FxFeed; stateOverride?: StateOverride } = {}
 ): Promise<FxOracleReading> {
   const address = getAddress(feed);
   const block = blockNumber === undefined ? await client.getBlock() : await client.getBlock({ blockNumber });
+  const override = options.stateOverride ? { stateOverride: options.stateOverride } : {};
   let round: readonly [bigint, bigint, bigint, bigint, bigint];
   let decimals: number;
   try {
     [round, decimals] = await Promise.all([
-      client.readContract({ address, abi: manualFxOracleAbi, functionName: "latestRoundData", blockNumber: block.number }),
+      client.readContract({
+        address,
+        abi: manualFxOracleAbi,
+        functionName: "latestRoundData",
+        blockNumber: block.number,
+        ...override
+      }),
       client.readContract({ address, abi: manualFxOracleAbi, functionName: "decimals", blockNumber: block.number })
     ]);
   } catch (error) {
@@ -2093,7 +2412,9 @@ async function readFxOracle(
     updatedAt: round[3],
     blockNumber: block.number,
     blockTimestamp: block.timestamp,
-    owner
+    owner,
+    quote: options.feed?.quote ?? "fxPerUsd",
+    source: options.feed?.source ?? "manual"
   };
 }
 
@@ -2102,6 +2423,7 @@ function describeOracle(
   strategy?: { maxStaleness: number; minPrice: bigint; maxPrice: bigint }
 ) {
   const fiat = reading.pair.fx.fiat;
+  const unit = feedUnit(fiat, reading.quote);
   const age = reading.blockTimestamp >= reading.updatedAt ? reading.blockTimestamp - reading.updatedAt : 0n;
   const fresh = strategy
     ? reading.updatedAt <= reading.blockTimestamp && age <= BigInt(strategy.maxStaleness)
@@ -2109,8 +2431,13 @@ function describeOracle(
   return {
     pair: reading.pair.name,
     feed: reading.feed,
+    source:
+      reading.source === "redstone" ? "RedStone redstone-primary-prod (signed, 3 of 5 signers)" : "ManualFxOracle (owner-set)",
     description: reading.description,
-    price: `${formatWad(reading.feedPriceWad)} ${fiat} per 1 USD`,
+    price: `${formatWad(reading.feedPriceWad)} ${unit}`,
+    ...(reading.quote === "usdPerFx" && reading.feedPriceWad > 0n
+      ? { fxPerUsd: `${formatWad((WAD * WAD) / reading.feedPriceWad)} ${fiat} per 1 USD` }
+      : {}),
     answer: reading.answer.toString(),
     decimals: reading.decimals,
     roundId: reading.roundId.toString(),
@@ -2123,8 +2450,8 @@ function describeOracle(
           strategyMaxStalenessSeconds: strategy.maxStaleness,
           fresh,
           strategyBand: {
-            min: `${formatWad(strategy.minPrice)} ${fiat} per 1 USD`,
-            max: `${formatWad(strategy.maxPrice)} ${fiat} per 1 USD`,
+            min: `${formatWad(strategy.minPrice)} ${unit}`,
+            max: `${formatWad(strategy.maxPrice)} ${unit}`,
             inBand: reading.feedPriceWad >= strategy.minPrice && reading.feedPriceWad <= strategy.maxPrice
           }
         }
@@ -2135,8 +2462,10 @@ function describeOracle(
 /** The price a strategy is anchored to: the FXSwap feed (read exactly as FXSwap reads it) or the pegged price. */
 async function readReferencePrice(
   client: ReadClient,
+  venue: SwapVMVenue,
   strategy: LiveStrategy,
-  blockNumber?: bigint
+  blockNumber?: bigint,
+  options: { onChainFeed?: boolean } = {}
 ): Promise<ReferencePrice | undefined> {
   const { pair } = strategy;
   const usdcIsLt = BigInt(pair.usdc.address) < BigInt(pair.fx.address);
@@ -2144,7 +2473,13 @@ async function readReferencePrice(
   for (const instruction of strategy.instructions) {
     if (instruction.name === "FXSwap") {
       const args: FxSwapArgs = instruction.args;
-      const reading = await readFxOracle(client, args.oracle, pair, blockNumber);
+      const feed = feedForAddress(venue, args.oracle);
+      // Read-only calls price RedStone feeds with the latest signed payload; after a push, read the chain.
+      const live = options.onChainFeed
+        ? { reading: await readFxOracle(client, args.oracle, pair, blockNumber, { feed }) }
+        : await readLiveFeed(client, feed, pair, blockNumber);
+      const reading = live.reading;
+      const redstone = "redstone" in live ? live.redstone : undefined;
       const decimals = args.oracleDecimals === 0 ? reading.decimals : args.oracleDecimals;
       const feedWad = reading.answer > 0n ? scaleToWad(reading.answer, decimals) : 0n;
       const priceGtPerLt =
@@ -2154,7 +2489,9 @@ async function readReferencePrice(
       const warnings = [
         ...(oracle.fresh === false
           ? [
-              `The ${pair.fx.fiat}/USD feed answer is ${oracle.ageSeconds}s old, beyond this strategy's ${args.maxStaleness}s staleness window: swaps revert (FXSwapOracleStale) until the feed owner refreshes it (set_fx_price)`
+              feed.source === "redstone"
+                ? `The on-chain RedStone ${pair.fx.fiat} price is ${oracle.ageSeconds}s old, beyond this strategy's ${args.maxStaleness}s staleness window: swaps revert (FXSwapOracleStale) until a fresh signed payload is pushed (swap pushes one first)`
+                : `The ${pair.fx.fiat}/USD feed answer is ${oracle.ageSeconds}s old, beyond this strategy's ${args.maxStaleness}s staleness window: swaps revert (FXSwapOracleStale) until the feed owner refreshes it (set_fx_price)`
             ]
           : []),
         ...(oracle.strategyBand?.inBand === false
@@ -2167,6 +2504,7 @@ async function readReferencePrice(
         source: "oracle",
         fxPerUsdcWad,
         oracle,
+        ...(redstone ? { redstone } : {}),
         ...(warnings.length > 0 ? { warning: warnings.join(". ") } : {})
       };
     }
@@ -2285,10 +2623,10 @@ function strategyIdentity(
     program: {
       instructions:
         spec.flatFeePpb > 0 ? "FlatFeeAmountIn (opcode 21) -> FXSwap (opcode 34)" : "FXSwap (opcode 34)",
-      priceSource: `oracle ${spec.oracle}, read on every swap`,
+      priceSource: `oracle ${spec.oracle} (${feedUnit(fiat, spec.feedQuote)}), read on every swap`,
       priceBand: {
-        min: `${formatWad(spec.band.minPrice)} ${fiat} per 1 USD`,
-        max: `${formatWad(spec.band.maxPrice)} ${fiat} per 1 USD`,
+        min: `${formatWad(spec.band.minPrice)} ${feedUnit(fiat, spec.feedQuote)}`,
+        max: `${formatWad(spec.band.maxPrice)} ${feedUnit(fiat, spec.feedQuote)}`,
         source: spec.band.source
       },
       maxStalenessSeconds: args.maxStaleness,
@@ -2348,6 +2686,16 @@ function safeDecodeProgram(program: Hex): DecodedInstruction[] {
 }
 
 function resolveFeedTarget(venue: SwapVMVenue, input: SetFxPriceInput): { pair: FxPair; feed: Lowercase<string> } {
+  const target = findFeedTarget(venue, input);
+  if (venue.fxswap?.feeds[target.pair.fx.symbol]?.source === "redstone") {
+    throw new Error(
+      `The ${target.pair.fx.fiat} feed ${target.feed} carries RedStone's signed market price, so nobody can set it by hand. quote_swap already prices with the latest signed RedStone payload and swap pushes it on-chain first. Only the USDC/ARS demo feed (ManualFxOracle) can be moved by hand.`
+    );
+  }
+  return target;
+}
+
+function findFeedTarget(venue: SwapVMVenue, input: SetFxPriceInput): { pair: FxPair; feed: Lowercase<string> } {
   if (!venue.fxswap) {
     throw new Error("FXSwap venue not configured, so there are no FX feeds to set");
   }

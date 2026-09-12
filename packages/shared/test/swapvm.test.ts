@@ -473,7 +473,17 @@ test("venues: FXSwap addresses default to the Arc deployment and can be overridd
   assert.equal(venue.fxswap?.router, ARC_TESTNET_DEPLOYMENT.fxVenue.fxswapRouter?.toLowerCase());
   assert.equal(venue.fxswap?.adapter, FX_ADAPTER.toLowerCase());
   assert.equal(venue.fxswap?.oracles.ARGt, ARS_FEED.toLowerCase());
-  assert.equal(venue.fxswap?.oracles.BRAt, BRL_FEED.toLowerCase());
+  // USDC/BRL reads RedStone's BRL feed (USD per 1 BRL) unless FX_ORACLE_BRL_USD overrides it with a BRL-per-USD feed.
+  assert.equal(venue.fxswap?.oracles.BRAt, ARC_TESTNET_DEPLOYMENT.fxVenue.redstone.feeds.BRL?.toLowerCase());
+  assert.deepEqual(venue.fxswap?.feeds.BRAt, {
+    address: ARC_TESTNET_DEPLOYMENT.fxVenue.redstone.feeds.BRL?.toLowerCase(),
+    source: "redstone",
+    quote: "usdPerFx",
+    redstone: { feedId: "BRL", adapter: ARC_TESTNET_DEPLOYMENT.fxVenue.redstone.multiFeedAdapter?.toLowerCase() }
+  });
+  assert.equal(venue.fxswap?.feeds.ARGt?.source, "manual");
+  const manualBrl = resolveSwapVMVenue({ writeChainId: 5042002, fxOracleBrlUsdAddress: BRL_FEED }).fxswap?.feeds.BRAt;
+  assert.deepEqual(manualBrl, { address: BRL_FEED.toLowerCase(), source: "manual", quote: "fxPerUsd" });
   assert.equal(venue.pegged.adapter, ADAPTER.toLowerCase());
   const override = `0x${"ab".repeat(20)}`;
   assert.equal(resolveSwapVMVenue({ writeChainId: 5042002, fxOracleArsUsdAddress: override }).fxswap?.oracles.ARGt, override);

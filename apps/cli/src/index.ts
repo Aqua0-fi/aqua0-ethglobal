@@ -52,9 +52,15 @@ Environment:
   FXSWAP_ROUTER_ADDRESS        AquaFXSwapVMRouter (Arc default)
   FXSWAP_AQUA_ADAPTER_ADDRESS  AquaAdapter bound to the FXSwap router (Arc default)
   FX_ORACLE_ARS_USD            ARS per USD feed (Arc default)
-  FX_ORACLE_BRL_USD            BRL per USD feed (Arc default)
+  FX_ORACLE_BRL_USD            BRL per USD feed override (Arc default: RedStone BRL feed)
   MCP_WRITE_MODE               prepare|execute, defaults to prepare
-  WRITE_PRIVATE_KEY            Required only for guarded execute mode`);
+  WRITE_PRIVATE_KEY            Local signer key for guarded execute mode
+  SIGNER                       local|circle, defaults to local
+  CIRCLE_API_KEY               Circle API key (SIGNER=circle)
+  CIRCLE_ENTITY_SECRET         Circle entity secret (SIGNER=circle; ENTITY_SECRET also accepted)
+  CIRCLE_WALLET_ID             Circle ARC-TESTNET EOA wallet to sign with
+  CIRCLE_WALLET_SET_ID         Without a wallet id: wallet set holding one wallet per user ref
+  CIRCLE_USER_REF              Without a wallet id: refId of the user's wallet, created on first use`);
 }
 
 try {
@@ -70,7 +76,7 @@ try {
       printJson(await aqua0.health());
       break;
     case "info":
-      printJson(aqua0.info());
+      printJson(await aqua0.info());
       break;
     case "balance":
       printJson(await aqua0.getBalance(requireArg(args[0], "address")));

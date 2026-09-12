@@ -17,10 +17,20 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 
 import { assetVaultAbi, vaultRegistryAbi } from "./abis.js";
+import type { CircleWalletsApi } from "./circle.js";
 
 export type ReadClient = PublicClient<HttpTransport, Chain>;
 import { ARC_TESTNET } from "./constants.js";
 import { normalizeAddress, normalizeBytes32 } from "./graph.js";
+import {
+  createCircleSigner,
+  createLocalSigner,
+  isSignerConfigured,
+  resolveSignerKind,
+  signerConfigProblem,
+  type SignerKind,
+  type WriteSigner
+} from "./signer.js";
 
 export type WriteMode = "prepare" | "execute";
 
@@ -29,6 +39,20 @@ export type WriteConfig = {
   writeChainId?: number;
   vaultRegistryAddress?: string;
   writePrivateKey?: string;
+  /** Execute-mode signer: local (WRITE_PRIVATE_KEY, the default) or circle (a Circle developer-controlled wallet). */
+  signer?: SignerKind;
+  /** Circle API key for SIGNER=circle. Secret. */
+  circleApiKey?: string;
+  /** Circle entity secret for SIGNER=circle. Secret. */
+  circleEntitySecret?: string;
+  /** Wallet set holding one Circle wallet per user ref. */
+  circleWalletSetId?: string;
+  /** Fixed Circle wallet to sign with; takes precedence over the wallet set lookup. */
+  circleWalletId?: string;
+  /** User ref: the wallet in circleWalletSetId with this refId, created on first use. */
+  circleUserRef?: string;
+  /** Pre-built Circle client (tests, embedding); otherwise built from circleApiKey and circleEntitySecret. */
+  circleClient?: CircleWalletsApi;
   mcpWriteMode?: WriteMode;
   /** Aqua0 AquaAdapter (SwapVM venue). Defaults to the Arc Testnet deployment when WRITE_CHAIN_ID is Arc. */
   aquaAdapterAddress?: string;
@@ -150,7 +174,7 @@ export function isExecutionAllowedByConfig(config: WriteConfig): boolean {
   if (config.mcpWriteMode !== "execute") {
     return false;
   }
-  if (!config.writeRpcUrl || !config.writeChainId || !config.writePrivateKey) {
+  if (!config.writeRpcUrl || !config.writeChainId || !isSignerConfigured(config)) {
     return false;
   }
   if (config.writeChainId === 1 || config.writeChainId === 8453) {
@@ -163,8 +187,9 @@ export function assertExecutionAllowed(config: WriteConfig): void {
   if (config.mcpWriteMode !== "execute") {
     throw new Error("Execution refused: MCP_WRITE_MODE must be execute");
   }
-  if (!config.writePrivateKey) {
-    throw new Error("Execution refused: WRITE_PRIVATE_KEY is required");
+  const signerProblem = signerConfigProblem(config);
+  if (signerProblem) {
+    throw new Error(`Execution refused: ${signerProblem}`);
   }
   if (!config.writeRpcUrl) {
     throw new Error("Execution refused: WRITE_RPC_URL is required");
@@ -353,8 +378,7 @@ export async function executeCreateStrategy(
 ): Promise<ExecutionResult> {
   assertExecutionAllowed(config);
   const chainId = requireWriteChainId(config);
-  const { wallet, publicClient } = await createExecutionClients(config);
-  const account = privateKeyToAccount(normalizePrivateKey(config.writePrivateKey));
+  const { signer, publicClient } = await createExecutionClients(config);
   const prepared = await prepareCreateStrategy(config, input);
   const receipts: ExecutionResult["receipts"] = [];
   let classId = BigInt(prepared.currentClassId);
@@ -364,8 +388,7 @@ export async function executeCreateStrategy(
     if (!tx) {
       throw new Error("Missing registerStrategyClass transaction");
     }
-    const hash = await wallet.writeContract({
-      account,
+    const hash = await signer.writeContract({
       abi: vaultRegistryAbi,
       address: getAddress(tx.to),
       functionName: "registerStrategyClass",
@@ -386,8 +409,7 @@ export async function executeCreateStrategy(
       : (await prepareCreateStrategy(config, input)).transactions;
   for (const tx of legTransactions) {
     if (tx.functionName !== "registerStrategy") continue;
-    const hash = await wallet.writeContract({
-      account,
+    const hash = await signer.writeContract({
       abi: assetVaultAbi,
       address: getAddress(tx.to),
       functionName: "registerStrategy",
@@ -413,11 +435,9 @@ export async function executeAuthorizeStrategy(
 ): Promise<ExecutionResult> {
   assertExecutionAllowed(config);
   const chainId = requireWriteChainId(config);
-  const { wallet, publicClient } = await createExecutionClients(config);
-  const account = privateKeyToAccount(normalizePrivateKey(config.writePrivateKey));
+  const { signer, publicClient } = await createExecutionClients(config);
   const tx = prepareAuthorizeStrategy(input);
-  const hash = await wallet.writeContract({
-    account,
+  const hash = await signer.writeContract({
     abi: assetVaultAbi,
     address: getAddress(tx.to),
     functionName: "setCommitment",
@@ -454,7 +474,7 @@ export function createReadClient(config: WriteConfig): ReadClient {
 
 export async function createExecutionClients(
   config: WriteConfig
-): Promise<{ publicClient: ReadClient; wallet: WalletClient<HttpTransport, Chain> }> {
+): Promise<{ publicClient: ReadClient; wallet: WalletClient<HttpTransport, Chain>; signer: WriteSigner }> {
   const chainId = requireWriteChainId(config);
   const rpcUrl = requireWriteRpcUrl(config);
   const chain = makeChain(chainId, rpcUrl);
@@ -469,7 +489,28 @@ export async function createExecutionClients(
     throw new Error("Execution refused: mainnet/Base writes are not allowed");
   }
   const wallet = createWalletClient({ chain, transport: http(rpcUrl) });
-  return { publicClient, wallet };
+  const signer = await createWriteSigner(config, wallet);
+  return { publicClient, wallet, signer };
+}
+
+/**
+ * The execute-mode signer SIGNER selects: the WRITE_PRIVATE_KEY account (default) or a Circle developer-controlled
+ * wallet. Circle broadcasts to Arc Testnet itself, so it is refused on a local fork RPC, which would never see the
+ * transaction.
+ */
+export async function createWriteSigner(
+  config: WriteConfig,
+  wallet: WalletClient<HttpTransport, Chain>
+): Promise<WriteSigner> {
+  if (resolveSignerKind(config) === "local") {
+    return createLocalSigner(privateKeyToAccount(normalizePrivateKey(config.writePrivateKey)), wallet);
+  }
+  if (config.writeChainId !== ARC_TESTNET.chainId || !config.writeRpcUrl || isLocalRpcUrl(config.writeRpcUrl)) {
+    throw new Error(
+      `Execution refused: SIGNER=circle sends through Circle on Arc Testnet, so it needs WRITE_CHAIN_ID ${ARC_TESTNET.chainId} and a non-local WRITE_RPC_URL`
+    );
+  }
+  return createCircleSigner(config);
 }
 
 function makeChain(chainId: number, rpcUrl: string) {

@@ -38,7 +38,7 @@ function createAqua0McpServer(config: McpConfig): McpServer {
         .describe("Include non-secret endpoint origins and write-mode configuration in the response")
     },
     async ({ includeConfig }) => {
-      const info = aqua0.info();
+      const info = await aqua0.info();
       return jsonText(includeConfig ? info : { ...info, endpoints: undefined });
     }
   );
@@ -122,7 +122,7 @@ function createAqua0McpServer(config: McpConfig): McpServer {
   const executionNote =
     "Sends transactions only when the server runs with MCP_WRITE_MODE=execute (Arc Testnet or a local fork) and dryRun is not true; otherwise nothing is sent and the response holds ordered calldata to sign.";
   const feedRisk =
-    "Oracle risk: FXSwap trusts its feed. The Arc demo feeds are ManualFxOracle contracts that only their owner can set by hand (see set_fx_price); each strategy is bounded only by its price band and staleness window.";
+    "Oracle risk: FXSwap trusts its feed, bounded only by each strategy's price band and staleness window. USDC/BRL reads RedStone's BRL feed (prices signed by 3 of RedStone's 5 primary-prod signers, verified on-chain); USDC/ARS reads a ManualFxOracle its owner sets by hand (see set_fx_price), because RedStone has no ARS feed.";
   const opcode = z
     .string()
     .optional()
@@ -164,13 +164,13 @@ function createAqua0McpServer(config: McpConfig): McpServer {
         .describe("FXSwap: accept feed answers within +/- this percent of the live oracle price at creation, e.g. 20."),
       minPrice: amount
         .optional()
-        .describe("FXSwap: lowest accepted feed answer, FX per 1 USD (default 0.5x of 1400 ARS / 5.5 BRL)."),
+        .describe("FXSwap: lowest accepted feed answer in the feed's orientation: ARS per 1 USD, or USD per 1 BRL for the RedStone BRL feed (default half of 1400 ARS / 5.5 BRL per USD)."),
       maxPrice: amount
         .optional()
-        .describe("FXSwap: highest accepted feed answer, FX per 1 USD (default 2x of 1400 ARS / 5.5 BRL)."),
+        .describe("FXSwap: highest accepted feed answer in the feed's orientation (default double the same reference)."),
       maxStaleness: amount
         .optional()
-        .describe('FXSwap: max feed age before swaps revert: seconds or "24h", "7d" (default 7d, demo feeds are set by hand).'),
+        .describe('FXSwap: max feed age before swaps revert: seconds or "24h", "7d" (default 1h for RedStone BRL, which swap refreshes first; 7d for the hand-set ARS feed).'),
       oracleDecimals: amount
         .optional()
         .describe("FXSwap, advanced: feed decimals pinned in the program; 0 (default) reads decimals() each swap."),
@@ -319,7 +319,8 @@ Examples:
 ${pricingNote}
 Examples:
 - "how many pesos do I get for 0.1 USDC?" -> {"pair":"USDC/ARS","amount":"0.1"}
-- "move the BRL rate to 5.6 and quote again" -> set_fx_price {"pair":"BRL","price":5.6}, then {"pair":"USDC/BRL","amount":"0.1"}
+- "quote reais at today's RedStone rate" -> {"pair":"USDC/BRL","amount":"0.1"} (priced with the latest signed RedStone BRL payload, nothing sent)
+- "move the ARS rate up 5% and quote again" -> set_fx_price {"pair":"ARS","changePercent":5}, then {"pair":"USDC/ARS","amount":"0.1"}
 - "price 5 reais into USDC" -> {"pair":"USDC/BRL","tokenIn":"BRL","amount":"5"}
 - "quote the fixed-rate peso pool instead" -> {"pair":"USDC/ARS","opcode":"pegged","amount":"0.1"}
 - "quote 0.1 USDC on strategy 0x5e86..." -> {"strategyId":"0x5e86...","amount":"0.1"}`,
@@ -335,7 +336,7 @@ Examples:
   server.registerTool(
     "swap",
     {
-      description: `Swap against a live Aqua0 SwapVM strategy on Arc Testnet through its router (exact input). Quotes first, enforces a minimum output on-chain (slippageBps, default 50 = 0.5%, or minAmountOut), approves the router if needed, swaps, and reports the amount received.
+      description: `Swap against a live Aqua0 SwapVM strategy on Arc Testnet through its router (exact input). For a RedStone-priced FXSwap strategy (USDC/BRL) it first pushes RedStone's latest signed price on-chain (updateDataFeedsValuesPartial), then quotes, enforces a minimum output on-chain (slippageBps, default 50 = 0.5%, or minAmountOut), approves the router if needed, swaps, and reports the amount received.
 ${pricingNote}
 ${executionNote}
 Examples:
@@ -386,11 +387,12 @@ Examples:
   server.registerTool(
     "get_fx_prices",
     {
-      description: `Read the FX feeds FXSwap strategies price from on Arc Testnet: ARS/USD and BRL/USD. For each feed: price (FX units per 1 USD), raw answer and decimals, last update time and age in seconds, the owner who can set it, and whether it sits inside the default strategy price band. Read-only.
+      description: `Read the FX feeds FXSwap strategies price from on Arc Testnet. BRL: RedStone's BRL feed (USD per 1 BRL, also shown as BRL per USD), with the latest signed price from RedStone's gateways (signing time, the 3 signer values) and the value currently stored on-chain. ARS: the hand-set ManualFxOracle (ARS per 1 USD) with its owner. Without a pair it also lists RedStone feeds live on Arc that no Aqua0 vault trades yet (MXNe, MXN per 1 USD). Each feed shows whether it sits inside the default strategy price band. Read-only.
 ${feedRisk}
 Examples:
+- "what's the real rate right now?" -> {"pair":"BRL"}
 - "what peso rate are the FX strategies using?" -> {"pair":"ARS"}
-- "are the oracles fresh?" -> {}`,
+- "are the oracles fresh? any other RedStone feeds?" -> {}`,
       inputSchema: {
         pair: z.string().optional().describe('"ARS", "BRL", "USDC/ARS"...; omit for both feeds.')
       },
@@ -402,12 +404,12 @@ Examples:
   server.registerTool(
     "set_fx_price",
     {
-      description: `Move an FX feed (ManualFxOracle, Chainlink-compatible) so every FXSwap strategy on it reprices on its next quote or swap. Pegged strategies do not move.
+      description: `Move the hand-set ARS/USD demo feed (ManualFxOracle, Chainlink-compatible) so every FXSwap strategy on it reprices on its next quote or swap. Pegged strategies do not move. The BRL feed is RedStone signed market data and cannot be set by hand; this tool refuses it.
 RISK: this is an owner-set demo oracle. Only the feed owner can set it, and FXSwap strategies on the feed trade at whatever it says, bounded only by each strategy's price band and staleness window.
 Execute path: sends ManualFxOracle.setAnswer only when the server runs with MCP_WRITE_MODE=execute, dryRun is not true, and the configured signer IS the feed owner. A non-owner signer gets a clear error and nothing is sent. Otherwise returns the prepared call for the owner to send.
 Give exactly one of price (absolute) or changePercent (relative).
 Examples:
-- "move the BRL rate to 5.6 and quote again" -> {"pair":"BRL","price":5.6}, then quote_swap {"pair":"USDC/BRL","amount":"0.1"}
+- "set the peso to 1470 and quote again" -> {"pair":"ARS","price":1470}, then quote_swap {"pair":"USDC/ARS","amount":"0.1"}
 - "push the ARS/USD price up 5%" -> {"pair":"ARS","changePercent":5}
 - "drop the peso feed by 2.5 percent" -> {"pair":"ARS","changePercent":-2.5}`,
       inputSchema: {

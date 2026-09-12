@@ -1,4 +1,4 @@
-import { type Aqua0ServiceConfig, type WriteMode } from "@aqua0/shared";
+import { readSignerEnv, type Aqua0ServiceConfig, type WriteMode } from "@aqua0/shared";
 
 export type McpConfig = Aqua0ServiceConfig & {
   transport: "stdio" | "http";
@@ -24,6 +24,7 @@ export function readMcpConfig(
     ...(env.WRITE_CHAIN_ID ? { writeChainId: parsePositiveInt(env.WRITE_CHAIN_ID, "WRITE_CHAIN_ID") } : {}),
     ...(env.VAULT_REGISTRY_ADDRESS ? { vaultRegistryAddress: env.VAULT_REGISTRY_ADDRESS } : {}),
     ...(env.WRITE_PRIVATE_KEY ? { writePrivateKey: env.WRITE_PRIVATE_KEY } : {}),
+    ...readSignerEnv(env),
     ...(env.AQUA_ADAPTER_ADDRESS ? { aquaAdapterAddress: env.AQUA_ADAPTER_ADDRESS } : {}),
     ...(env.AQUA_SWAPVM_ROUTER_ADDRESS
       ? { aquaSwapVMRouterAddress: env.AQUA_SWAPVM_ROUTER_ADDRESS }

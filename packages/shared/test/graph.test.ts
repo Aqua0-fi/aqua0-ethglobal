@@ -108,14 +108,14 @@ test("getBalance normalizes LP/vault addresses and aggregates raw BigInt strings
   assert.equal(balance.positions[0]?.vaultMetadata?.raw.vaultLiveTvl, "30");
 });
 
-test("info redacts endpoint paths, query strings, and userinfo", () => {
+test("info redacts endpoint paths, query strings, and userinfo", async () => {
   const service = new Aqua0Service({
     graphEndpoint: "https://user:password@gateway.example/api/secret-key/subgraphs/id/abc?api_key=hidden",
     writeRpcUrl: "https://rpc.example/v2/private-token?key=hidden",
     writeChainId: 5042002
   });
 
-  const info = service.info();
+  const info = await service.info();
   assert.deepEqual(info.endpoints, {
     graphOrigin: "https://gateway.example",
     writeRpcOrigin: "https://rpc.example"

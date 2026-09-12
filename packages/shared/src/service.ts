@@ -30,6 +30,7 @@ import {
   normalizeAddress,
   type FetchLike
 } from "./graph.js";
+import { resolveSignerAddress, resolveSignerKind, type SignerKind } from "./signer.js";
 import {
   assertExecutionAllowed,
   executeAuthorizeStrategy,
@@ -78,6 +79,8 @@ export type Aqua0Info = {
     chainId?: number;
     vaultRegistryAddress?: Lowercase<string>;
     executionConfigured: boolean;
+    /** Execute-mode signer and its address (null when none is configured or it could not be resolved). */
+    signer: { kind: SignerKind; address: Lowercase<string> | null; error?: string };
   };
 };
 
@@ -252,7 +255,7 @@ export class Aqua0Service {
     }
   }
 
-  info(): Aqua0Info {
+  async info(): Promise<Aqua0Info> {
     return {
       architecture: AQUA0_ARCHITECTURE,
       chain: ARC_TESTNET,
@@ -269,9 +272,20 @@ export class Aqua0Service {
         ...(this.#config.vaultRegistryAddress
           ? { vaultRegistryAddress: normalizeAddress(this.#config.vaultRegistryAddress) }
           : {}),
-        executionConfigured: isExecutionAllowedByConfig(this.#config)
+        executionConfigured: isExecutionAllowedByConfig(this.#config),
+        signer: await this.#signerInfo()
       }
     };
+  }
+
+  /** Signer kind and address only; a Circle lookup failure is reported (secrets redacted), not thrown. */
+  async #signerInfo(): Promise<Aqua0Info["write"]["signer"]> {
+    const kind = resolveSignerKind(this.#config);
+    try {
+      return { kind, address: (await resolveSignerAddress(this.#config)) ?? null };
+    } catch (error) {
+      return { kind, address: null, error: error instanceof Error ? error.message : String(error) };
+    }
   }
 
   async getBalance(address: string) {
