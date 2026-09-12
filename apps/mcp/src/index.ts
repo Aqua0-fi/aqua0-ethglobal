@@ -164,58 +164,58 @@ Examples:
   const executionNote =
     "Sends transactions only when the server runs with MCP_WRITE_MODE=execute (Arc Testnet or a local fork) and dryRun is not true; otherwise nothing is sent and the response holds ordered calldata to sign.";
   const feedRisk =
-    "Oracle risk: FXSwap trusts its feed, bounded only by each strategy's price band and staleness window. USDC/BRL reads RedStone's BRL feed (prices signed by 3 of RedStone's 5 primary-prod signers, verified on-chain); USDC/ARS reads a ManualFxOracle its owner sets by hand (see set_fx_price), because RedStone has no ARS feed.";
+    "Oracle risk: a forex strategy trusts its feed, bounded only by its price band and staleness window. USDC/BRL reads RedStone's BRL feed (prices signed by 3 of RedStone's 5 primary-prod signers, verified on-chain); USDC/ARS reads a ManualFxOracle its owner sets by hand (see set_fx_price), because RedStone has no ARS feed.";
   const opcode = z
     .string()
     .optional()
     .describe(
-      '"fxswap" (default when the FXSwap venue is configured): FXSwap, the oracle-anchored CryptoSwap instruction on AquaFXSwapVMRouter. "pegged": fixed-price PeggedSwap fallback on the stock AquaSwapVMRouter. Loose forms like "oracle" or "fixed" work.'
+      '"forex" (default when the forex venue is configured): the forex curve (Shell v1 / DFX), priced from an FX oracle on AquaForexSwapVMRouter. "pegged": fixed-price PeggedSwap fallback on the stock AquaSwapVMRouter. Loose forms like "fxswap", "oracle", "dfx" or "fixed" work.'
     );
   const strategyParams = z
     .object({
       feeBps: amount
         .optional()
-        .describe("Fee in basis points. FXSwap: the fee at balance (default 10). Pegged: the flat fee (default 30)."),
-      feePercent: amount.optional().describe("Same fee in percent, e.g. 0.1. Alternative to feeBps."),
-      feePpb: amount.optional().describe("Same fee in parts per billion (1000000 = 0.10%)."),
+        .describe("Fee in basis points. Forex: the curve's proportional fee epsilon on every swap (default 30). Pegged: the flat fee (default 30)."),
+      feePercent: amount.optional().describe("Same fee in percent, e.g. 0.3. Alternative to feeBps."),
+      feePpb: amount.optional().describe("Same fee in parts per billion (3000000 = 0.30%)."),
       usdcAmount: amount
         .optional()
         .describe("USDC shipped into the strategy from vault backing; default 1 USDC."),
       fxAmount: amount
         .optional()
-        .describe("FX tokens shipped; default usdcAmount x price (FXSwap: the live oracle price)."),
+        .describe("FX tokens shipped; default usdcAmount x price (forex: the live oracle price, so the book starts balanced)."),
       amountUnit: unit,
-      a: amount
+      alpha: amount
         .optional()
-        .describe("FXSwap: amplification A (whitepaper units, default 100). Higher = flatter price near the oracle."),
-      gamma: amount
+        .describe('Forex: halt band as a decimal or "50%" (default 0.5). A swap that pushes either side past this fraction from the even split reverts.'),
+      beta: amount
         .optional()
-        .describe("FXSwap: CryptoSwap gamma as a decimal (default 0.1). Lower = the flat zone around the oracle ends sooner."),
-      outFeeBps: amount
+        .describe('Forex: flat band as a decimal or "15%" (default 0.15, below alpha). Within it the price is exactly the oracle price, no slippage.'),
+      delta: amount
         .optional()
-        .describe("FXSwap: fee far from balance in bps (default 100 = 1%, never below the fee at balance)."),
-      outFeePercent: amount.optional().describe("FXSwap: out fee in percent. Alternative to outFeeBps."),
-      feeGamma: amount
+        .describe("Forex: slope of the inventory fee charged outside the flat band (default 0.5). Higher = the fee rises faster as the pool tips."),
+      maxFee: amount
         .optional()
-        .describe("FXSwap: how fast the fee widens from feeBps to outFeeBps as inventory drains (default 0.03)."),
-      flatFeeBps: amount
+        .describe('Forex: cap on the inventory fee rate as a decimal or "25%" (default 0.25).'),
+      maxFeePercent: amount.optional().describe("Forex: the same cap in percent, e.g. 25. Alternative to maxFee."),
+      lambda: amount
         .optional()
-        .describe("FXSwap: optional flat input fee in front of the curve, in bps (default none)."),
+        .describe('Forex: share of the inventory fee paid back to a trade that rebalances the pool, decimal or "30%" (default 0.3).'),
       bandPercent: amount
         .optional()
-        .describe("FXSwap: accept feed answers within +/- this percent of the live oracle price at creation, e.g. 20."),
+        .describe("Forex: accept feed answers within +/- this percent of the live oracle price at creation, e.g. 20."),
       minPrice: amount
         .optional()
-        .describe("FXSwap: lowest accepted feed answer in the feed's orientation: ARS per 1 USD, or USD per 1 BRL for the RedStone BRL feed (default half of 1400 ARS / 5.5 BRL per USD)."),
+        .describe("Forex: lowest accepted feed answer in the feed's orientation: ARS per 1 USD, or USD per 1 BRL for the RedStone BRL feed (default half of 1400 ARS / 5.5 BRL per USD)."),
       maxPrice: amount
         .optional()
-        .describe("FXSwap: highest accepted feed answer in the feed's orientation (default double the same reference)."),
+        .describe("Forex: highest accepted feed answer in the feed's orientation (default double the same reference)."),
       maxStaleness: amount
         .optional()
-        .describe('FXSwap: max feed age before swaps revert: seconds or "24h", "7d" (default 1h for RedStone BRL, which swap refreshes first; 7d for the hand-set ARS feed).'),
+        .describe('Forex: max feed age before swaps revert: seconds or "24h", "7d" (default 1h for RedStone BRL, which swap refreshes first; 7d for the hand-set ARS feed).'),
       oracleDecimals: amount
         .optional()
-        .describe("FXSwap, advanced: feed decimals pinned in the program; 0 (default) reads decimals() each swap."),
+        .describe("Forex, advanced: feed decimals pinned in the program; 0 (default) reads decimals() each swap."),
       price: amount
         .optional()
         .describe("Pegged only: FX units per 1 USDC, up to 2 decimals. Defaults: 1400 for ARS, 5.5 for BRL."),
@@ -226,31 +226,33 @@ Examples:
       label: z
         .string()
         .optional()
-        .describe('Strategy class label; default "FXSwap oracle ARS" (FXSwap) or "FXSwap ARS" (pegged). A new label creates a new class.')
+        .describe('Strategy class label; default "Forex ARS" (forex) or "FXSwap ARS" (pegged). A new label creates a new class.')
     })
+    .passthrough()
     .optional()
     .describe(
-      "Strategy parameters; omit for the demo defaults. FXSwap-only params imply opcode fxswap, pegged-only params (price, linearWidth) imply pegged. Quote/swap need the same program params to find a custom strategy."
+      "Strategy parameters; omit for the demo defaults. Forex-only params (alpha, beta, delta, maxFee, lambda, band, staleness) imply opcode forex, pegged-only params (price, linearWidth) imply pegged. Quote/swap need the same program params to find a custom strategy."
     );
 
   server.registerTool(
     "create_strategy",
     {
       description: `Create a USDC/FX market-making strategy on Arc Testnet: a 1inch SwapVM program backed by Aqua0 vault liquidity and shipped into 1inch Aqua through an Aqua0 AquaAdapter.
-Two opcodes, two venues on the same Aqua0 vaults (each AquaAdapter is bound to one router):
-- "fxswap" (default): FXSwap, the team's oracle-anchored CryptoSwap instruction (AquaFXSwapVMRouter opcode 34). Every swap reads the pair's feed (ARS/USD or BRL/USD), rejects stale or out-of-band answers, prices around the oracle and widens its fee as inventory drains. Defaults: A 100, gamma 0.1, fee 10 bps at balance rising to 1% (feeGamma 0.03), price band 0.5x-2x of 1400 ARS / 5.5 BRL per USD, max feed age 7 days, ships 1 USDC plus its value in FX at the live oracle price. Declares the mid fee as feePpb to the adapter.
+Every fill draws on one liquidity path, the Aqua0 vaults, just in time: the adapter pulls the output token from its AssetVault and sweeps the input into the other, and Aqua only records virtual balances. The opcode picks the pricing program and the router (with its own AquaAdapter) that runs it:
+- "forex" (default): the forex curve (Shell v1 / DFX), opcode 34 on AquaForexSwapVMRouter. Every swap reads the pair's feed (ARS/USD or BRL/USD) and rejects stale or out-of-band answers. While the book stays within the flat band (beta) of an even split it trades at exactly the oracle price; past it an inventory fee applies (slope delta, capped at maxFee, which must stay below min(0.5, (1 - alpha) / (2 alpha)) so no trade can outgrow its fee or clear the whole book), part of which (lambda) is paid back to trades that rebalance; a swap that would push the book past the halt band (alpha) reverts. A proportional fee epsilon (feeBps) applies to every swap. Defaults: alpha 0.5, beta 0.15, delta 0.5, maxFee 0.25, lambda 0.3, fee 30 bps, price band 0.5x-2x of 1400 ARS / 5.5 BRL per USD, max feed age 7 days (1 hour on RedStone BRL), ships 1 USDC plus its value in FX at the live oracle price. Declares epsilon as feePpb to the adapter. No SwapVM flat fee is stacked on it.
 - "pegged": fixed-price fallback, [flat fee][PeggedSwap] at a price you set, on the stock AquaSwapVMRouter.
-If opcode is omitted and FXSwap cannot ship yet (its adapter is not wired into the vault core, or the signer lacks OPERATOR_ROLE), the response explains why in opcodeNote and uses "pegged".
+If opcode is omitted and the forex venue cannot ship yet (its adapter is not wired into the vault core, or the signer lacks OPERATOR_ROLE), the response explains why in opcodeNote and uses "pegged".
 One call runs every step idempotently and reports finished steps as skipped, so re-running is safe:
 1) register the strategy class, 2) register the USDC and FX vault legs, 3) fund the FX leg if short (ARGt/BRAt are open-mint demo tokens), 4) commit the signer's vault principal, 5) sign and ship the program.
 One USDC deposit can back several strategies: create USDC/ARS and USDC/BRL and both commit the same USDC. Deposit USDC first with the deposit tool.
 ${feedRisk}
 ${executionNote}
 Examples:
-- "create a peso FX strategy that tracks the oracle" -> {"pair":"USDC/ARS","opcode":"fxswap"}
+- "create a peso FX strategy that tracks the oracle" -> {"pair":"USDC/ARS","opcode":"forex"}
 - "now the same USDC with Brazilian reais" -> {"pair":"usdc to brl"}
-- "BRL fxswap, 5 bps fee going up to 2%, and stop trading if the feed moves 15% from here" -> {"pair":"USDC/BRL","opcode":"fxswap","params":{"feeBps":5,"outFeeBps":200,"bandPercent":15}}
-- "ARS strategy with amplification 200, gamma 0.02, stale after a day, half a USDC" -> {"pair":"USDC/ARS","params":{"a":200,"gamma":0.02,"maxStaleness":"24h","usdcAmount":"0.5"}}
+- "BRL forex curve, 5 bps fee, and stop trading if the feed moves 15% from here" -> {"pair":"USDC/BRL","opcode":"forex","params":{"feeBps":5,"bandPercent":15}}
+- "ARS strategy with a tight flat band of 10%, rebate 50%, stale after a day, half a USDC" -> {"pair":"USDC/ARS","params":{"beta":0.1,"lambda":0.5,"maxStaleness":"24h","usdcAmount":"0.5"}}
+- "cap the imbalance fee at 5% and halt at 40% off balance" -> {"pair":"USDC/BRL","params":{"maxFee":0.05,"alpha":0.4}}
 - "fixed-rate BRL pool at 5.40 reais per dollar, 10 bps" -> {"pair":"USDC/BRL","opcode":"pegged","params":{"price":5.4,"feeBps":10}}
 Legacy form without pair (strategist, token0, token1, label, vaults) only registers a class and its vault legs.`,
       inputSchema: {
@@ -345,19 +347,19 @@ Examples:
     opcode: z
       .string()
       .optional()
-      .describe('"fxswap" or "pegged" to pick the venue. Default: FXSwap first when configured, then pegged.'),
+      .describe('"forex" or "pegged" to pick the pricing program. Default: forex first when configured, then pegged.'),
     params: strategyParams,
     tokenIn: z.string().optional().describe('Token you pay: "USDC" (default) or the FX side ("ARS", "BRL").'),
     amount: amount.describe('Exact input amount of tokenIn, e.g. "0.1" (human units unless unit is "raw").'),
     unit
   };
   const pricingNote =
-    "The response shows pricing.oraclePrice (the feed answer FXSwap reads, or fixedPrice for pegged), pricing.executionPrice and pricing.effectiveSpreadBps (shortfall versus trading at the oracle price: fees plus curve slippage), plus the feed's age and band for FXSwap.";
+    "The response shows pricing.oraclePrice (the FX-per-USDC price the forex curve reads from its feed, or fixedPrice for pegged), pricing.executionPrice and pricing.effectiveSpreadBps: the shortfall versus trading at that price. For forex that is the fee epsilon plus any inventory fee once the trade pushes the book past the flat band (negative when a rebalancing trade earns a rebate); for pegged, the flat fee plus curve slippage. Forex also shows the feed's age and band.";
 
   server.registerTool(
     "quote_swap",
     {
-      description: `Quote an exact-input swap against a live Aqua0 SwapVM strategy on Arc Testnet. Read-only: an eth_call to the strategy's router quote (AquaFXSwapVMRouter for FXSwap, AquaSwapVMRouter for pegged), nothing is sent. Choose the strategy by pair (defaults find the strategies create_strategy makes by default; FXSwap is tried first) or by strategyId.
+      description: `Quote an exact-input swap against a live Aqua0 SwapVM strategy on Arc Testnet. Read-only: an eth_call to the strategy's router quote (AquaForexSwapVMRouter for forex, AquaSwapVMRouter for pegged), nothing is sent. Choose the strategy by pair (defaults find the strategies create_strategy makes by default; forex is tried first) or by strategyId.
 ${pricingNote}
 Examples:
 - "how many pesos do I get for 0.1 USDC?" -> {"pair":"USDC/ARS","amount":"0.1"}
@@ -378,7 +380,7 @@ Examples:
   server.registerTool(
     "swap",
     {
-      description: `Swap against a live Aqua0 SwapVM strategy on Arc Testnet through its router (exact input). For a RedStone-priced FXSwap strategy (USDC/BRL) it first pushes RedStone's latest signed price on-chain (updateDataFeedsValuesPartial), then quotes, enforces a minimum output on-chain (slippageBps, default 50 = 0.5%, or minAmountOut), approves the router if needed, swaps, and reports the amount received.
+      description: `Swap against a live Aqua0 SwapVM strategy on Arc Testnet through its router (exact input). For a RedStone-priced forex strategy (USDC/BRL) it first pushes RedStone's latest signed price on-chain (updateDataFeedsValuesPartial), then quotes, enforces a minimum output on-chain (slippageBps, default 50 = 0.5%, or minAmountOut), approves the router if needed, swaps, and reports the amount received.
 ${pricingNote}
 ${executionNote}
 Examples:
@@ -406,7 +408,7 @@ Examples:
   server.registerTool(
     "get_shared_backing",
     {
-      description: `Show how one USDC deposit backs several strategies at once for an address (default: the configured signer). Returns the USDC principal counted once, every strategy class the address committed it to (e.g. USDC/ARS and USDC/BRL), each class's committed backing and available liquidity in the USDC and FX vaults, and the SwapVM strategies shipped for each class on BOTH venues (FXSwap and pegged adapters), each tagged with its opcode.
+      description: `Show how one USDC deposit backs several strategies at once for an address (default: the configured signer). Returns the USDC principal counted once, every strategy class the address committed it to (e.g. USDC/ARS and USDC/BRL), each class's committed backing and available liquidity in the USDC and FX vaults, and the SwapVM strategies shipped for each class through both adapters (forex and pegged), each tagged with its opcode. Every strategy draws on the same vaults; the opcode only sets the pricing program.
 Source: direct on-chain RPC reads, labelled in the response (Graph indexing for the Aqua adapters is being added separately).
 Examples:
 - "is my USDC backing both FX strategies?" -> {}
@@ -429,7 +431,7 @@ Examples:
   server.registerTool(
     "get_fx_prices",
     {
-      description: `Read the FX feeds FXSwap strategies price from on Arc Testnet. BRL: RedStone's BRL feed (USD per 1 BRL, also shown as BRL per USD), with the latest signed price from RedStone's gateways (signing time, the 3 signer values) and the value currently stored on-chain. ARS: the hand-set ManualFxOracle (ARS per 1 USD) with its owner. Without a pair it also lists RedStone feeds live on Arc that no Aqua0 vault trades yet (MXNe, MXN per 1 USD). Each feed shows whether it sits inside the default strategy price band. Read-only.
+      description: `Read the FX feeds forex strategies price from on Arc Testnet. BRL: RedStone's BRL feed (USD per 1 BRL, also shown as BRL per USD), with the latest signed price from RedStone's gateways (signing time, the 3 signer values) and the value currently stored on-chain. ARS: the hand-set ManualFxOracle (ARS per 1 USD) with its owner. Without a pair it also lists RedStone feeds live on Arc that no Aqua0 vault trades yet (MXNe, MXN per 1 USD). Each feed shows whether it sits inside the default strategy price band. Read-only.
 ${feedRisk}
 Examples:
 - "what's the real rate right now?" -> {"pair":"BRL"}
@@ -446,8 +448,8 @@ Examples:
   server.registerTool(
     "set_fx_price",
     {
-      description: `Move the hand-set ARS/USD demo feed (ManualFxOracle, Chainlink-compatible) so every FXSwap strategy on it reprices on its next quote or swap. Pegged strategies do not move. The BRL feed is RedStone signed market data and cannot be set by hand; this tool refuses it.
-RISK: this is an owner-set demo oracle. Only the feed owner can set it, and FXSwap strategies on the feed trade at whatever it says, bounded only by each strategy's price band and staleness window.
+      description: `Move the hand-set ARS/USD demo feed (ManualFxOracle, Chainlink-compatible) so every forex strategy on it reprices on its next quote or swap. Pegged strategies do not move. The BRL feed is RedStone signed market data and cannot be set by hand; this tool refuses it.
+RISK: this is an owner-set demo oracle. Only the feed owner can set it, and forex strategies on the feed trade at whatever it says, bounded only by each strategy's price band and staleness window.
 Execute path: sends ManualFxOracle.setAnswer only when the server runs with MCP_WRITE_MODE=execute, dryRun is not true, and the configured signer IS the feed owner. A non-owner signer gets a clear error and nothing is sent. Otherwise returns the prepared call for the owner to send.
 Give exactly one of price (absolute) or changePercent (relative).
 Examples:
@@ -456,7 +458,7 @@ Examples:
 - "drop the peso feed by 2.5 percent" -> {"pair":"ARS","changePercent":-2.5}`,
       inputSchema: {
         pair: z.string().optional().describe('Which feed: "ARS" / "USDC/ARS" or "BRL" / "USDC/BRL".'),
-        feed: z.string().optional().describe("Feed address, as an alternative to pair (must be a configured FXSwap feed)."),
+        feed: z.string().optional().describe("Feed address, as an alternative to pair (must be a configured forex feed)."),
         price: amount.optional().describe("New price in FX units per 1 USD, e.g. 5.6 or 1470."),
         changePercent: amount
           .optional()

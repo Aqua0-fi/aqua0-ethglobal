@@ -38,7 +38,9 @@
       "decimals": 8,
       "deployer": "0x7E61A5EbCCd26d9D91690C6037d7224F5384730D",
       "firstUpdateTx": "0x3ec11cc0830567cb25a5d9b9b1f36c8caa5d966216c552b8a3098fee75d44ecf"
-    }
+    },
+    "forexRouter": "0x0661435C2684Dcf62c547bA75a3300f928701E3d",
+    "forexAquaAdapter": "0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80"
   },
   "assets": {
     "usdc": "0x3600000000000000000000000000000000000000",
@@ -56,6 +58,203 @@
     "vaultCount": 3,
     "factoryHasRegistrarRole": true,
     "composerWiredToFillerRegistry": true,
-    "composerRoleGrantedToAllVaults": true
+    "composerRoleGrantedToAllVaults": true,
+    "arcscan": {
+      "explorer": "https://testnet.arcscan.app",
+      "checkedAt": "2026-09-12",
+      "contracts": {
+        "0x490d2eceD9aCF99e1db6090f820775bFa70020D4": {
+          "name": "AquaRouter",
+          "status": "verified",
+          "match": "full",
+          "url": "https://testnet.arcscan.app/address/0x490d2eceD9aCF99e1db6090f820775bFa70020D4#code"
+        },
+        "0xb20bc70b485eC1352C190d26fCaB1959d219F763": {
+          "name": "AquaSwapVMRouter",
+          "status": "verified",
+          "match": "full",
+          "url": "https://testnet.arcscan.app/address/0xb20bc70b485eC1352C190d26fCaB1959d219F763#code"
+        },
+        "0xb54AE15d2372F27718f32e9f6990330cdD3edaEB": {
+          "name": "AquaFXSwapVMRouter",
+          "status": "verified",
+          "match": "full",
+          "url": "https://testnet.arcscan.app/address/0xb54AE15d2372F27718f32e9f6990330cdD3edaEB#code"
+        },
+        "0xc05A3Fb016f973C82b0232EF50336d4C0466E70C": {
+          "name": "ManualFxOracle ARS/USD",
+          "status": "verified",
+          "match": "full",
+          "url": "https://testnet.arcscan.app/address/0xc05A3Fb016f973C82b0232EF50336d4C0466E70C#code"
+        },
+        "0x1AE6542b9da89Ed2AEf00600710Bba75DbFF5e71": {
+          "name": "ManualFxOracle BRL/USD",
+          "status": "verified",
+          "match": "full",
+          "url": "https://testnet.arcscan.app/address/0x1AE6542b9da89Ed2AEf00600710Bba75DbFF5e71#code"
+        },
+        "0x1a3fff65628048e4188C40dd5cf55A27Fb513ea0": {
+          "name": "AquaRedStoneMultiFeedAdapter",
+          "status": "verified",
+          "match": "full",
+          "url": "https://testnet.arcscan.app/address/0x1a3fff65628048e4188C40dd5cf55A27Fb513ea0#code"
+        },
+        "0xac4D10eE7FF790c2E505fBBD6A72d15D7Cbc1796": {
+          "name": "AquaRedStonePriceFeed BRL",
+          "status": "verified",
+          "match": "full",
+          "url": "https://testnet.arcscan.app/address/0xac4D10eE7FF790c2E505fBBD6A72d15D7Cbc1796#code"
+        },
+        "0xc7cDEfF4e7534dAdeEBFc701c80d8C65b91807ad": {
+          "name": "AquaRedStonePriceFeed MXNe",
+          "status": "verified",
+          "match": "full",
+          "url": "https://testnet.arcscan.app/address/0xc7cDEfF4e7534dAdeEBFc701c80d8C65b91807ad#code"
+        },
+        "0xbF72D34b804636496c3308796908152b82624Ca5": {
+          "name": "AquaAdapter (pegged venue)",
+          "status": "verified",
+          "match": "partial (compiled with cbor_metadata=false, so no metadata hash to match)",
+          "url": "https://testnet.arcscan.app/address/0xbF72D34b804636496c3308796908152b82624Ca5#code"
+        },
+        "0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5": {
+          "name": "AquaAdapter (FXSwap venue)",
+          "status": "verified",
+          "match": "partial (compiled with cbor_metadata=false, so no metadata hash to match)",
+          "url": "https://testnet.arcscan.app/address/0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5#code"
+        },
+        "0x0661435C2684Dcf62c547bA75a3300f928701E3d": {
+          "name": "AquaForexSwapVMRouter",
+          "status": "verified",
+          "match": "full",
+          "url": "https://testnet.arcscan.app/address/0x0661435C2684Dcf62c547bA75a3300f928701E3d#code"
+        },
+        "0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80": {
+          "name": "AquaAdapter (forex venue)",
+          "status": "verified",
+          "match": "partial (compiled with cbor_metadata=false, so no metadata hash to match)",
+          "url": "https://testnet.arcscan.app/address/0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80#code"
+        }
+      },
+      "vaultCore": {
+        "0x9E094b21C4263e0BE5BEffa0f8296B3fd982fFFf": {
+          "name": "VaultRegistry (ERC1967Proxy)",
+          "status": "proxy verified (partial); implementation 0x0969C6d2eF8258f0F0d9ac3863feBCA89E6a46Cd not verified",
+          "url": "https://testnet.arcscan.app/address/0x9E094b21C4263e0BE5BEffa0f8296B3fd982fFFf#code"
+        },
+        "0x879C0c90205172a8DD66afB8124994D866372FBa": {
+          "name": "VaultFactory (ERC1967Proxy)",
+          "status": "proxy verified (partial); implementation 0x55f150Fe2B3d9425Af6daCBD5B81576C545cCCdc not verified",
+          "url": "https://testnet.arcscan.app/address/0x879C0c90205172a8DD66afB8124994D866372FBa#code"
+        },
+        "0x656F28021a624aDfA0d92dDFdBb20577674aFEC7": {
+          "name": "Composer (ERC1967Proxy)",
+          "status": "proxy verified (partial); implementation 0x05c40985182c632C78e72E8385e943F5B7fA6Aed not verified",
+          "url": "https://testnet.arcscan.app/address/0x656F28021a624aDfA0d92dDFdBb20577674aFEC7#code"
+        },
+        "0xa8e08346DD7b6809C47A920c365bCC987Ea91297": {
+          "name": "FillerRegistry",
+          "status": "not verified",
+          "url": "https://testnet.arcscan.app/address/0xa8e08346DD7b6809C47A920c365bCC987Ea91297#code"
+        },
+        "0x77C04851838cb7f675e0366CEA253fEf08001C21": {
+          "name": "UpgradeableBeacon",
+          "status": "verified (partial)",
+          "url": "https://testnet.arcscan.app/address/0x77C04851838cb7f675e0366CEA253fEf08001C21#code"
+        },
+        "0xc2F0D96Ba81C67baFaD6530A6A2C5236c7b66EEd": {
+          "name": "AssetVault implementation",
+          "status": "not verified",
+          "url": "https://testnet.arcscan.app/address/0xc2F0D96Ba81C67baFaD6530A6A2C5236c7b66EEd#code"
+        },
+        "0x99c2ab427b29dB1Cc14D228d970596015d1C4429": {
+          "name": "AssetVault usdc (BeaconProxy)",
+          "status": "proxy verified (partial); implementation not verified",
+          "url": "https://testnet.arcscan.app/address/0x99c2ab427b29dB1Cc14D228d970596015d1C4429#code"
+        },
+        "0x8a3d6188C58d7877499592E179DfE3bd80c4F460": {
+          "name": "AssetVault argt (BeaconProxy)",
+          "status": "proxy verified (partial); implementation not verified",
+          "url": "https://testnet.arcscan.app/address/0x8a3d6188C58d7877499592E179DfE3bd80c4F460#code"
+        },
+        "0xEcB132648B781ec5742b582c526243Eeef900785": {
+          "name": "AssetVault brat (BeaconProxy)",
+          "status": "proxy verified (partial); implementation not verified",
+          "url": "https://testnet.arcscan.app/address/0xEcB132648B781ec5742b582c526243Eeef900785#code"
+        }
+      }
+    }
+  },
+  "forexVenue": {
+    "note": "ForexCurve (opcode 34, the Shell v1 / DFX forex curve) venue. Supersedes the FXSwap venue (contracts.fxswapRouter), which was never wired.",
+    "router": {
+      "address": "0x0661435C2684Dcf62c547bA75a3300f928701E3d",
+      "deployTx": "0x26007918f08656de1ff6d62b1645b307756ec08af5a69ded592667319a13b5f7",
+      "runtimeBytes": 24553
+    },
+    "adapter": {
+      "address": "0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80",
+      "admin": "0x7E61A5EbCCd26d9D91690C6037d7224F5384730D",
+      "operatorRole": [
+        "0xcdbd43edb8292def7e8ac99c77860a689cc6d404"
+      ],
+      "oneStrategyPerToken": false,
+      "deployTx": "0xe53f6ca0c3929cb6566fa1205f10437b1a3eb2436b699ba2a4083046dcb54bc3",
+      "setOneStrategyPerTokenTx": "0x5fdaea440e47095bbabd32eb78ba7eeb3ff5d03f4fb82eecea47d4f5a8e28fb1",
+      "operatorRoleGrantTx": "0x50c38bc1bfd2dec897388d1bafa6c6384b958c1d134dcd8272b43f3fd48d39fc"
+    },
+    "coreWiring": {
+      "status": "wired",
+      "date": "2026-09-12",
+      "note": "The core admin granted the team key the roles needed to wire venues itself; the team key then sent the forex wiring.",
+      "rolesGrantedToTeamKey": {
+        "by": "0xBaA361817C8676b4A8a8C5e6fd050253f81f407C",
+        "account": "0x7E61A5EbCCd26d9D91690C6037d7224F5384730D",
+        "transactions": [
+          {
+            "contract": "VaultRegistry",
+            "role": "DEFAULT_ADMIN_ROLE",
+            "hash": "0x5524f4a817532c5d40f3af232bf9da0b615c7351d2b37c28f33ea99308a65daf"
+          },
+          {
+            "contract": "AssetVault usdc",
+            "role": "CAPITAL_ADMIN_ROLE",
+            "hash": "0xe78ea34128c4264b4ebbec9fed69bed65424502305002f6a110c02f9cae8bf1b"
+          },
+          {
+            "contract": "AssetVault argt",
+            "role": "CAPITAL_ADMIN_ROLE",
+            "hash": "0x8042c9a8b24d5156fd264fe601279841279011b48bf6ee30848c267ff7caf9a8"
+          },
+          {
+            "contract": "AssetVault brat",
+            "role": "CAPITAL_ADMIN_ROLE",
+            "hash": "0x4825602330cbfe5ab5d07a48fbd290533e787729b57288f48db114b68a166412"
+          }
+        ]
+      },
+      "transactions": [
+        {
+          "call": "VaultRegistry.setAdapterAllowed(forexAquaAdapter, true)",
+          "hash": "0x6991957627a2440fbe17d2854af4344727124f02b5b97184e60b14eea39461a9"
+        },
+        {
+          "call": "AssetVault usdc grantRole(VENUE_SETTLER_ROLE, forexAquaAdapter)",
+          "hash": "0xabb80a89b83301e9b5d23542c9d18306bd10a6aeb494645ae7e6479c8210dc42"
+        },
+        {
+          "call": "AssetVault argt grantRole(VENUE_SETTLER_ROLE, forexAquaAdapter)",
+          "hash": "0xdb32e2892676637708a634a06ad53afcbab755edcc6a7d58e81d4a48a07e1431"
+        },
+        {
+          "call": "AssetVault brat grantRole(VENUE_SETTLER_ROLE, forexAquaAdapter)",
+          "hash": "0x6994050e5bdf09fbc79512a9aee8419e9a965214daaf41c7bae64cd8ad9b6754"
+        }
+      ],
+      "verified": {
+        "isAllowedAdapter": true,
+        "venueSettlerRoleOnAllVaults": true
+      }
+    }
   }
 }

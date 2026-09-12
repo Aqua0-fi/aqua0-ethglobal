@@ -4,11 +4,18 @@
   "sourceManifest": "packages/subgraph/subgraph.arc.yaml",
   "studioSlug": "aqua-0-ethglobal-arc-testnet",
   "studioUrl": "https://thegraph.com/studio/subgraph/aqua-0-ethglobal-arc-testnet",
-  "queryEndpoint": "https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/ethglobal-d3ad9d9",
-  "versionLabel": "ethglobal-d3ad9d9",
-  "deploymentCid": "QmY8nDAgVvaafu3aD99HN3Lm3Fx4WVsKKMx6X1Xrj49ujE",
+  "queryEndpoint": "https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/ethglobal-arc-d179c59",
+  "versionLabel": "ethglobal-arc-d179c59",
+  "deploymentCid": "QmVbx7DnfVxAZVXpETz2YQ4LD9b8fSyFnAaCexaoKVLmDy",
   "publicMcp": "https://ethglobal-mcp.18-207-103-187.nip.io/mcp",
   "publicDashboard": "https://ethglobal-demo.18-207-103-187.nip.io/",
   "status": "live",
-  "verifiedAtUtc": "2026-09-12T07:46:32Z"
+  "verifiedAtUtc": "2026-09-12T17:58:57Z",
+  "sources": "vault core, pegged venue (AquaAdapter 0xbF72D34b804636496c3308796908152b82624Ca5 + AquaSwapVMRouter), forex venue (AquaAdapter 0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80 + AquaForexSwapVMRouter 0x0661435C2684Dcf62c547bA75a3300f928701E3d)",
+  "deployedAtUtc": "2026-09-12T17:57:19Z",
+  "previousVersion": {
+    "versionLabel": "ethglobal-d3ad9d9",
+    "deploymentCid": "QmY8nDAgVvaafu3aD99HN3Lm3Fx4WVsKKMx6X1Xrj49ujE"
+  },
+  "syncCheck": "synced to Arc head (block 61768042 vs 61768050), no indexing errors, both AquaVenueAdapters indexed (pegged, forex)"
 }

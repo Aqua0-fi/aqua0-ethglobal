@@ -61,18 +61,22 @@ export type WriteConfig = {
   circleOperatorWalletId?: string;
   /** Testnet USDC the operator sends a signed-in user holding under 1 USDC ("0" disables). Default 5. */
   onboardUsdc?: string;
+  /** Most testnet USDC all top-ups may send in a rolling 24 hours. Default 50. */
+  onboardDailyCapUsdc?: string;
+  /** Top-up ledger (once per wallet and user). Default `~/.aqua0/onboarding-topups.json`. */
+  onboardLedgerFile?: string;
   mcpWriteMode?: WriteMode;
   /** Aqua0 AquaAdapter (SwapVM venue). Defaults to the Arc Testnet deployment when WRITE_CHAIN_ID is Arc. */
   aquaAdapterAddress?: string;
   /** 1inch AquaSwapVMRouter. Defaults to the Arc Testnet deployment when WRITE_CHAIN_ID is Arc. */
   aquaSwapVMRouterAddress?: string;
-  /** AquaFXSwapVMRouter (FXSwap venue). Defaults to the Arc Testnet deployment when WRITE_CHAIN_ID is Arc. */
+  /** AquaForexSwapVMRouter (forex venue). Defaults to the Arc Testnet deployment when WRITE_CHAIN_ID is Arc. */
   fxswapRouterAddress?: string;
-  /** AquaAdapter bound to the FXSwap router (a second adapter: each binds one router immutably). */
+  /** AquaAdapter bound to the forex router (a second adapter: each binds one router immutably). */
   fxswapAquaAdapterAddress?: string;
-  /** ARS-per-USD feed (ManualFxOracle / Chainlink-style) used by USDC/ARS FXSwap strategies. */
+  /** ARS-per-USD feed (ManualFxOracle / Chainlink-style) used by USDC/ARS forex strategies. */
   fxOracleArsUsdAddress?: string;
-  /** BRL-per-USD feed used by USDC/BRL FXSwap strategies. */
+  /** BRL-per-USD feed used by USDC/BRL forex strategies. */
   fxOracleBrlUsdAddress?: string;
 };
 
