@@ -1,5 +1,12 @@
+name: ethglobal-arc-rpc-proxy
+
 services:
   arc-rpc-proxy:
+    image: ethglobal-arc-rpc-proxy:latest
+    container_name: ethglobal-arc-rpc-proxy
+    labels:
+      com.aqua0.scope: ethglobal
+      com.aqua0.component: arc-rpc-proxy
     build: .
     restart: unless-stopped
     environment:
@@ -11,9 +18,9 @@ services:
       MIN_REQUEST_INTERVAL_MS: "300"
       PORT: "8545"
     networks:
-      - graph-node
+      - ethglobal-graph
 
 networks:
-  graph-node:
+  ethglobal-graph:
     external: true
-    name: graph-node_default
+    name: ethglobal-graph

@@ -1,5 +1,12 @@
+name: ethglobal-public
+
 services:
   mcp:
+    image: ethglobal-mcp:latest
+    container_name: ethglobal-mcp
+    labels:
+      com.aqua0.scope: ethglobal
+      com.aqua0.component: mcp
     build:
       context: ../..
       dockerfile: Dockerfile.mcp
