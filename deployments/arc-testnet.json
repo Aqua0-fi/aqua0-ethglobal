@@ -23,6 +23,21 @@
       "arsUsd": "0xc05A3Fb016f973C82b0232EF50336d4C0466E70C",
       "brlUsd": "0x1AE6542b9da89Ed2AEf00600710Bba75DbFF5e71",
       "owner": "0xAFF7Da673820fAA38289de8B03984A9cf20fb02c"
+    },
+    "redstone": {
+      "dataServiceId": "redstone-primary-prod",
+      "multiFeedAdapter": "0x1a3fff65628048e4188C40dd5cf55A27Fb513ea0",
+      "feeds": {
+        "BRL": "0xac4D10eE7FF790c2E505fBBD6A72d15D7Cbc1796",
+        "MXNe": "0xc7cDEfF4e7534dAdeEBFc701c80d8C65b91807ad"
+      },
+      "orientation": {
+        "BRL": "USD per 1 BRL",
+        "MXNe": "MXN per 1 USD"
+      },
+      "decimals": 8,
+      "deployer": "0x7E61A5EbCCd26d9D91690C6037d7224F5384730D",
+      "firstUpdateTx": "0x3ec11cc0830567cb25a5d9b9b1f36c8caa5d966216c552b8a3098fee75d44ecf"
     }
   },
   "assets": {

@@ -3,3 +3,7 @@ forge-std/=lib/swap-vm/node_modules/forge-std/src/
 @1inch/solidity-utils/=lib/swap-vm/node_modules/@1inch/solidity-utils/
 @1inch/aqua/=lib/swap-vm/node_modules/@1inch/aqua/
 @1inch/swap-vm/=lib/swap-vm/src/
+@redstone-finance/on-chain-relayer/=lib/redstone/on-chain-relayer/
+@redstone-finance/evm-connector/=lib/redstone/evm-connector/
+@chainlink/contracts/=lib/redstone/chainlink/
+@openzeppelin/contracts-upgradeable/=lib/swap-vm/node_modules/@openzeppelin/contracts/

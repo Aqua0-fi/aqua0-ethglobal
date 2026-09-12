@@ -21,6 +21,8 @@
     "typescript": "^5.7.2"
   },
   "dependencies": {
+    "@circle-fin/developer-controlled-wallets": "10.8.0",
+    "@redstone-finance/sdk": "0.9.0",
     "viem": "^2.56.3"
   }
 }

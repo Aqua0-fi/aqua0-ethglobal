@@ -233,6 +233,7 @@ test("Arc deployment constants stay in sync with deployments/arc-testnet.json (F
       fxswapRouter?: string | null;
       fxAquaAdapter?: string | null;
       fxOracles?: { arsUsd?: string | null; brlUsd?: string | null; owner?: string | null } | null;
+      redstone?: { multiFeedAdapter?: string | null; feeds?: { BRL?: string | null; MXNe?: string | null } } | null;
     };
     assets: Record<string, string>;
     vaults: Record<string, string>;
@@ -253,7 +254,10 @@ test("Arc deployment constants stay in sync with deployments/arc-testnet.json (F
     ["fxAquaAdapter", file.contracts.fxAquaAdapter, fx.fxAquaAdapter],
     ["fxOracles.arsUsd", file.contracts.fxOracles?.arsUsd, fx.fxOracles.arsUsd],
     ["fxOracles.brlUsd", file.contracts.fxOracles?.brlUsd, fx.fxOracles.brlUsd],
-    ["fxOracles.owner", file.contracts.fxOracles?.owner, fx.fxOracles.owner]
+    ["fxOracles.owner", file.contracts.fxOracles?.owner, fx.fxOracles.owner],
+    ["redstone.multiFeedAdapter", file.contracts.redstone?.multiFeedAdapter, fx.redstone.multiFeedAdapter],
+    ["redstone.feeds.BRL", file.contracts.redstone?.feeds?.BRL, fx.redstone.feeds.BRL],
+    ["redstone.feeds.MXNe", file.contracts.redstone?.feeds?.MXNe, fx.redstone.feeds.MXNe]
   ];
   for (const [name, inFile, inConstants] of pairs) {
     assert.equal(inConstants?.toLowerCase() ?? null, inFile?.toLowerCase() ?? null, name);
@@ -396,6 +400,37 @@ test("default FXSwap USDC/ARS strategy and human-unit params encode the Solidity
   assert.equal(parseDurationSeconds("1.5 hours"), 5_400);
   assert.throws(() => parseDurationSeconds("0"), /whole number of seconds/);
   assert.throws(() => parseDurationSeconds("soon"), /duration/);
+});
+
+test("FXSwap on a USD-per-FX feed (RedStone BRL) flips the price flag and states the band in the feed's orientation", () => {
+  const pair = resolvePair("USDC/BRL");
+  const usdPerBrl = 194n * 10n ** 15n;
+  const brlPerUsd = (WAD * WAD) / usdPerBrl;
+  const redstone = buildFxSwapStrategySpec(FX_ADAPTER, pair, BRL_FEED, {}, { oraclePriceWad: usdPerBrl, feedQuote: "usdPerFx" });
+  const manual = buildFxSwapStrategySpec(FX_ADAPTER, pair, BRL_FEED, {}, { oraclePriceWad: brlPerUsd });
+  assert.equal(redstone.feedQuote, "usdPerFx");
+  assert.equal(manual.feedQuote, "fxPerUsd");
+  assert.equal(redstone.args.flags, manual.args.flags ^ FXSWAP.flagInvertPrice);
+  assert.equal(redstone.args.rateLt, manual.args.rateLt);
+  assert.equal(redstone.args.rateGt, manual.args.rateGt);
+  // Default band: half to double the 5.50 BRL per USD reference, as USD per BRL.
+  const reference = (WAD * WAD) / (55n * 10n ** 17n);
+  assert.equal(redstone.band.minPrice, reference / 2n);
+  assert.equal(redstone.band.maxPrice, reference * 2n);
+  // Same value-balanced ship whichever way the feed quotes.
+  assert.equal(redstone.fxShip, manual.fxShip);
+  assert.notEqual(redstone.strategyId, manual.strategyId);
+
+  const banded = buildFxSwapStrategySpec(FX_ADAPTER, pair, BRL_FEED, { bandPercent: 10 }, {
+    oraclePriceWad: usdPerBrl,
+    feedQuote: "usdPerFx"
+  });
+  assert.equal(banded.band.minPrice, (usdPerBrl * 9n) / 10n);
+  assert.equal(banded.band.maxPrice, (usdPerBrl * 11n) / 10n);
+  assert.throws(
+    () => buildFxSwapStrategySpec(FX_ADAPTER, pair, BRL_FEED, { minPrice: 1, maxPrice: 0.5, fxAmount: 1 }, { feedQuote: "usdPerFx" }),
+    /USD per BRL is invalid/
+  );
 });
 
 test("FXSwap validation mirrors FXSwapArgsBuilder.validate, and params are checked per opcode", () => {

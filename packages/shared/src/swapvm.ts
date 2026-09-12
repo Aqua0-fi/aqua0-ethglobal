@@ -542,6 +542,9 @@ export const FXSWAP_DEFAULTS = {
   oracleDecimals: 0
 } as const;
 
+/** What an FX feed answer means: FX units per 1 USD, or USD per 1 FX unit. */
+export type FxFeedQuote = "fxPerUsd" | "usdPerFx";
+
 /** FX units per 1 USD (WAD) the default price band is built around. */
 export const FXSWAP_REFERENCE_PRICE_WAD: Readonly<Record<string, bigint>> = {
   ARGt: 1_400n * 10n ** 18n,
@@ -870,6 +873,8 @@ export type FxSwapStrategySpec = {
   pair: FxPair;
   label: string;
   oracle: Lowercase<string>;
+  /** What the feed answer means; `minPrice`/`maxPrice` are in this orientation. */
+  feedQuote: FxFeedQuote;
   args: FxSwapArgs;
   band: { source: "default" | "explicit" | "bandPercent"; minPrice: bigint; maxPrice: bigint };
   flatFeePpb: number;
@@ -892,23 +897,24 @@ export type FxSwapStrategySpec = {
 export type StrategySpec = PeggedStrategySpec | FxSwapStrategySpec;
 
 /**
- * `[FlatFeeAmountIn]?[FXSwap]` for a USDC/FX pair whose feed quotes FX units per 1 USD. `oraclePriceWad` (the
- * live feed answer in WAD) is needed for `bandPercent` and for the default `fxAmount` (value-balanced ship).
+ * `[FlatFeeAmountIn]?[FXSwap]` for a USDC/FX pair. `context.feedQuote` says what the feed answer means: FX units per
+ * 1 USD (`fxPerUsd`, the default: the manual feeds, RedStone MXNe) or USD per 1 FX unit (`usdPerFx`: RedStone BRL).
+ * `oraclePriceWad` (the live feed answer in WAD, in the feed's orientation) is needed for `bandPercent` and for the
+ * default `fxAmount` (value-balanced ship).
  */
 export function buildFxSwapStrategySpec(
   adapter: string,
   pair: FxPair,
   oracle: string,
   params: StrategyParamsInput = {},
-  context: { oraclePriceWad?: bigint | undefined } = {}
+  context: { oraclePriceWad?: bigint | undefined; feedQuote?: FxFeedQuote | undefined } = {}
 ): FxSwapStrategySpec {
   assertParamsFor("fxswap", params);
-  const orientation = fxSwapOrientation(
-    pair.usdc.address,
-    pair.usdc.decimals,
-    pair.fx.address,
-    pair.fx.decimals
-  );
+  const feedQuote = context.feedQuote ?? "fxPerUsd";
+  const orientation =
+    feedQuote === "usdPerFx"
+      ? fxSwapOrientation(pair.fx.address, pair.fx.decimals, pair.usdc.address, pair.usdc.decimals)
+      : fxSwapOrientation(pair.usdc.address, pair.usdc.decimals, pair.fx.address, pair.fx.decimals);
   const a =
     params.a === undefined ? FXSWAP_DEFAULTS.a : parseTokenAmount(params.a, 4, { field: "a (amplification A)" });
   const gamma =
@@ -935,7 +941,7 @@ export function buildFxSwapStrategySpec(
     throw new Error("flat fee is finer than 1 ppb (0.0000001%)");
   }
   const flatFeePpb = flatFeeWad === undefined ? 0 : Number(flatFeeWad / 10n ** 9n);
-  const band = resolveFxSwapBand(pair, params, context.oraclePriceWad);
+  const band = resolveFxSwapBand(pair, params, context.oraclePriceWad, feedQuote);
   const maxStaleness =
     params.maxStaleness === undefined
       ? FXSWAP_DEFAULTS.maxStaleness
@@ -974,8 +980,10 @@ export function buildFxSwapStrategySpec(
   let fxShip: bigint;
   if (params.fxAmount !== undefined) {
     fxShip = parseTokenAmount(params.fxAmount, pair.fx.decimals, { unit, field: "fxAmount" });
-  } else if (context.oraclePriceWad !== undefined) {
-    fxShip = (usdcShip * decimalScale(pair) * context.oraclePriceWad) / FXSWAP.wad;
+  } else if (context.oraclePriceWad !== undefined && context.oraclePriceWad > 0n) {
+    const fxPerUsdWad =
+      feedQuote === "usdPerFx" ? (FXSWAP.wad * FXSWAP.wad) / context.oraclePriceWad : context.oraclePriceWad;
+    fxShip = (usdcShip * decimalScale(pair) * fxPerUsdWad) / FXSWAP.wad;
   } else {
     throw new Error("fxAmount defaults to usdcAmount x the live oracle price; read the feed first or pass fxAmount");
   }
@@ -993,6 +1001,7 @@ export function buildFxSwapStrategySpec(
     pair,
     label,
     oracle: normalizeAddress(oracle),
+    feedQuote,
     args,
     band,
     flatFeePpb,
@@ -1011,7 +1020,8 @@ export function buildFxSwapStrategySpec(
 function resolveFxSwapBand(
   pair: FxPair,
   params: StrategyParamsInput,
-  oraclePriceWad: bigint | undefined
+  oraclePriceWad: bigint | undefined,
+  feedQuote: FxFeedQuote
 ): FxSwapStrategySpec["band"] {
   const explicit = params.minPrice !== undefined || params.maxPrice !== undefined;
   if (params.bandPercent !== undefined) {
@@ -1031,8 +1041,13 @@ function resolveFxSwapBand(
       maxPrice: (oraclePriceWad * (FXSWAP.wad + fraction)) / FXSWAP.wad
     };
   }
-  const reference = FXSWAP_REFERENCE_PRICE_WAD[pair.fx.symbol];
-  const field = `(${pair.fx.fiat} per 1 USD)`;
+  const usdPerFx = feedQuote === "usdPerFx";
+  // The default band is half to double the reference price, expressed in the feed's orientation.
+  const fxPerUsdReference = FXSWAP_REFERENCE_PRICE_WAD[pair.fx.symbol];
+  const reference =
+    fxPerUsdReference === undefined || !usdPerFx ? fxPerUsdReference : (FXSWAP.wad * FXSWAP.wad) / fxPerUsdReference;
+  const unitLabel = usdPerFx ? `USD per ${pair.fx.fiat}` : `${pair.fx.fiat} per USD`;
+  const field = usdPerFx ? `(USD per 1 ${pair.fx.fiat})` : `(${pair.fx.fiat} per 1 USD)`;
   const minPrice =
     params.minPrice !== undefined
       ? parseTokenAmount(params.minPrice, 18, { field: `minPrice ${field}` })
@@ -1050,7 +1065,7 @@ function resolveFxSwapBand(
   }
   if (minPrice === 0n || minPrice > maxPrice) {
     throw new Error(
-      `price band ${formatUnits(minPrice, 18)}..${formatUnits(maxPrice, 18)} ${pair.fx.fiat} per USD is invalid: need 0 < minPrice <= maxPrice`
+      `price band ${formatUnits(minPrice, 18)}..${formatUnits(maxPrice, 18)} ${unitLabel} is invalid: need 0 < minPrice <= maxPrice`
     );
   }
   return { source: explicit ? "explicit" : "default", minPrice, maxPrice };
