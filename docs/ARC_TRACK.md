@@ -14,7 +14,7 @@ For prize-by-prize criteria and checklists, see [README: Prize tracks](../README
 | Nanopayments (Circle Gateway batched x402) | Yes | The keeper buys oracle, book and vault signals per request ($0.0005 to $0.001) from the Aqua0 signals seller; each payment is an EIP-3009 authorization signed by the keeper's Circle wallet and settled in batches by Circle Gateway on Arc Testnet: **Live**. See [Autonomous FX book keeper](#autonomous-fx-book-keeper). |
 | App Kit (`send`) | Yes | Funded the keeper's Circle wallet with 3 USDC from the operator wallet (`@circle-fin/app-kit` with the Circle Wallets adapter); the keeper tops itself up the same way, capped per day: **Live** |
 | ERC-8004 (Identity and Reputation registries on Arc Testnet) | Yes | The keeper is agent 894559; the operator recorded feedback after its rebalance: **Live** |
-| Circle Contracts, CCTP, StableFX | Not yet | **Planned**, see below |
+| Circle Contracts, CCTP, StableFX | No | Not used. StableFX covers only USDC/EURC. |
 | Paymaster, Agent Stack starter kits | No | Paymaster is not available on Arc. The starter kits were not used. |
 
 Arc is testnet-only for Aqua0 today.
@@ -35,10 +35,10 @@ Addresses and mechanics: [`ARC_DEPLOYMENT.md`](ARC_DEPLOYMENT.md#6-redstone-pric
 | Functional MVP: frontend | Judge dashboard at `https://ethglobal-demo.18-207-103-187.nip.io/` ([`apps/dashboard`](../apps/dashboard)): Arc vault cards, live Graph health, indexed data, strategy classes, ARS/BRL presets, prepare-only strategy calldata. The primary interface is the agentic terminal via MCP. | **Live** (read-only and prepare-only) |
 | Functional MVP: backend | Dashboard Node API, MCP server ([`apps/mcp`](../apps/mcp)), typed service ([`packages/shared`](../packages/shared)), subgraph on Subgraph Studio, Arc contracts | **Live** |
 | Architecture diagram | [README: How it works](../README.md#how-it-works), [`ARCHITECTURE.md`](ARCHITECTURE.md) | **Live** |
-| Video demo of core functions and use of Circle developer tools | Link added at submission | **In progress** |
+| Video demo of core functions and use of Circle developer tools | Link added at submission | Not yet linked |
 | Detailed documentation | README, `docs/`, [`skills/aqua0/SKILL.md`](../skills/aqua0/SKILL.md) | **Live** |
 | GitHub repository | `https://github.com/Aqua0-fi/aqua0-ethglobal` | **Live** |
-| Arc Mainnet deployment (mainnet-conditional share of each prize) | Not deployed | **Planned** |
+| Arc Mainnet deployment (mainnet-conditional share of each prize) | Not deployed | Testnet only |
 
 ## Web MVP architecture
 
@@ -73,11 +73,11 @@ A local MCP or CLI started with `MCP_WRITE_MODE=execute` sends `deposit`, `creat
 
 - **Live on Arc Testnet:** the demo wallet ran deposit → two pegged strategies → one swap each → shared-backing read through the `aqua0` CLI, which calls the same service functions as the MCP tools. Hashes: [`deployments/arc-testnet-strategies.json`](../deployments/arc-testnet-strategies.json).
 - **Live on Arc Testnet, forex venue:** with `SIGNER=circle`, the demo Circle wallet `0xb0c0…d952` created forex USDC/ARS and USDC/BRL strategies with the default opcode (the shared Circle operator sent the ships) and swapped 0.1 USDC on each, with a RedStone price push before the BRL swap. Hashes: `forexLiveRun` in [`deployments/arc-testnet-strategies.json`](../deployments/arc-testnet-strategies.json).
-- **Fork-proven:** the forex curve's inventory fee and halt band, and an ARS feed move and re-quote, which the small live run does not reach ([`scripts/test-arc-fork-forex.sh`](../scripts/test-arc-fork-forex.sh)).
-- The first live run signed with a locally configured key (`WRITE_PRIVATE_KEY`). `SIGNER=circle` signs with a Circle developer-controlled EOA wallet instead, one per user.
+- **On an Arc fork:** fills past the flat band, the halt band, and an ARS feed move and re-quote, which small live swaps do not reach ([`scripts/test-arc-fork-forex.sh`](../scripts/test-arc-fork-forex.sh)).
+- The pegged run signed with a local key (`WRITE_PRIVATE_KEY`). `SIGNER=circle` signs with a Circle developer-controlled EOA wallet, one per user.
 - **Live on Arc Testnet, Circle wallets:** a person signed in with Privy (`aqua0 login`), which created their Circle wallet `0x34f9…450f`. The Aqua0 operator wallet `0xcdbd…d404` topped it up with 5 testnet USDC. With no role of its own, the wallet then deposited 2 USDC, created a USDC/BRL strategy (it signed the ship, the operator sent it, tx `0xea960df6…4c8b1a`) and swapped 0.1 USDC → 0.547 BRAt against it (tx `0x586c0105…3b49e4`). Every transaction went through Circle's API.
 - The MCP and CLI act on user instructions. The FX book keeper below acts on its own.
-- The public endpoint is prepare-only and holds no key.
+- The hosted endpoint is prepare-only and holds no key.
 
 ## Autonomous FX book keeper
 
@@ -107,11 +107,6 @@ pnpm --filter @aqua0/dashboard dev
 
 AWS loopback compose: `docker compose -f deploy/aws/dashboard.compose.yml up -d --build`. It binds `127.0.0.1:8400->3000`, attaches `graph-node_default`, and pins `MCP_WRITE_MODE=prepare`.
 
-## Next steps toward the Circle stack (Planned, not built)
+## Known gaps
 
-- **Circle Wallets / Agent Stack:** give the agent its own wallet to sign the strategy, deposit and swap transactions it already builds. Keep policy limits (chain, tokens, max notional) in the wallet layer, not in the prompt.
-- **Nanopayments:** built and live for the keeper's signals (see above). Next: host the seller and price `quote_swap` for third-party agents the same way.
-- **Paymaster:** not available on Arc; revisit if it ships there.
-- **StableFX:** it covers only USDC/EURC today, so the forex curve's BRL price comes from RedStone. Evaluate StableFX for a USDC/EURC pair or as a comparison venue.
-- **CCTP / Gateway:** bring USDC in from other chains before depositing into the shared vault.
-- **Arc Mainnet:** deploy after a security review of the contracts and the ForexCurve instruction.
+See [README: Known gaps](../README.md#known-gaps).

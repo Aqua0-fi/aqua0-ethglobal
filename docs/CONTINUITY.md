@@ -26,9 +26,9 @@ This repository separates that pre-existing work from what was built during ETHG
 | Both-venue Aqua indexing: `AquaStrategy`, `AquaOrder`, `AquaFill` with a `venue` label, per-LP fill stats and fees | `packages/subgraph` | **Live** on Subgraph Studio |
 | Arc RPC topic-splitting and rate-pacing proxy for a self-hosted Graph Node | `infra/arc-rpc-proxy` | Development fallback |
 | Graph-backed typed service: analytics, strategy keys, SwapVM programs (pegged and forex curve), calldata, execution guard | `packages/shared` | **Live** |
-| MCP server (stdio + Streamable HTTP) and public deployment | `apps/mcp`, `deploy/aws` | **Live**; public endpoint on the earlier prepare-only build |
+| MCP server (stdio + Streamable HTTP): npm package `@aqua0/mcp`, Claude Code plugin, and a hosted prepare-only endpoint deployed from `main` after CI | `apps/mcp`, `.claude-plugin`, `deploy/aws`, `.github/workflows/deploy.yml` | **Live** |
 | MCP SwapVM tools: `create_strategy`, `deposit`, `quote_swap`, `swap`, `get_shared_backing` | `packages/shared`, `apps/mcp`, `apps/cli` | **Live** on Arc (pegged and forex venues, via the CLI) |
-| MCP forex tools: `opcode:"forex"` (the default), `get_fx_prices`, `set_fx_price`, oracle and spread pricing, RedStone payload push and quote state override | `packages/shared`, `apps/mcp`, `apps/cli` | **Live** on Arc; `set_fx_price` **Fork-proven** |
+| MCP forex tools: `opcode:"forex"` (the default), `get_fx_prices`, `set_fx_price`, oracle and spread pricing, RedStone payload push and quote state override | `packages/shared`, `apps/mcp`, `apps/cli` | **Live** on Arc; `set_fx_price` also runs in the forex fork proof |
 | CLI with MCP parity | `apps/cli` | **Live** |
 | Agent skill | `skills/aqua0/SKILL.md` | **Live** |
 | Judge dashboard (web MVP) | `apps/dashboard` | **Live** |
@@ -36,8 +36,13 @@ This repository separates that pre-existing work from what was built during ETHG
 | 1inch Aqua 0.1.0 + AquaSwapVMRouter (swap-vm v1.0.2) + AquaAdapter on Arc, wired | `packages/contracts` | **Live** |
 | One USDC deposit, two FX strategies shipped and filled on Arc Testnet | `deployments/arc-testnet-strategies.json` (`liveVenueRun`) | **Live** |
 | Forex strategies shipped by default and filled on Arc Testnet, one USDC principal backing three classes | `deployments/arc-testnet-strategies.json` (`forexLiveRun`) | **Live** |
-| Arc strategy scripts and fork proofs | `packages/contracts/script/ArcFxStrategies.s.sol`, `scripts/test-arc-fork-strategies.sh`, `scripts/test-arc-fork-forex.sh` | **Fork-proven** |
-| Base-fork proof that one principal backs two FX classes | `scripts/test-shared-backing-fork.sh` | **Fork-proven** |
-| ForexCurve SwapVM instruction (Tomás's forex curve) and `AquaForexSwapVMRouter` | `packages/contracts/src`, `packages/contracts/test` | Matches all 979 reference vectors within a few wei; 83 Foundry tests pass |
+| Arc strategy scripts and fork proofs | `packages/contracts/script/ArcFxStrategies.s.sol`, `scripts/test-arc-fork-strategies.sh`, `scripts/test-arc-fork-forex.sh` | Runs on an Arc fork |
+| Base-fork proof that one principal backs two FX classes | `scripts/test-shared-backing-fork.sh` | Runs on a Base fork |
+| ForexCurve SwapVM instruction (Tomás's forex curve) and `AquaForexSwapVMRouter` | `packages/contracts/src`, `packages/contracts/test` | Matches all 979 reference vectors within a few wei |
 | Forex venue on Arc: `AquaForexSwapVMRouter` and forex AquaAdapter (verified on Arcscan), and the ARS/USD feed it reads | `packages/contracts/script` | **Live** (wired into the vaults) |
 | RedStone BRL and MXNe price feeds on Arc (`AquaRedStoneFeeds`), deploy script, Arc-calldata replay test (5 tests) | `packages/contracts/src/oracles`, `packages/contracts/script/DeployRedStoneFeeds.s.sol`, `packages/contracts/test/AquaRedStoneFeeds.t.sol` | **Live** |
+| Privy sign-in with Circle developer-controlled wallets and a shared Circle operator wallet | `packages/shared`, `apps/mcp`, `apps/cli` | **Live** (`circleSignInRun`) |
+| Autonomous FX book keeper: swap watcher, rules and OpenAI model policies, executor limits, Circle Nanopayments buyer, App Kit top-ups, ERC-8004 identity | `apps/keeper`, `apps/cli` | **Live** on Arc Testnet (`keeperRun`), runs locally |
+| Signals seller behind Circle Gateway batched x402 | `apps/signals` | **Live**, runs locally |
+| MCP keeper tools `get_signals` and `keeper_status` | `packages/shared`, `apps/mcp` | **Live** |
+| `benchmark_fx_strategy`: Messari standardized DEX subgraphs composed with the Aqua0 subgraph | `packages/shared/src/graph-benchmark.ts`, `apps/mcp`, `apps/cli` | **Live** |

@@ -1,53 +1,32 @@
 # ETHGlobal demo runbook
 
-The demo is a conversation in an agentic terminal (Claude Code, Codex or any MCP client) and needs no web UI. This runbook keeps Live and Fork-proven work apart, so the demo never shows fake state. Agents can load [`skills/aqua0/SKILL.md`](../skills/aqua0/SKILL.md) for the tool map and safety rules.
+The demo is a conversation in an agentic terminal (Claude Code, Codex or any MCP client) and needs no web UI. This runbook keeps live and fork-only work apart, so the demo never shows fake state. Agents can load [`skills/aqua0/SKILL.md`](../skills/aqua0/SKILL.md) for the tool map and safety rules.
 
 | Part | Status |
 | --- | --- |
 | Pegged flow on Arc Testnet: deposit, two strategies on one USDC, one swap each, shared-backing read | **Live** |
 | RedStone BRL and MXNe price feeds on Arc, read with `get_fx_prices` | **Live** |
 | Forex flow on Arc Testnet: two forex strategies by default on one USDC, one swap each with a RedStone price push, shared-backing read | **Live** |
-| Forex curve regimes: inventory fee past the flat band, halt band, `set_fx_price` → `quote_swap` on ARS | **Fork-proven** |
+| Forex curve regimes past the flat band: inventory fee fills, halt band, `set_fx_price` → `quote_swap` on ARS | On an Arc fork |
 | Graph reads from Subgraph Studio, including Aqua strategies and fills for both venues | **Live** |
-| Public MCP endpoint and dashboard | **Live** on the earlier 12-tool prepare-only build |
+| Hosted MCP endpoint (25 tools, prepare-only) and dashboard | **Live** |
+| Autonomous keeper: swap wake, signals bought with Nanopayments, model decision, rebalance | **Live** (keeper runs locally) |
 
 ## Setup
 
-### Local MCP (26 tools)
+### Local MCP (25 tools, 26 in execute mode)
 
 ```bash
-pnpm install && pnpm build
+claude mcp add aqua0 -- npx -y @aqua0/mcp
 ```
 
-`~/.claude.json`-style or Codex-style config for a prepare-mode server:
+Any MCP client:
 
 ```json
-{
-  "mcpServers": {
-    "aqua0": {
-      "command": "node",
-      "args": ["<repo>/apps/mcp/dist/index.js"],
-      "env": {
-        "GRAPH_ENDPOINT": "https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/version/latest",
-        "WRITE_RPC_URL": "https://rpc.testnet.arc.network",
-        "WRITE_CHAIN_ID": "5042002",
-        "MCP_WRITE_MODE": "prepare"
-      }
-    }
-  }
-}
+{ "mcpServers": { "aqua0": { "command": "npx", "args": ["-y", "@aqua0/mcp"] } } }
 ```
 
-Or from the command line:
-
-```bash
-claude mcp add aqua0 \
-  -e GRAPH_ENDPOINT=https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/version/latest \
-  -e WRITE_RPC_URL=https://rpc.testnet.arc.network \
-  -e WRITE_CHAIN_ID=5042002 \
-  -e MCP_WRITE_MODE=prepare \
-  -- node <repo>/apps/mcp/dist/index.js
-```
+It starts in prepare mode on Arc Testnet with the public Studio subgraph and needs no variables. From a clone, run `pnpm install && pnpm build` and use `node <repo>/apps/mcp/dist/index.js` instead.
 
 The pegged venue, forex venue and FX feed addresses default to the Arc deployment. Override `FXSWAP_ROUTER_ADDRESS` and `FXSWAP_AQUA_ADAPTER_ADDRESS` (the forex router and adapter; the names are kept) and `FX_ORACLE_ARS_USD` only for a fork. Leave `FX_ORACLE_BRL_USD` unset so BRL prices from RedStone; setting it replaces RedStone with a hand-set BRL-per-USD feed.
 
@@ -56,7 +35,9 @@ The pegged venue, forex venue and FX feed addresses default to the Arc deploymen
 - hold `OPERATOR_ROLE` on the AquaAdapter it ships through;
 - own the ARS/USD feed, for `set_fx_price` to send.
 
-### Public endpoint (read-only)
+### Hosted endpoint (prepare-only)
+
+Install the Claude Code plugin (`/plugin marketplace add Aqua0-fi/aqua0-ethglobal`, then `/plugin install aqua0@aqua0`), or add the endpoint by hand:
 
 ```bash
 claude mcp add --transport http aqua0 https://ethglobal-mcp.18-207-103-187.nip.io/mcp
@@ -65,7 +46,7 @@ claude mcp add --transport http aqua0 https://ethglobal-mcp.18-207-103-187.nip.i
 - MCP health: `https://ethglobal-mcp.18-207-103-187.nip.io/health`
 - Judge dashboard: `https://ethglobal-demo.18-207-103-187.nip.io/`
 
-It has 12 tools (reads and `prepare_*`), no signer, and no strategy, swap or FX tools until the hosted redeploy (**Planned**).
+It serves the same 25 tools in prepare mode with no signer, so write tools return calldata. Sign-in and `keeper_status` belong on a local server.
 
 ## Part 1: pegged flow, live on Arc Testnet
 
@@ -128,7 +109,7 @@ Closing line: *"One capital, Argentine pesos and Brazilian reais, both live on A
 - ARS/USD `ManualFxOracle` `0xc05A3Fb016f973C82b0232EF50336d4C0466E70C` at 1400, owned by the demo wallet `0xAFF7…b02c`;
 - RedStone BRL feed `0xac4D10eE7FF790c2E505fBBD6A72d15D7Cbc1796` (USD per 1 BRL), **Live**, updated only from signed RedStone prices.
 
-This is the flow the demo Circle wallet `0xb0c0687eb013a5ffde4d23a89398a11bc424d952` ran on 2026-09-12 through the `aqua0` CLI with `SIGNER=circle` in execute mode; the shared Circle operator sent the strategy ships the wallet signed. Hashes are in [`deployments/arc-testnet-strategies.json`](../deployments/arc-testnet-strategies.json) under `forexLiveRun`. Steps 7 and 8 show curve regimes the live run did not reach, and `set_fx_price` needs the feed owner, so run those two on the fork and present them as **Fork-proven**.
+This is the flow the demo Circle wallet `0xb0c0687eb013a5ffde4d23a89398a11bc424d952` ran on 2026-09-12 through the `aqua0` CLI with `SIGNER=circle` in execute mode; the shared Circle operator sent the strategy ships the wallet signed. Hashes are in [`deployments/arc-testnet-strategies.json`](../deployments/arc-testnet-strategies.json) under `forexLiveRun`. Steps 7 and 8 show curve regimes the live run did not reach, and `set_fx_price` needs the feed owner, so run those two on the fork and say so.
 
 | # | Say | Tool call |
 | --- | --- | --- |
@@ -167,7 +148,7 @@ Fork results ([`scripts/test-arc-fork-forex.sh`](../scripts/test-arc-fork-forex.
 
 The live BRL rate moves, so a new run gives slightly different BRL figures.
 
-Strategy defaults: `α` 0.5 (halt band), `β` 0.15 (flat band), `δ` 0.5 (fee slope), `maxFee` 0.25, `λ` 0.3 (rebate share), fee `ε` 30 bps. ARS: band half to double 1400 ARS per USD, max feed age 7 days. BRL: band 0.0909–0.3636 USD per BRL, max feed age 1 hour.
+Strategy defaults: `α` 0.5 (halt band), `β` 0.15 (flat band), `δ` 0.5 (fee slope), `maxFee` 0.25, `λ` 0.3 (rebate share), fee `ε` 30 bps. ARS: band half to double 1400 ARS per USD, max feed age 7 days. BRL: band 0.0909 to 0.3636 USD per BRL, max feed age 1 hour.
 
 ```bash
 pnpm install && pnpm build
@@ -246,7 +227,7 @@ Keeper transactions: [mint BRAt](https://testnet.arcscan.app/tx/0xad87d8270d80d2
 
 - **Forex cannot ship for the presenter's signer** (`opcodeNote` says forex was not used, for example no `OPERATOR_ROLE`): use `opcode:"pegged"` for the live part. Say explicitly that this curve sits at a fixed price and does not track a moving FX rate, and show the forex curve from the recorded `forexLiveRun` hashes or on the fork.
 - **Arc RPC or execute key unavailable:** run [`scripts/test-arc-fork-strategies.sh`](../scripts/test-arc-fork-strategies.sh) and point at the recorded live hashes in [`deployments/arc-testnet-strategies.json`](../deployments/arc-testnet-strategies.json).
-- **Public endpoint only:** use the read steps and `prepare_*` tools, and say that the strategy and swap tools run in the local build.
+- **Hosted endpoint only:** use the read steps; `create_strategy`, `deposit` and `swap` return calldata there, and sending needs a local execute-mode server.
 
 ## Close the loop
 

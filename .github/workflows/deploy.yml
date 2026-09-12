@@ -102,7 +102,8 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$GRAPH_GATEWAY_API_KEY" ]; then
-            echo '::warning::GRAPH_GATEWAY_API_KEY is not configured yet; benchmark_fx_strategy may be unavailable.'
+            echo '::error::GRAPH_GATEWAY_API_KEY is required by benchmark_fx_strategy.'
+            exit 1
           fi
           umask 077
           cat > /tmp/aqua0-autodeploy.env <<EOF_ENV
@@ -150,9 +151,7 @@ jobs:
           jq -r '.result.tools[].name' /tmp/tools.json | tee /tmp/tool-names.txt
           grep -qx create_strategy /tmp/tool-names.txt
           grep -qx quote_swap /tmp/tool-names.txt
-          if ! grep -qx benchmark_fx_strategy /tmp/tool-names.txt; then
-            echo '::warning::benchmark_fx_strategy is not present in this main SHA yet.'
-          fi
+          grep -qx benchmark_fx_strategy /tmp/tool-names.txt
 
       - name: Remove legacy ETHGlobal image tags
         run: |
