@@ -29,7 +29,8 @@ interface IAquaAdapterAdmin {
 /// @notice End-to-end on an Arc Testnet fork (local simulation, nothing is broadcast): a fresh AquaFXSwapVMRouter on
 ///         the live stock Aqua, a fresh Aqua0 AquaAdapter wired into the live VaultRegistry and USDC / ARGt vaults, an
 ///         FXSwap strategy shipped from vault capital, then USDC → ARGt swaps before and after an oracle move.
-/// @dev Set FXSWAP_SKIP_FORK=true to skip; ARC_TESTNET_RPC_URL overrides the public RPC.
+/// @dev Set FXSWAP_SKIP_FORK=true to skip; ARC_TESTNET_RPC_URL overrides the public RPC. Also skips when the Aqua0
+///      AquaAdapter artifact is missing (it is compiled from the Aqua0 contracts repo by the deploy scripts).
 contract FXSwapArcForkTest is Test {
     address internal constant REGISTRY = 0x9E094b21C4263e0BE5BEffa0f8296B3fd982fFFf;
     address internal constant COMPOSER = 0x656F28021a624aDfA0d92dDFdBb20577674aFEC7;
@@ -67,7 +68,7 @@ contract FXSwapArcForkTest is Test {
     address internal strategist;
 
     function setUp() public {
-        if (vm.envOr("FXSWAP_SKIP_FORK", false)) vm.skip(true);
+        if (vm.envOr("FXSWAP_SKIP_FORK", false) || !vm.exists(ADAPTER_ARTIFACT)) vm.skip(true);
         vm.createSelectFork(vm.envOr("ARC_TESTNET_RPC_URL", string("https://rpc.testnet.arc.network")));
         require(block.chainid == ARC_TESTNET_CHAIN_ID, "not Arc Testnet");
         strategist = vm.addr(strategistKey);

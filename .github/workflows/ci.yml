@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - "rithik/**"
+      - "yudhishthra/**"
 
 jobs:
   verify:
@@ -47,3 +48,33 @@ jobs:
       - run: pnpm --filter @aqua0/subgraph generate:arc
       - run: pnpm --filter @aqua0/subgraph exec graph codegen subgraph.arc.yaml
       - run: pnpm --filter @aqua0/subgraph exec graph build subgraph.arc.yaml
+
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: packages/contracts
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.3.5
+
+      # swap-vm v1.0.2 resolves its Solidity dependencies from node_modules.
+      - run: npm install --no-audit --no-fund --ignore-scripts
+        working-directory: packages/contracts/lib/swap-vm
+
+      - run: forge build
+
+      # The Arc fork test needs the public Arc RPC and a locally compiled Aqua0 AquaAdapter artifact.
+      - run: forge test
+        env:
+          FXSWAP_SKIP_FORK: "true"
