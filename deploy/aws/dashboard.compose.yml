@@ -16,10 +16,3 @@ services:
       MCP_WRITE_MODE: prepare
       HOST: 0.0.0.0
       PORT: 3000
-    networks:
-      - graph-node
-
-networks:
-  graph-node:
-    external: true
-    name: graph-node_default

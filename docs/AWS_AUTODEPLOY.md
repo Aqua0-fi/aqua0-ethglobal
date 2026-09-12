@@ -16,7 +16,9 @@ The public runtime is intentionally prepare-only:
 - `WRITE_CHAIN_ID=5042002`
 - `MCP_WRITE_MODE=prepare`
 - `WRITE_PRIVATE_KEY=`
+- `WRITE_PRIVATE_KEY` is pinned empty in the MCP Compose file, not merely defaulted
 - no Circle signing credentials are passed to the public containers
+- public MCP/dashboard no longer depend on the legacy self-hosted Graph Node Docker network
 
 `GRAPH_GATEWAY_API_KEY` is supplied only from the GitHub Actions secret of the same name. It is never committed or copied into the repository. The workflow writes a mode-600 runtime env file on the EC2 host.
 

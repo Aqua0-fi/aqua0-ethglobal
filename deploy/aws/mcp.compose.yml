@@ -14,15 +14,8 @@ services:
       WRITE_RPC_URL: ${WRITE_RPC_URL:-https://rpc.testnet.arc.network}
       WRITE_CHAIN_ID: ${WRITE_CHAIN_ID:-5042002}
       VAULT_REGISTRY_ADDRESS: ${VAULT_REGISTRY_ADDRESS:-0x9E094b21C4263e0BE5BEffa0f8296B3fd982fFFf}
-      MCP_WRITE_MODE: ${MCP_WRITE_MODE:-prepare}
-      WRITE_PRIVATE_KEY: ${WRITE_PRIVATE_KEY:-}
+      MCP_WRITE_MODE: prepare
+      WRITE_PRIVATE_KEY: ""
       MCP_TRANSPORT: http
       HOST: 0.0.0.0
       PORT: 3000
-    networks:
-      - graph-node
-
-networks:
-  graph-node:
-    external: true
-    name: graph-node_default
