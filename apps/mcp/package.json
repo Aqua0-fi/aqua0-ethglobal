@@ -20,7 +20,7 @@
   },
   "type": "module",
   "bin": {
-    "aqua0-mcp": "./dist/npm/aqua0-mcp.js"
+    "aqua0-mcp": "dist/npm/aqua0-mcp.js"
   },
   "files": [
     "dist/npm"
