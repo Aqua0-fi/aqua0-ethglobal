@@ -94,7 +94,7 @@ export function signerConfigProblem(config: WriteConfig): string | undefined {
     ...(config.circleClient || config.circleEntitySecret ? [] : ["CIRCLE_ENTITY_SECRET"]),
     ...(config.circleWalletId || (config.circleWalletSetId && config.circleUserRef)
       ? []
-      : ["CIRCLE_WALLET_ID or CIRCLE_WALLET_SET_ID with CIRCLE_USER_REF"])
+      : ["CIRCLE_WALLET_ID, or CIRCLE_WALLET_SET_ID with CIRCLE_USER_REF or a Privy sign-in (login)"])
   ];
   return missing.length > 0 ? `SIGNER=circle requires ${missing.join(", ")}` : undefined;
 }

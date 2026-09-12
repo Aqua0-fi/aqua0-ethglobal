@@ -15,6 +15,9 @@ function printHelp(): void {
 Usage:
   aqua0 health
   aqua0 info
+  aqua0 login                  Sign in with Privy; your Circle wallet on Arc Testnet is created or reused
+  aqua0 whoami
+  aqua0 logout
   aqua0 balance <address>
   aqua0 strategies <address>
   aqua0 fees <address> [seconds]
@@ -60,7 +63,10 @@ Environment:
   CIRCLE_ENTITY_SECRET         Circle entity secret (SIGNER=circle; ENTITY_SECRET also accepted)
   CIRCLE_WALLET_ID             Circle ARC-TESTNET EOA wallet to sign with
   CIRCLE_WALLET_SET_ID         Without a wallet id: wallet set holding one wallet per user ref
-  CIRCLE_USER_REF              Without a wallet id: refId of the user's wallet, created on first use`);
+  CIRCLE_USER_REF              Without a wallet id: refId of the user's wallet, created on first use
+  PRIVY_APP_ID                 Privy app for login (SIGNER=circle with CIRCLE_WALLET_SET_ID; the Privy user id is the refId)
+  PRIVY_LOGIN_PORT             Local sign-in page port, default 8787 (allow http://localhost:<port> in Privy)
+  AQUA0_SESSION_FILE           Saved sign-in, default ~/.aqua0/session.json`);
 }
 
 try {
@@ -77,6 +83,18 @@ try {
       break;
     case "info":
       printJson(await aqua0.info());
+      break;
+    case "login": {
+      const { url, completed } = await aqua0.startLogin();
+      console.error(`Open this page to sign in with Privy (expires in 10 minutes):\n\n  ${url}\n`);
+      printJson(await completed);
+      process.exit(0);
+    }
+    case "whoami":
+      printJson(await aqua0.whoami());
+      break;
+    case "logout":
+      printJson(aqua0.logout());
       break;
     case "balance":
       printJson(await aqua0.getBalance(requireArg(args[0], "address")));

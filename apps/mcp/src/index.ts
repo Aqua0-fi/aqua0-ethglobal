@@ -42,6 +42,48 @@ function createAqua0McpServer(config: McpConfig): McpServer {
       return jsonText(includeConfig ? info : { ...info, endpoints: undefined });
     }
   );
+  server.registerTool(
+    "login",
+    {
+      description: `Sign in to Aqua0 with Privy, using any login method the Privy app enables (email, Google, a wallet...). The user gets a Circle developer-controlled wallet on Arc Testnet: created on first sign-in, reused afterwards. Returns a localhost URL for the user to open in their browser; after they sign in, this server verifies the Privy token and signs execute-mode writes with that user's Circle wallet. The sign-in is saved, so it survives restarts until logout. Check progress with whoami.
+Local (stdio) servers only. Needs SIGNER=circle, CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET, CIRCLE_WALLET_SET_ID and PRIVY_APP_ID.
+Examples:
+- "log me in" / "connect my wallet" -> {} then show the URL, then whoami once they say they're done`,
+      inputSchema: {},
+      annotations: { readOnlyHint: false, openWorldHint: true }
+    },
+    async () => {
+      if (config.transport === "http") {
+        throw new Error("login opens a sign-in page on the machine running the server, so it is only available on a local (stdio) server");
+      }
+      const { url } = await aqua0.startLogin();
+      return jsonText({
+        url,
+        next: "Ask the user to open the URL and sign in, then call whoami to confirm and show their Circle wallet.",
+        expiresInSeconds: 600
+      });
+    }
+  );
+  server.registerTool(
+    "whoami",
+    {
+      description:
+        "Show who this server signs as: whether a Privy sign-in is active (Privy user id), the signer kind and Circle wallet address on Arc Testnet, and the status of a sign-in started with login. Read-only.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true, openWorldHint: true }
+    },
+    async () => jsonText(await aqua0.whoami())
+  );
+  server.registerTool(
+    "logout",
+    {
+      description:
+        "Forget the Privy sign-in: deletes the saved session so this server stops signing as that user. The user's Circle wallet and funds are untouched and come back on the next sign-in.",
+      inputSchema: {},
+      annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: false }
+    },
+    async () => jsonText(aqua0.logout())
+  );
   server.tool(
     "get_balance",
     {

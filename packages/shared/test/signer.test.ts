@@ -115,7 +115,7 @@ test("execution guard accepts a configured Circle signer without WRITE_PRIVATE_K
   const { circleWalletId: _walletId, ...noWallet } = circleExecute;
   assert.throws(
     () => assertExecutionAllowed(noWallet),
-    /SIGNER=circle requires CIRCLE_WALLET_ID or CIRCLE_WALLET_SET_ID with CIRCLE_USER_REF/
+    /SIGNER=circle requires CIRCLE_WALLET_ID, or CIRCLE_WALLET_SET_ID with CIRCLE_USER_REF or a Privy sign-in/
   );
   assert.equal(isExecutionAllowedByConfig(noWallet), false);
   assert.throws(() => assertExecutionAllowed({ ...circleExecute, mcpWriteMode: "prepare" }), /MCP_WRITE_MODE must be execute/);
