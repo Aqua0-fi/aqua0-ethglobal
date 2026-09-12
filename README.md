@@ -310,8 +310,6 @@ flowchart TD
 | Circle / Arc | Best DeFi or Agentic Application (Continuity) | Same as the DeFi entry, with the continuity split documented |
 | 1inch | Build an Aqua App, and Build an Aqua App (Continuity) | Official Aqua + SwapVM **deployed** on Arc, positions **fork-proven**, FXSwap **in progress** |
 
-<!-- TODO(coordinator): confirm which prizes the team registered for and remove any rows that do not apply. -->
-
 ### The Graph: Best AI Tooling or AI Use Case with The Graph (Continuity pool)
 
 **Prizes:** $2,500 / $1,500 / $1,000.
