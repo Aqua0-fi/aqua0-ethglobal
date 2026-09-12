@@ -21,6 +21,7 @@ export function readMcpConfig(
     graphEndpoint,
     ...(env.GRAPH_NETWORK ? { graphNetwork: env.GRAPH_NETWORK } : {}),
     ...(env.GRAPH_AUTH_TOKEN ? { graphAuthToken: env.GRAPH_AUTH_TOKEN } : {}),
+    ...(env.GRAPH_GATEWAY_API_KEY ? { graphGatewayApiKey: env.GRAPH_GATEWAY_API_KEY } : {}),
     // Arc Testnet by default, so `npx -y @aqua0/mcp` reads the chain with no variables. Execution still needs
     // MCP_WRITE_MODE=execute and a signer, and stays limited to Arc Testnet or a local fork.
     writeRpcUrl: env.WRITE_RPC_URL?.trim() || ARC_TESTNET.rpcUrl,
