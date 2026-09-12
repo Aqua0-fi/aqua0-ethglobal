@@ -1454,7 +1454,7 @@ export function buildVerdict(args: {
   const answered = markets.filter((source) => source.status === "ok" || source.status === "partial");
   const failureNote =
     failed.length > 0
-      ? ` Not fully checked: ${failed.map((source) => `${source.protocol} on ${source.network} (${source.error ?? source.status})`).join("; ")}.`
+      ? ` Not fully checked: ${failed.map((source) => `${source.protocol} on ${source.network} (${truncate(source.error ?? source.status, 80)})`).join("; ")}.`
       : "";
 
   if (answered.length === 0) {
