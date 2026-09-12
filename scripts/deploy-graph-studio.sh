@@ -3,14 +3,28 @@ set -eu
 
 # Deploy the Aqua0 subgraph to Subgraph Studio.
 #
-#   NETWORK=base (default)  -> packages/subgraph/subgraph.base.yaml  (Graph network: base)
-#   NETWORK=arc             -> packages/subgraph/subgraph.arc.yaml   (Graph network: arc-testnet, chainId 5042002)
+#   NETWORK=arc (default)  -> packages/subgraph/subgraph.arc.yaml   (Graph network: arc-testnet, chainId 5042002)
+#   NETWORK=base           -> packages/subgraph/subgraph.base.yaml  (Graph network: base)
 #
+# GRAPH_STUDIO_SLUG and GRAPH_STUDIO_DEPLOY_KEY come from the environment or from the gitignored
+# .secrets/graph-studio.env (override the path with GRAPH_STUDIO_ENV_FILE).
 # For NETWORK=arc the manifest is regenerated first when PUBLIC_ARC_VAULT_FACTORY is set (see
 # packages/subgraph/scripts/generate-arc-manifest.mjs); otherwise the committed subgraph.arc.yaml is used.
 # DRY_RUN=1 runs codegen + build and prints the deploy command instead of deploying (no deploy key needed).
 
-NETWORK=${NETWORK:-base}
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+ROOT_DIR=$(dirname "$SCRIPT_DIR")
+SECRETS_FILE=${GRAPH_STUDIO_ENV_FILE:-"$ROOT_DIR/.secrets/graph-studio.env"}
+
+if [ -f "$SECRETS_FILE" ]; then
+  set -a
+  . "$SECRETS_FILE"
+  set +a
+fi
+
+cd "$ROOT_DIR"
+
+NETWORK=${NETWORK:-arc}
 DRY_RUN=${DRY_RUN:-0}
 SHA=$(git rev-parse --short HEAD)
 
@@ -26,7 +40,7 @@ case "$NETWORK" in
     DEFAULT_LABEL="ethglobal-arc-$SHA"
     ;;
   *)
-    echo "Unsupported NETWORK=$NETWORK (expected base or arc)" >&2
+    echo "Unsupported NETWORK=$NETWORK (expected arc or base)" >&2
     exit 1
     ;;
 esac
@@ -34,12 +48,12 @@ esac
 if [ "$DRY_RUN" = "1" ]; then
   GRAPH_STUDIO_SLUG=${GRAPH_STUDIO_SLUG:-<studio-slug>}
 else
-  : "${GRAPH_STUDIO_DEPLOY_KEY:?Set GRAPH_STUDIO_DEPLOY_KEY from Subgraph Studio}"
-  : "${GRAPH_STUDIO_SLUG:?Set GRAPH_STUDIO_SLUG from Subgraph Studio}"
+  : "${GRAPH_STUDIO_DEPLOY_KEY:?Set GRAPH_STUDIO_DEPLOY_KEY in .secrets/graph-studio.env or the environment}"
+  : "${GRAPH_STUDIO_SLUG:?Set GRAPH_STUDIO_SLUG in .secrets/graph-studio.env or the environment}"
 fi
 VERSION_LABEL=${GRAPH_STUDIO_VERSION:-$DEFAULT_LABEL}
 
-SUBGRAPH_DIR="$(cd "$(dirname "$0")/.." && pwd)/packages/subgraph"
+SUBGRAPH_DIR="$ROOT_DIR/packages/subgraph"
 
 if [ "$GRAPH_NETWORK" = "arc-testnet" ]; then
   if [ -n "${PUBLIC_ARC_VAULT_FACTORY:-}" ]; then
