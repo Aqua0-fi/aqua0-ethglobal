@@ -5,8 +5,9 @@ The demo is a conversation in an agentic terminal (Claude Code, Codex or any MCP
 | Part | Status |
 | --- | --- |
 | Pegged flow on Arc Testnet: deposit, two strategies on one USDC, one swap each, shared-backing read | **Live** |
-| FXSwap venue on Arc (router, FXSwap AquaAdapter, ARS/USD and BRL/USD feeds) | **Deployed, awaiting wiring** |
-| FXSwap flow through the MCP service path, including `set_fx_price` → `quote_swap` | **Fork-proven** |
+| RedStone BRL and MXNe price feeds on Arc, read with `get_fx_prices` | **Live** |
+| FXSwap venue on Arc (router, FXSwap AquaAdapter, hand-set ARS/USD feed) | **Deployed, awaiting wiring** |
+| FXSwap flow through the MCP service path: USDC/BRL priced from RedStone, `set_fx_price` → `quote_swap` on ARS | **Fork-proven** |
 | Graph reads from Subgraph Studio | **Live** (earlier schema; Aqua venue entities **Built, not yet deployed**) |
 | Public MCP endpoint and dashboard | **Live** on the earlier 12-tool prepare-only build |
 
@@ -48,12 +49,12 @@ claude mcp add aqua0 \
   -- node <repo>/apps/mcp/dist/index.js
 ```
 
-The pegged venue, FXSwap venue and FX feed addresses default to the Arc deployment. Override `FXSWAP_ROUTER_ADDRESS`, `FXSWAP_AQUA_ADAPTER_ADDRESS`, `FX_ORACLE_ARS_USD` and `FX_ORACLE_BRL_USD` only for a fork.
+The pegged venue, FXSwap venue and FX feed addresses default to the Arc deployment. Override `FXSWAP_ROUTER_ADDRESS`, `FXSWAP_AQUA_ADAPTER_ADDRESS` and `FX_ORACLE_ARS_USD` only for a fork. Leave `FX_ORACLE_BRL_USD` unset so BRL prices from RedStone; setting it replaces RedStone with a hand-set BRL-per-USD feed.
 
 **To transact live**, the presenter restarts the server with `MCP_WRITE_MODE=execute` and a throwaway `WRITE_PRIVATE_KEY` in the server's environment, never in the chat. The signer must:
 - be an address without contract code (an EIP-7702-delegated address is rejected through ERC-1271);
 - hold `OPERATOR_ROLE` on the AquaAdapter it ships through;
-- own the feed, for `set_fx_price` to send.
+- own the ARS/USD feed, for `set_fx_price` to send.
 
 ### Public endpoint (read-only)
 
@@ -113,36 +114,47 @@ Until the FXSwap adapter is wired, the response carries an `opcodeNote` saying i
 
 Closing line: *"One capital, Argentine pesos and Brazilian reais, both live on Arc, all from a terminal."*
 
+### Step 5 (optional): the real BRL rate
+
+> "What's the real BRL rate right now?"
+
+`get_fx_prices {"pair":"BRL"}` shows the latest RedStone price signed by 3 of its 5 primary-prod signers (signing time, the three signer values, also as BRL per USD) and the value stored on-chain. The pegged strategy above sits at a fixed 5.5 BRL per USD whatever that rate does; FXSwap strategies trade at the signed price (Part 2). **Live**.
+
 ## Part 2: FXSwap flow, once the adapter is wired
 
 The FXSwap venue is **Deployed, awaiting wiring** on Arc:
 - router `0xb54AE15d2372F27718f32e9f6990330cdD3edaEB`;
 - FXSwap AquaAdapter `0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5`;
-- ARS/USD feed `0xc05A3Fb016f973C82b0232EF50336d4C0466E70C` at 1400;
-- BRL/USD feed `0x1AE6542b9da89Ed2AEf00600710Bba75DbFF5e71` at 5.50;
-- feed owner: the demo wallet.
+- ARS/USD `ManualFxOracle` `0xc05A3Fb016f973C82b0232EF50336d4C0466E70C` at 1400, owned by the demo wallet;
+- RedStone BRL feed `0xac4D10eE7FF790c2E505fBBD6A72d15D7Cbc1796` (USD per 1 BRL), **Live**, updated only from signed RedStone prices.
 
-The core admin must allowlist the adapter and grant it `VENUE_SETTLER_ROLE` on the three vaults (see [`ARC_DEPLOYMENT.md`](ARC_DEPLOYMENT.md#pending-wiring-for-the-fxswap-adapter)). Until then, run this part on a fork and present it as **Fork-proven**.
+The core admin must allowlist the adapter and grant it `VENUE_SETTLER_ROLE` on the three vaults (see [`ARC_DEPLOYMENT.md`](ARC_DEPLOYMENT.md#pending-wiring-for-the-fxswap-adapter)). Until then, run this part on a fork and present it as **Fork-proven**. Step 1 also works live on Arc.
 
 | # | Say | Tool call |
 | --- | --- | --- |
-| 1 | "What rates are the FX feeds on, and are they fresh?" | `get_fx_prices {}` |
+| 1 | "What's the real BRL rate right now?" | `get_fx_prices {"pair":"BRL"}` |
 | 2 | "Create a peso strategy that tracks the oracle." | `create_strategy {"pair":"USDC/ARS","opcode":"fxswap"}` |
-| 3 | "Same USDC with reais." | `create_strategy {"pair":"usdc to brl","opcode":"fxswap"}` |
-| 4 | "How many pesos for 0.1 USDC? Show the oracle price and spread." | `quote_swap {"pair":"USDC/ARS","amount":"0.1"}` |
-| 5 | "Swap it." | `swap {"pair":"USDC/ARS","amount":"0.1"}` |
-| 6 | "Push the ARS/USD price up 5% and quote again." | `set_fx_price {"pair":"ARS","changePercent":5}`, then `quote_swap {"pair":"USDC/ARS","amount":"0.1"}` |
-| 7 | "Is my USDC still backing both?" | `get_shared_backing {}` |
+| 3 | "Same USDC with reais, at the real rate." | `create_strategy {"pair":"usdc to brl","opcode":"fxswap"}` |
+| 4 | "How many reais for 0.1 USDC right now?" | `quote_swap {"pair":"USDC/BRL","amount":"0.1"}` |
+| 5 | "Swap it." | `swap {"pair":"USDC/BRL","amount":"0.1"}` |
+| 6 | "How many pesos for 0.1 USDC? Show the oracle price and spread." | `quote_swap {"pair":"USDC/ARS","amount":"0.1"}` |
+| 7 | "Push the ARS/USD price up 5% and quote again." | `set_fx_price {"pair":"ARS","changePercent":5}`, then `quote_swap {"pair":"USDC/ARS","amount":"0.1"}` |
+| 8 | "Is my USDC still backing both?" | `get_shared_backing {}` |
 
-At step 6, name the trust assumption: the feed is an owner-set demo oracle, and FXSwap strategies trade at whatever it says within their price band and staleness window.
+At steps 3 to 5, say where the BRL price comes from. `create_strategy` sizes the BRL leg from the live RedStone price and sets FXSwap's invert-price flag (the feed quotes USD per BRL). `quote_swap` applies the latest signed payload as an `eth_call` state override and sends nothing. `swap` first pushes that payload on-chain (about 130k gas), because there is no keeper. BRL is never set by hand.
 
-Expected figures from the fork proof ([`scripts/test-arc-fork-fxswap.sh`](../scripts/test-arc-fork-fxswap.sh)):
+At step 7, name the trust assumption: the ARS feed is an owner-set demo oracle, because RedStone has no ARS feed. FXSwap strategies trade at whatever their feed says within their price band and staleness window.
+
+Expected figures from the fork proof (`FX_VENUE=deployed` [`scripts/test-arc-fork-fxswap.sh`](../scripts/test-arc-fork-fxswap.sh)):
 - one 2 USDC deposit backs FXSwap USDC/ARS and USDC/BRL;
-- 0.1 USDC → 139.462 ARGt at oracle 1400, with an effective spread of about 38 bps;
+- USDC/BRL: `swap` pushes the signed RedStone BRL price, then 0.1 USDC → 0.513529 BRAt at oracle 5.155131 BRAt per USDC (RedStone BRL 0.194026 USD per BRL), spread about 38 bps. That is exactly what `quote_swap` returned beforehand with nothing sent. The strategy has the invert-price flag and a 1 hour max staleness;
+- USDC/ARS: 0.1 USDC → 139.462 ARGt at oracle 1400, with an effective spread of about 38 bps;
 - the feed owner moves ARS/USD +5% and the quote rises 4.79%;
 - a non-owner update is refused.
 
-Strategy defaults: A 100, γ 0.1, fee 10 bps rising to 1% with imbalance, band 0.5x–2x, max feed age 7 days.
+The live BRL rate moves, so a new run gives slightly different BRL figures.
+
+Strategy defaults: A 100, γ 0.1, fee 10 bps rising to 1% with imbalance. ARS: band half to double 1400 ARS per USD, max feed age 7 days. BRL: band 0.0909–0.3636 USD per BRL, max feed age 1 hour.
 
 ```bash
 pnpm install && pnpm build

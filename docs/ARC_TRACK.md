@@ -8,12 +8,21 @@ For prize-by-prize criteria and checklists, see [README: Prize tracks](../README
 
 | Circle / Arc product | Used? | How |
 | --- | --- | --- |
-| Arc (chain `5042002`) | Yes | The Aqua0 vault core, three AssetVaults and the pegged 1inch Aqua venue are **Live**, with two strategies shipped and filled. The FXSwap venue is **Deployed, awaiting wiring**. See [`ARC_DEPLOYMENT.md`](ARC_DEPLOYMENT.md). |
+| Arc (chain `5042002`) | Yes | The Aqua0 vault core, three AssetVaults and the pegged 1inch Aqua venue are **Live**, with two strategies shipped and filled. RedStone BRL and MXNe price feeds are **Live**. The FXSwap venue is **Deployed, awaiting wiring**. See [`ARC_DEPLOYMENT.md`](ARC_DEPLOYMENT.md). |
 | USDC | Yes | Arc's native USDC (ERC-20 interface `0x3600…0000`, 6 dp) is the shared quote asset. One 2 USDC deposit backs a USDC/ARS and a USDC/BRL strategy at once: **Live**. |
 | App Kits, Circle Wallets, Circle Contracts, CCTP, Gateway, StableFX | Not yet | **Planned**, see below |
 | Agent Stack, Nanopayments, Paymaster | Not yet | **Planned**, see below |
 
 Arc is testnet-only for Aqua0 today.
+
+## FX market data on Arc
+
+FXSwap USDC/BRL strategies price from real FX market data on Arc: RedStone prices signed by 3 of its 5 primary-prod signers and verified on-chain by the RedStone adapter.
+- **Feeds:** BRL (USD per 1 BRL) and MXNe (MXN per 1 USD, from Etherfuse's MXNe stablecoin), **Live** on Arc Testnet. No Aqua0 MXN vault exists yet.
+- **Why RedStone:** its gateways are free and need no API key. Pyth's free tier excludes FX feeds, Chainlink Data Feeds are on Arc mainnet only, StableFX covers only USDC/EURC, and RedStone has no ARS feed, so USDC/ARS stays on a hand-set feed.
+- **Status:** FXSwap USDC/BRL through the MCP on these feeds is **Fork-proven**. FXSwap on Arc itself is **Deployed, awaiting wiring**.
+
+Addresses and mechanics: [`ARC_DEPLOYMENT.md`](ARC_DEPLOYMENT.md#6-redstone-price-feeds-live).
 
 ## Arc prize requirements checklist
 
@@ -56,11 +65,11 @@ The dashboard backend has no execute endpoint and never reads `WRITE_PRIVATE_KEY
 
 ## Agent transactions on Arc
 
-A local MCP or CLI started with `MCP_WRITE_MODE=execute` sends `deposit`, `create_strategy` and `swap` transactions itself, and `set_fx_price` when the signer owns the feed. This is limited to Arc Testnet or a local fork.
+A local MCP or CLI started with `MCP_WRITE_MODE=execute` sends `deposit`, `create_strategy` and `swap` transactions itself, and `set_fx_price` when the signer owns the ARS/USD feed. For a RedStone-priced strategy, `swap` first pushes the latest signed price on-chain. This is limited to Arc Testnet or a local fork.
 
 - **Live on Arc Testnet:** the demo wallet ran deposit → two pegged strategies → one swap each → shared-backing read through the `aqua0` CLI, which calls the same service functions as the MCP tools. Hashes: [`deployments/arc-testnet-strategies.json`](../deployments/arc-testnet-strategies.json).
-- **Fork-proven:** the FXSwap flow, including a feed move and re-quote ([`scripts/test-arc-fork-fxswap.sh`](../scripts/test-arc-fork-fxswap.sh)).
-- The signer is a locally configured key (`WRITE_PRIVATE_KEY`), not a Circle wallet.
+- **Fork-proven:** the FXSwap flow, including a RedStone price push before the USDC/BRL swap and an ARS feed move and re-quote ([`scripts/test-arc-fork-fxswap.sh`](../scripts/test-arc-fork-fxswap.sh)).
+- The live run signed with a locally configured key (`WRITE_PRIVATE_KEY`). `SIGNER=circle` signs with a Circle developer-controlled EOA wallet instead, one per user ref. Its EIP-712 signing is checked live; no transaction has been sent from a Circle wallet yet.
 - The agent acts on user instructions; it is not an autonomous agent.
 - The public endpoint is prepare-only and holds no key.
 
@@ -81,6 +90,6 @@ AWS loopback compose: `docker compose -f deploy/aws/dashboard.compose.yml up -d 
 - **Circle Wallets / Agent Stack:** give the agent its own wallet to sign the strategy, deposit and swap transactions it already builds. Keep policy limits (chain, tokens, max notional) in the wallet layer, not in the prompt.
 - **Nanopayments:** charge per quote or per strategy-management action in USDC.
 - **Paymaster:** sponsor strategist and LP transactions.
-- **StableFX:** evaluate it as an FX price source for FXSwap, or as a comparison venue.
+- **StableFX:** it covers only USDC/EURC today, so FXSwap's BRL price comes from RedStone. Evaluate StableFX for a USDC/EURC pair or as a comparison venue.
 - **CCTP / Gateway:** bring USDC in from other chains before depositing into the shared vault.
 - **Arc Mainnet:** deploy after a security review of the contracts and FXSwap.

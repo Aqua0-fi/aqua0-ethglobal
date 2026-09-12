@@ -14,6 +14,7 @@ This repository separates that pre-existing work from what was built during ETHG
 | Base mainnet Aqua0 vault deployment | Addresses in `packages/subgraph/subgraph.base.yaml` |
 | Strategy-key derivation used by the Aqua0 web app | Re-implemented and tested here |
 | 1inch Aqua and SwapVM | Official 1inch sources |
+| RedStone `evm-connector` and `on-chain-relayer` contracts | Vendored unmodified under `packages/contracts/lib/redstone` (BUSL-1.1) |
 
 ## Built during ETHGlobal
 
@@ -27,7 +28,7 @@ This repository separates that pre-existing work from what was built during ETHG
 | Graph-backed typed service: analytics, strategy keys, SwapVM and FXSwap programs, calldata, execution guard | `packages/shared` | **Live** |
 | MCP server (stdio + Streamable HTTP) and public deployment | `apps/mcp`, `deploy/aws` | **Live**; public endpoint on the earlier prepare-only build |
 | MCP SwapVM tools: `create_strategy`, `deposit`, `quote_swap`, `swap`, `get_shared_backing` | `packages/shared`, `apps/mcp`, `apps/cli` | **Live** on Arc (pegged venue, via the CLI) |
-| MCP FXSwap tools: `opcode:"fxswap"`, `get_fx_prices`, `set_fx_price`, oracle and spread pricing | `packages/shared`, `apps/mcp`, `apps/cli` | **Fork-proven** |
+| MCP FXSwap tools: `opcode:"fxswap"`, `get_fx_prices`, `set_fx_price`, oracle and spread pricing, RedStone payload push and quote state override | `packages/shared`, `apps/mcp`, `apps/cli` | **Fork-proven** |
 | CLI with MCP parity | `apps/cli` | **Live** |
 | Agent skill | `skills/aqua0/SKILL.md` | **Live** |
 | Judge dashboard (web MVP) | `apps/dashboard` | **Live** |
@@ -37,4 +38,5 @@ This repository separates that pre-existing work from what was built during ETHG
 | Arc strategy scripts and fork proofs | `packages/contracts/script/ArcFxStrategies.s.sol`, `scripts/test-arc-fork-strategies.sh`, `scripts/test-arc-fork-fxswap.sh` | **Fork-proven** |
 | Base-fork proof that one principal backs two FX classes | `scripts/test-shared-backing-fork.sh` | **Fork-proven** |
 | FXSwap SwapVM instruction, `AquaFXSwapVMRouter`, 46 tests | `packages/contracts/src`, `packages/contracts/test` | CI green; validation against reference vectors **In progress** |
-| FXSwap venue on Arc: router, FXSwap AquaAdapter, ARS/USD and BRL/USD feeds | `packages/contracts/script/deploy-arc-fx-venue.sh` | **Deployed, awaiting wiring** |
+| FXSwap venue on Arc: router, FXSwap AquaAdapter, ARS/USD feed | `packages/contracts/script/deploy-arc-fx-venue.sh` | **Deployed, awaiting wiring** |
+| RedStone BRL and MXNe price feeds on Arc (`AquaRedStoneFeeds`), deploy script, Arc-calldata replay test (5 tests) | `packages/contracts/src/oracles`, `packages/contracts/script/DeployRedStoneFeeds.s.sol`, `packages/contracts/test/AquaRedStoneFeeds.t.sol` | **Live** |
