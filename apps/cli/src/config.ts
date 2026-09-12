@@ -10,6 +10,7 @@ export function readCliConfig(env: NodeJS.ProcessEnv = process.env): Aqua0Servic
     graphEndpoint,
     ...(env.GRAPH_NETWORK ? { graphNetwork: env.GRAPH_NETWORK } : {}),
     ...(env.GRAPH_AUTH_TOKEN ? { graphAuthToken: env.GRAPH_AUTH_TOKEN } : {}),
+    ...(env.GRAPH_GATEWAY_API_KEY ? { graphGatewayApiKey: env.GRAPH_GATEWAY_API_KEY } : {}),
     ...(env.WRITE_RPC_URL ? { writeRpcUrl: env.WRITE_RPC_URL } : {}),
     ...(env.WRITE_CHAIN_ID ? { writeChainId: parsePositiveInt(env.WRITE_CHAIN_ID, "WRITE_CHAIN_ID") } : {}),
     ...(env.VAULT_REGISTRY_ADDRESS ? { vaultRegistryAddress: env.VAULT_REGISTRY_ADDRESS } : {}),

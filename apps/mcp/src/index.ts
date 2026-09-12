@@ -446,6 +446,46 @@ Examples:
   );
 
   server.registerTool(
+    "benchmark_fx_strategy",
+    {
+      description: `Benchmark an Aqua0 forex strategy against the onchain market for the same currency, from Graph data on both sides. Read-only.
+Market side: one standardized query pattern (the Messari DEX AMM schema: liquidityPools, dailySnapshots, hourlySnapshots) sent unchanged through The Graph Network gateway to every standardized DEX subgraph on the chosen chains: Uniswap v3 (Ethereum, Base, Polygon, Arbitrum, Optimism, Celo), Curve (Ethereum), SushiSwap (Ethereum, Polygon, Arbitrum, Celo) and Velodrome v2 (Optimism). It finds pools holding USDC and the currency's stablecoins by token address, then reports each pool's protocol, chain, fee tier, realized fee rate, TVL, average daily volume, 24h price range and last activity. Uniswap-v3-schema subgraphs (Aerodrome on Base, official Uniswap v3) are a labelled, non-standardized fallback for a chain the standardized ones do not cover.
+Aqua0 side: the Aqua0 subgraph on Subgraph Studio (live forex strategies and their indexed fills and fees on Arc Testnet, demo tokens), the strategy's cost at each trade size (feeBps inside the flat band; an inventory fee applies past it, not evaluated here), and for USDC/ARS and USDC/BRL a live Arc Testnet router quote for 0.1 USDC.
+Returns a verdict: liquid (existing pools at a few bps with $1M+ TVL, so a 30 bps strategy is not price-competitive), thin, or none (the LatAm gap Aqua0 targets), with the numbers behind it and any source that failed.
+Pairs: EUR, BRL, MXN, ARS, SGD, CAD against USDC. Needs GRAPH_GATEWAY_API_KEY on the server.
+Examples:
+- "is a 30 bps euro strategy competitive onchain?" -> {"pair":"USDC/EUR"}
+- "how deep is onchain BRL liquidity? 5 bps fee, last 30 days" -> {"pair":"BRL","feeBps":5,"lookbackDays":30}
+- "compare a peso strategy with Polygon pools only, for $5k and $50k trades" -> {"pair":"ARS","chains":["polygon"],"tradeSizesUsd":[5000,50000]}`,
+      inputSchema: {
+        pair: z.string().describe('Currency against USDC: "USDC/EUR", "EUR", "BRL", "reais", "MXN", "ARS", "SGD", "CAD"...'),
+        feeBps: amount.optional().describe("The Aqua0 strategy's proportional fee in bps (default 30)."),
+        flatBandPercent: amount
+          .optional()
+          .describe("The forex curve's flat band (beta) in percent of an even split (default 15)."),
+        tradeSizesUsd: z.array(amount).optional().describe("Trade sizes in USD to compare (default [1000, 10000, 100000])."),
+        lookbackDays: amount.optional().describe("Days of volume and fees to average, 1 to 30 (default 7)."),
+        chains: z
+          .union([z.string(), z.array(z.string())])
+          .optional()
+          .describe("ethereum, base, polygon, arbitrum, optimism, celo; default every chain with a pinned stablecoin for the pair."),
+        fallback: z
+          .string()
+          .optional()
+          .describe(
+            '"auto" (default): query the non-standardized Uniswap-v3-schema subgraphs only for a chain where no standardized subgraph answered or none found a pool. "always" or "never".'
+          ),
+        includeArcQuote: z
+          .boolean()
+          .optional()
+          .describe("For ARS and BRL, add a live Arc Testnet quote for 0.1 USDC through the router (default true).")
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true }
+    },
+    async (input) => jsonText(await aqua0.benchmarkFxStrategy(input))
+  );
+
+  server.registerTool(
     "set_fx_price",
     {
       description: `Move the hand-set ARS/USD demo feed (ManualFxOracle, Chainlink-compatible) so every forex strategy on it reprices on its next quote or swap. Pegged strategies do not move. The BRL feed is RedStone signed market data and cannot be set by hand; this tool refuses it.

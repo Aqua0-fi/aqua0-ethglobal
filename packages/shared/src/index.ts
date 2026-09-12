@@ -3,6 +3,7 @@ export * from "./circle.js";
 export * from "./constants.js";
 export * from "./fx.js";
 export * from "./graph.js";
+export * from "./graph-benchmark.js";
 export * from "./onboarding.js";
 export * from "./privy.js";
 export * from "./redstone.js";

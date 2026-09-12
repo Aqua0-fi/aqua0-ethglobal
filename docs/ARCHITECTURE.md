@@ -104,7 +104,7 @@ flowchart TB
 
 | Layer | Component | Location | Status |
 | --- | --- | --- | --- |
-| Agent interface | MCP server, 19 tools (stdio + Streamable HTTP) | [`apps/mcp`](../apps/mcp) | Local build: pegged and forex tools **Live** on Arc. Public endpoint **Live** on the earlier prepare-only build (12 tools, no signer); hosted redeploy **Planned** |
+| Agent interface | MCP server, 24 tools (stdio + Streamable HTTP) | [`apps/mcp`](../apps/mcp) | Local build: pegged and forex tools **Live** on Arc. Public endpoint **Live** on the earlier prepare-only build (12 tools, no signer); hosted redeploy **Planned** |
 | Agent interface | SwapVM tools: `create_strategy`, `deposit`, `quote_swap`, `swap`, `get_shared_backing` | [`packages/shared`](../packages/shared), [`apps/mcp`](../apps/mcp) | **Live** on Arc (pegged and forex venues, run through the CLI) |
 | Agent interface | Forex tools: `opcode:"forex"` (the default), `get_fx_prices`, `set_fx_price` (ARS only), oracle and spread pricing in `quote_swap` and `swap`, RedStone payload push and quote state override for USDC/BRL | [`packages/shared`](../packages/shared), [`apps/mcp`](../apps/mcp) | **Live** on Arc; `set_fx_price` and the curve regimes **Fork-proven** ([`scripts/test-arc-fork-forex.sh`](../scripts/test-arc-fork-forex.sh)) |
 | Agent interface | CLI mirroring the MCP tools, plus `fx-prices`, `set-fx-price`, `--opcode` | [`apps/cli`](../apps/cli) | **Live** (drove the Arc run) |
