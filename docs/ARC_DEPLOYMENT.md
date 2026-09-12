@@ -66,8 +66,8 @@ To send writes from the MCP in execute mode, the signer also needs `OPERATOR_ROL
 | 1 | USDC / ARGt ("FXSwap ARS", key `0x9b16e2b3…802b`) | Core deployer | Legacy. Registered earlier with both vault legs; not funded, no strategy shipped. |
 | 2 | USDC / ARS (ARGt), pegged | Demo wallet `0xAFF7…b02c` | **Live**: strategy [`0x384f3266…3c3c`](https://testnet.arcscan.app/tx/0x97d5fea443f9090f6b9dd2432036bdfbc2ed58d636e8ac802742d2e499968471) shipped with 0.5 USDC |
 | 3 | USDC / BRL (BRAt), pegged | Demo wallet `0xAFF7…b02c` | **Live**: strategy [`0x3fbcd975…716e`](https://testnet.arcscan.app/tx/0x7571eea087df535b0a4391a48d510abeb9ed0084cc3816946040c05214aa2293) shipped with 0.5 USDC |
-| 6 | USDC / ARS (ARGt), forex | Demo Circle wallet `0xb0c0…d952` | **Live**: strategy [`0x4e566aef…27a1`](https://testnet.arcscan.app/tx/0x1e43315d45de2dd895c22a3ab2fc1cfe24944e3bc24490042ea494eae78f65c8) shipped with 1 USDC |
-| 7 | USDC / BRL (BRAt), forex | Demo Circle wallet `0xb0c0…d952` | **Live**: strategy [`0xeb17dfb7…660c`](https://testnet.arcscan.app/tx/0x457e8e89298ba9fe4a805311928f38dd73fa6d7eccaea85d565537d804637292) shipped with 1 USDC |
+| 6 | USDC / ARS (ARGt), forex | Demo Circle wallet `0xb0c0…d952` | **Live**: strategy [`0xc39dd71d…8597`](https://testnet.arcscan.app/tx/0xc74849a497ff73207e70872d3d83ed9d5cbc1babaa8f161ee716f444a9b7071e) shipped with 1 USDC |
+| 7 | USDC / BRL (BRAt), forex | Demo Circle wallet `0xb0c0…d952` | **Live**: strategy [`0x87e021d4…2aa1`](https://testnet.arcscan.app/tx/0xb1d40beb277fda1516f39e59eacfd535c9199c0670d78d8181420289f88406b4) shipped with 1 USDC |
 
 The earlier prepared "FXSwap BRL" class registration was never sent and is superseded by class 3. Records: [`deployments/arc-testnet-strategies.json`](../deployments/arc-testnet-strategies.json).
 
@@ -95,10 +95,12 @@ The same flow is repeatable on a local fork, with real Arc bytecode and state. O
 
 Deployed with [`packages/contracts/script/deploy-arc-forex-venue.sh`](../packages/contracts/script/deploy-arc-forex-venue.sh), which runs [`DeployForexVenue.s.sol`](../packages/contracts/script/DeployForexVenue.s.sol) and then deploys a second AquaAdapter bound to the new router, since an adapter binds exactly one router. It deploys no feeds: forex strategies read the RedStone BRL feed ([section 6](#6-redstone-price-feeds-live)) and the ARS/USD `ManualFxOracle` below. Record: `forexVenue` in [`deployments/arc-testnet.json`](../deployments/arc-testnet.json).
 
+This redeploy superseded the first forex venue (router `0x0661…1E3d`, adapter `0x7b42…fE80`, record `forexVenueV1`), whose router enforced a `maxFee` bound stricter than Tomás's spec. That venue is now retired: its two strategies were emergency-docked ([USDC/ARS](https://testnet.arcscan.app/tx/0x771a896751914bff20c29b45ff0a77ad051beee3cc0daa15ee8399e5b2701c1b), [USDC/BRL](https://testnet.arcscan.app/tx/0x454f0f166b77db42d43b740b037df583cff1d898f2d15b4fee1412ff176e8f87)), its adapter was [removed from the VaultRegistry allowlist](https://testnet.arcscan.app/tx/0xe6ed3e31d56fa86387fd0f60dd95659a45e5bd025953d2b3fc8ed5c047240d8c), and its `VENUE_SETTLER_ROLE` was revoked on the three vaults. The current router accepts any `maxFee` below 0.5 (so each quote has one solution), whatever `α` is.
+
 | Contract | Address | Notes |
 | --- | --- | --- |
-| `AquaForexSwapVMRouter` | [`0x0661435C2684Dcf62c547bA75a3300f928701E3d`](https://testnet.arcscan.app/address/0x0661435C2684Dcf62c547bA75a3300f928701E3d) | ForexCurve = opcode 34, 24,553 bytes (under EIP-170). EIP-712 name `AquaSwapVMRouter`, version `1.0.2-forex`, bound to the existing Aqua. Deploy tx [`0x26007918…b5f7`](https://testnet.arcscan.app/tx/0x26007918f08656de1ff6d62b1645b307756ec08af5a69ded592667319a13b5f7), block 61762912. Verified on Arcscan (full match). |
-| Aqua0 `AquaAdapter`, forex venue | [`0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80`](https://testnet.arcscan.app/address/0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80) | Bound to the forex router, `oneStrategyPerToken` off. Wired: allowlisted, with `VENUE_SETTLER_ROLE` on the three vaults (below). `OPERATOR_ROLE` granted to the shared Circle operator `0xcdbd…d404`. Verified on Arcscan (partial match: compiled without CBOR metadata). |
+| `AquaForexSwapVMRouter` | [`0x475d0E487779743Fb52c8E7729A1718934D4187e`](https://testnet.arcscan.app/address/0x475d0E487779743Fb52c8E7729A1718934D4187e) | ForexCurve = opcode 34, 24,418 bytes (under EIP-170). EIP-712 name `AquaSwapVMRouter`, version `1.0.2-forex`, bound to the existing Aqua. Deploy tx [`0x6697a936…2809`](https://testnet.arcscan.app/tx/0x6697a9364a485b1f3d09c99d12b929275d1bb564dcf5a656adb463bf885e2809), block 61773156. Verified on Arcscan (full match). |
+| Aqua0 `AquaAdapter`, forex venue | [`0xc9cD056FCF2EF46116259fb094BD897c7E7C0EfB`](https://testnet.arcscan.app/address/0xc9cD056FCF2EF46116259fb094BD897c7E7C0EfB) | Bound to the forex router. Deploy tx [`0x9c77d0cd…2ff0`](https://testnet.arcscan.app/tx/0x9c77d0cda621deef452e315b885661024c1402b008cf878f9e1f8aa0d7842ff0), block 61773163. `oneStrategyPerToken` off ([tx](https://testnet.arcscan.app/tx/0xd507ad489dbb007b2defae02112f2ab602c736fe0d553e0fb74c5fd32f8a4a59)). Wired: allowlisted, with `VENUE_SETTLER_ROLE` on the three vaults (below). `OPERATOR_ROLE` granted to the shared Circle operator `0xcdbd…d404` ([tx](https://testnet.arcscan.app/tx/0x7e5e646d0254e31b4bc198c892ad46505f0b522c23803afb8f2930998eca63a8)). Verified on Arcscan (partial match: compiled without CBOR metadata). |
 | `ManualFxOracle` ARS/USD | [`0xc05A3Fb016f973C82b0232EF50336d4C0466E70C`](https://testnet.arcscan.app/address/0xc05A3Fb016f973C82b0232EF50336d4C0466E70C) | Answer 1400; owner is the demo wallet |
 | `ManualFxOracle` BRL/USD | [`0x1AE6542b9da89Ed2AEf00600710Bba75DbFF5e71`](https://testnet.arcscan.app/address/0x1AE6542b9da89Ed2AEf00600710Bba75DbFF5e71) | Answer 5.50; owner is the demo wallet. No longer the default: BRL prices from RedStone ([section 6](#6-redstone-price-feeds-live)). Set `FX_ORACLE_BRL_USD` to use it. |
 
@@ -108,28 +110,28 @@ The `ManualFxOracle` feeds are Chainlink-compatible and owner-set by hand. Forex
 
 ### Wiring for the forex adapter: done
 
-The core admin `0xBaA361817C8676b4A8a8C5e6fd050253f81f407C` holds `DEFAULT_ADMIN_ROLE` on the registry and `CAPITAL_ADMIN_ROLE` on the vaults. On 2026-09-12 it granted both roles to the team key `0x7E61A5EbCCd26d9D91690C6037d7224F5384730D`, which then sent the wiring:
+The core admin `0xBaA361817C8676b4A8a8C5e6fd050253f81f407C` holds `DEFAULT_ADMIN_ROLE` on the registry and `CAPITAL_ADMIN_ROLE` on the vaults. On 2026-09-12 it granted both roles to the team key `0x7E61A5EbCCd26d9D91690C6037d7224F5384730D`, which holds them and sent the wiring for this adapter:
 
 | Call | Tx |
 | --- | --- |
-| `VaultRegistry.setAdapterAllowed(0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80, true)` | [`0x69919576…61a9`](https://testnet.arcscan.app/tx/0x6991957627a2440fbe17d2854af4344727124f02b5b97184e60b14eea39461a9) |
-| `grantRole(keccak256("VENUE_SETTLER_ROLE"), forexAdapter)` on the USDC AssetVault | [`0xabb80a89…dc42`](https://testnet.arcscan.app/tx/0xabb80a89b83301e9b5d23542c9d18306bd10a6aeb494645ae7e6479c8210dc42) |
-| The same on the ARGt AssetVault | [`0xdb32e289…1431`](https://testnet.arcscan.app/tx/0xdb32e2892676637708a634a06ad53afcbab755edcc6a7d58e81d4a48a07e1431) |
-| The same on the BRAt AssetVault | [`0x6994050e…6754`](https://testnet.arcscan.app/tx/0x6994050e5bdf09fbc79512a9aee8419e9a965214daaf41c7bae64cd8ad9b6754) |
+| `VaultRegistry.setAdapterAllowed(0xc9cD056FCF2EF46116259fb094BD897c7E7C0EfB, true)` | [`0xbc5aa29e…d57a`](https://testnet.arcscan.app/tx/0xbc5aa29ed8d56c84d2d376a131b4f772ec3ed0002d9a38f3bedf7a6af43ad57a) |
+| `grantRole(keccak256("VENUE_SETTLER_ROLE"), forexAdapter)` on the USDC AssetVault | [`0x7d81d8e2…660f`](https://testnet.arcscan.app/tx/0x7d81d8e29ec9d4d50daf0cb3742157340b85f9e431dacd8cac32878d3d65660f) |
+| The same on the ARGt AssetVault | [`0xf311a044…11a6`](https://testnet.arcscan.app/tx/0xf311a04452791477e4d36d10e5ffd02f075fe1ff6b6f15eb74ace4cdc1eb11a6) |
+| The same on the BRAt AssetVault | [`0xe8c96205…464b`](https://testnet.arcscan.app/tx/0xe8c96205abe87a026516be364e1887d9bf6d27e157f49d5dcb6910d848c4464b) |
 
-The role grants and these calls are recorded under `forexVenue.coreWiring` in [`deployments/arc-testnet.json`](../deployments/arc-testnet.json). For a fresh adapter, `deploy-arc-forex-venue.sh` with `MODE=arc` prints the same calldata; with `MODE=fork` it impersonates the admin and sends the calls on a local fork. The shared Circle operator holds `OPERATOR_ROLE` on this adapter; any other address that sends ships on it needs that role too.
+These calls are recorded under `forexVenue.coreWiring` in [`deployments/arc-testnet.json`](../deployments/arc-testnet.json), and the role grants to the team key in the same file. For a fresh adapter, `deploy-arc-forex-venue.sh` with `MODE=arc` prints the same calldata; with `MODE=fork` it impersonates the admin and sends the calls on a local fork. The shared Circle operator holds `OPERATOR_ROLE` on this adapter; any other address that sends ships on it needs that role too.
 
 ### Live forex run
 
-On 2026-09-12 the `aqua0` CLI ran with `SIGNER=circle` in execute mode, signing with the demo Circle wallet `0xb0c0687eb013a5ffde4d23a89398a11bc424d952`. `create_strategy` picked `opcode:"forex"` by default, with no fallback, and the shared Circle operator sent the ships the wallet signed. Every hash is under `forexLiveRun` in [`deployments/arc-testnet-strategies.json`](../deployments/arc-testnet-strategies.json).
+On 2026-09-12 the `aqua0` CLI ran with `SIGNER=circle` in execute mode, signing with the demo Circle wallet `0xb0c0687eb013a5ffde4d23a89398a11bc424d952`. `create_strategy` picked `opcode:"forex"` by default, with no fallback, and reused classes 6 and 7. The shared Circle operator sent the ships the wallet signed. Every hash is under `forexLiveRun` in [`deployments/arc-testnet-strategies.json`](../deployments/arc-testnet-strategies.json).
 
 | Step | Result | Tx |
 | --- | --- | --- |
-| USDC/ARS strategy | Class 6 registered, legs funded and committed, `[Salt][ForexCurve]` shipped with 1 USDC and 1400 ARGt | [`0x1e43315d…65c8`](https://testnet.arcscan.app/tx/0x1e43315d45de2dd895c22a3ab2fc1cfe24944e3bc24490042ea494eae78f65c8) |
-| USDC/BRL strategy | Class 7, same steps, the same USDC committed, shipped with 1 USDC and its value in BRAt at the RedStone price | [`0x457e8e89…7292`](https://testnet.arcscan.app/tx/0x457e8e89298ba9fe4a805311928f38dd73fa6d7eccaea85d565537d804637292) |
-| Swap USDC → ARGt | 0.1 USDC → 139.58 ARGt at oracle 1400, execution 1395.8, spread 29.99 bps | [`0x9c7e64ca…cd0e`](https://testnet.arcscan.app/tx/0x9c7e64ca0750e8f51ecd79b8e72f21e8422729401dc101edd640e6a39c6bcd0e) |
-| Push RedStone BRL price | Signed payload pushed before the BRL swap | [`0xf0d548c5…c8cb`](https://testnet.arcscan.app/tx/0xf0d548c5393af0e6f5441f5fbff92b04dcbdce0912bd478822dd725611bdc8cb) |
-| Swap USDC → BRAt | 0.1 USDC → 0.513733 BRAt at 5.152785 BRAt per USDC, spread 30.00 bps | [`0x20f50a2a…bd97`](https://testnet.arcscan.app/tx/0x20f50a2aa481496af1818392f5da094fa02213e0f0400ebec1335d198ccabd97) |
+| USDC/ARS strategy | Class 6 reused with its vault legs and commitments, ARGt leg topped up, `[Salt][ForexCurve]` shipped with 1 USDC and 1400 ARGt | [`0xc74849a4…071e`](https://testnet.arcscan.app/tx/0xc74849a497ff73207e70872d3d83ed9d5cbc1babaa8f161ee716f444a9b7071e) |
+| USDC/BRL strategy | Class 7 reused the same way, the same USDC committed, shipped with 1 USDC and its value in BRAt at the RedStone price | [`0xb1d40beb…06b4`](https://testnet.arcscan.app/tx/0xb1d40beb277fda1516f39e59eacfd535c9199c0670d78d8181420289f88406b4) |
+| Swap USDC → ARGt | 0.1 USDC → 139.58 ARGt at oracle 1400, execution 1395.8, spread 29.99 bps | [`0x54f61cb5…7554`](https://testnet.arcscan.app/tx/0x54f61cb5ddbeea9ea6cdeef75346aba69fe08c9f59f1d2f0eea4dd89e3ef7554) |
+| Push RedStone BRL price | Signed payload pushed before the BRL swap | [`0x46dbaaa5…8bed`](https://testnet.arcscan.app/tx/0x46dbaaa5685b7365c30c0b815a32e0cb3f5efd856283993c6f11698d74d28bed) |
+| Swap USDC → BRAt | 0.1 USDC → 0.513598 BRAt at oracle 5.15143, execution 5.135976, spread 29.99 bps | [`0xe28f4014…172a`](https://testnet.arcscan.app/tx/0xe28f401465a86dd8557ddd8de548366b0ad5e1fe20db74f71e56cd4a6bcc172a) |
 | Shared-backing read | 1 USDC principal committed to three classes at once: class 4 (pegged USDC/BRL), class 6 and class 7 | on-chain reads |
 
 Both swaps stayed inside the flat band, so each paid only the 30 bps fee. [`scripts/test-arc-fork-forex.sh`](../scripts/test-arc-fork-forex.sh) remains the repeatable proof of the other curve regimes (inventory fee, halt band, oracle move), which this small run does not reach. Details are in the [README](../README.md#forex-curve-in-brief).
@@ -167,7 +169,7 @@ Sources: [`AquaRedStoneFeeds.sol`](../packages/contracts/src/oracles/AquaRedSton
 | Scope | Status |
 | --- | --- |
 | Feeds deployed, updated on-chain, readable with `get_fx_prices` | **Live** |
-| Forex USDC/BRL on these feeds: `swap` pushed a signed BRL price ([tx](https://testnet.arcscan.app/tx/0xf0d548c5393af0e6f5441f5fbff92b04dcbdce0912bd478822dd725611bdc8cb)), then filled 0.1 USDC → 0.513733 BRAt at 5.152785 BRAt per USDC ([tx](https://testnet.arcscan.app/tx/0x20f50a2aa481496af1818392f5da094fa02213e0f0400ebec1335d198ccabd97)) | **Live** (section 5) |
+| Forex USDC/BRL on these feeds: `swap` pushed a signed BRL price ([tx](https://testnet.arcscan.app/tx/0x46dbaaa5685b7365c30c0b815a32e0cb3f5efd856283993c6f11698d74d28bed)), then filled 0.1 USDC → 0.513598 BRAt at oracle 5.15143 BRAt per USDC ([tx](https://testnet.arcscan.app/tx/0xe28f401465a86dd8557ddd8de548366b0ad5e1fe20db74f71e56cd4a6bcc172a)) | **Live** (section 5) |
 
 ## 7. Arc subgraph
 
@@ -183,16 +185,16 @@ PUBLIC_ARC_AQUA_ADAPTER=0xbF72D34b804636496c3308796908152b82624Ca5 \
 PUBLIC_ARC_AQUA_ADAPTER_START_BLOCK=61679229 \
 PUBLIC_ARC_AQUA_SWAPVM_ROUTER=0xb20bc70b485eC1352C190d26fCaB1959d219F763 \
 PUBLIC_ARC_AQUA_SWAPVM_ROUTER_START_BLOCK=61679223 \
-PUBLIC_ARC_FX_AQUA_ADAPTER=0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80 \
-PUBLIC_ARC_FX_AQUA_ADAPTER_START_BLOCK=61762912 \
-PUBLIC_ARC_FXSWAP_ROUTER=0x0661435C2684Dcf62c547bA75a3300f928701E3d \
-PUBLIC_ARC_FXSWAP_ROUTER_START_BLOCK=61762912 \
+PUBLIC_ARC_FX_AQUA_ADAPTER=0xc9cD056FCF2EF46116259fb094BD897c7E7C0EfB \
+PUBLIC_ARC_FX_AQUA_ADAPTER_START_BLOCK=61773163 \
+PUBLIC_ARC_FXSWAP_ROUTER=0x475d0E487779743Fb52c8E7729A1718934D4187e \
+PUBLIC_ARC_FXSWAP_ROUTER_START_BLOCK=61773156 \
 pnpm --filter @aqua0/subgraph generate:arc
 ```
 
 | Scope | Status |
 | --- | --- |
-| Subgraph Studio: [`aqua-0-ethglobal-arc-testnet`](https://thegraph.com/studio/subgraph/aqua-0-ethglobal-arc-testnet), query endpoint `https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/version/latest`, `_meta.hasIndexingErrors = false` | **Live**: version `ethglobal-arc-d179c59` (deployment `QmVbx7DnfVxAZVXpETz2YQ4LD9b8fSyFnAaCexaoKVLmDy`), synced to the Arc head; record in [`deployments/graph-studio-arc-testnet.json`](../deployments/graph-studio-arc-testnet.json) |
+| Subgraph Studio: [`aqua-0-ethglobal-arc-testnet`](https://thegraph.com/studio/subgraph/aqua-0-ethglobal-arc-testnet), query endpoint `https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/version/latest`, `_meta.hasIndexingErrors = false` | **Live**: version `ethglobal-arc-3d0b9ef` (deployment `QmWSmaVSWJ1hG8L5ShPj3n7z8fwpExj7mAVYXGfGtZ7gk9`), synced to the Arc head, indexing the current forex adapter and router with both live forex fills; record in [`deployments/graph-studio-arc-testnet.json`](../deployments/graph-studio-arc-testnet.json) |
 | Both Aqua venues: `AquaStrategy`, `AquaOrder`, `AquaFill` with a `venue` label (`pegged` / `fxswap`), per-LP fill stats | **Live** on Subgraph Studio |
 | Self-hosted Graph Node through the Arc RPC proxy | Development fallback |
 

@@ -64,14 +64,13 @@ not follow a moving FX rate.
 `src/instructions/ForexCurve.sol` is Tomás's forex curve (Shell v1 as DFX v2 runs it) as a SwapVM instruction,
 with the closed-form math in `src/libs/ForexCurveMath.sol`. `src/routers/AquaForexSwapVMRouter.sol` adds it at
 opcode 34 and keeps every other swap-vm v1.0.2 `AquaOpcodes` index; XYCConcentrate, Decay and the protocol-fee
-opcodes are no-ops so the router fits EIP-170 (24,553 bytes).
+opcodes are no-ops so the router fits EIP-170 (24,418 bytes).
 
 Each swap reads the feed the program names, rejects a stale or out-of-band answer and values both Aqua balances in
 the quote token. Inside the flat band `beta` the price is the oracle; past it an inventory fee applies (slope
 `delta`, capped at `maxFee`), and a share `lambda` of a shrinking fee goes back to the taker. A swap that pushes the
-book past the halt band `alpha` reverts. `epsilon` is a proportional fee on every swap. The args builder requires
-`maxFee < min(1/2, (1 - alpha)/(2 alpha))`, so each quote has one solution and a trade the size of the book cannot
-clear; `delta` is capped only by its `uint64` field (about 18.45).
+book past the halt band `alpha` reverts. `epsilon` is a proportional fee on every swap. `maxFee` must be below 0.5
+(so each quote has one solution); `delta` is capped only by its `uint64` field (about 18.45).
 
 ```bash
 # Local fork: deploy the router and adapter, wire the adapter as the impersonated core admin
@@ -84,8 +83,8 @@ KEYSTORE_ACCOUNT=<keystore-name> KEYSTORE_PASSWORD_FILE=<path-to-password-file> 
 ```
 
 No feeds are deployed: forex strategies read the RedStone BRL feed below and the ARS/USD `ManualFxOracle`. On Arc
-Testnet the router is `0x0661435C2684Dcf62c547bA75a3300f928701E3d` and the adapter
-`0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80`, both verified on Arcscan. The adapter is wired: allowlisted in the `VaultRegistry` and holding `VENUE_SETTLER_ROLE`
+Testnet the router is `0x475d0E487779743Fb52c8E7729A1718934D4187e` and the adapter
+`0xc9cD056FCF2EF46116259fb094BD897c7E7C0EfB`, both verified on Arcscan. The adapter is wired: allowlisted in the `VaultRegistry` and holding `VENUE_SETTLER_ROLE`
 on the USDC, ARGt and BRAt vaults, so forex strategies trade live on Arc.
 
 Tests: `test/ForexCurve.t.sol`, `test/ForexCurveInvariants.t.sol`, `test/ForexCurveVectors.t.sol` (all 979 reference

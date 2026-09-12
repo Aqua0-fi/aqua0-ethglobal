@@ -2,9 +2,9 @@
   "maxFeeLimit": {
     "300000000000000000": "499999999999999999",
     "500000000000000000": "499999999999999999",
-    "600000000000000000": "333333333333333333",
-    "900000000000000000": "55555555555555555",
-    "999999999999999999": "0"
+    "600000000000000000": "499999999999999999",
+    "900000000000000000": "499999999999999999",
+    "999999999999999999": "499999999999999999"
   },
   "pairFields": {
     "usdc6-argt18-ars-per-usd": {
@@ -50,20 +50,20 @@
   },
   "quote-is-gt-extremes": {
     "alpha": "999999999999999999",
-    "args": "0x0003ffffffffffffffffffffffffffffffffffffffffffffffffff00000000000000000000000000000001ffffffffffffffffffffffffffffffff0de0b6b3a763ffff0de0b6b3a763fffeffffffffffffffff00000000000000000de0b6b3a7640000016345785d89ffff0de0b6b3a7640000000000e8d4a51000",
+    "args": "0x0003ffffffffffffffffffffffffffffffffffffffffffffffffff00000000000000000000000000000001ffffffffffffffffffffffffffffffff0de0b6b3a763ffff0de0b6b3a763fffeffffffffffffffff06f05b59d3b1ffff0de0b6b3a7640000016345785d89ffff0de0b6b3a7640000000000e8d4a51000",
     "beta": "999999999999999998",
     "delta": "18446744073709551615",
     "epsilon": "99999999999999999",
     "flags": 3,
     "lambda": "1000000000000000000",
-    "maxFee": "0",
+    "maxFee": "499999999999999999",
     "maxPrice": "340282366920938463463374607431768211455",
     "maxStaleness": 4294967295,
     "minPrice": "1",
     "oracle": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
     "oracleDecimals": 255,
     "oracleKind": 0,
-    "program": "0x1420ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff227b0003ffffffffffffffffffffffffffffffffffffffffffffffffff00000000000000000000000000000001ffffffffffffffffffffffffffffffff0de0b6b3a763ffff0de0b6b3a763fffeffffffffffffffff00000000000000000de0b6b3a7640000016345785d89ffff0de0b6b3a7640000000000e8d4a51000",
+    "program": "0x1420ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff227b0003ffffffffffffffffffffffffffffffffffffffffffffffffff00000000000000000000000000000001ffffffffffffffffffffffffffffffff0de0b6b3a763ffff0de0b6b3a763fffeffffffffffffffff06f05b59d3b1ffff0de0b6b3a7640000016345785d89ffff0de0b6b3a7640000000000e8d4a51000",
     "rateGt": "1000000000000",
     "rateLt": "1000000000000000000",
     "salt": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",

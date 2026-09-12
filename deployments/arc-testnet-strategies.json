@@ -326,6 +326,168 @@
     "date": "2026-09-12",
     "driver": "aqua0 CLI with SIGNER=circle (developer-controlled demo wallet), MCP_WRITE_MODE=execute, same @aqua0/shared service functions as the MCP tools",
     "venue": {
+      "router": "0x475d0E487779743Fb52c8E7729A1718934D4187e",
+      "aquaAdapter": "0xc9cD056FCF2EF46116259fb094BD897c7E7C0EfB"
+    },
+    "note": "Classes 6 and 7 and their vault legs and commitments were reused from forexLiveRunV1; only the FX leg top-up and the ship on the new adapter were sent.",
+    "strategist": "0xb0c0687eb013a5ffde4d23a89398a11bc424d952",
+    "operator": "0xcdbd43edb8292def7e8ac99c77860a689cc6d404",
+    "strategies": [
+      {
+        "pair": "USDC/ARS",
+        "opcode": "forex",
+        "opcodeSource": "default",
+        "label": "Forex ARS",
+        "classId": "6",
+        "strategyId": "0xc39dd71deb079e2cd3b725f31562a74cea0e5266244170df4974739402f58597",
+        "program": "Salt (opcode 20) -> ForexCurve (opcode 34)",
+        "params": {
+          "alpha": "0.5",
+          "beta": "0.15",
+          "delta": "0.5",
+          "maxFee": "0.25",
+          "lambda": "0.3",
+          "epsilonBps": "30",
+          "invertPrice": true
+        },
+        "usdcShip": "1",
+        "fxShip": "1400 ARGt",
+        "live": true,
+        "transactions": [
+          {
+            "stage": "approve ARGt",
+            "hash": "0xe8e6f227cc161f3b27521f20f28e8b48ca56c36539ff01419ee5f4bf1d72fb58"
+          },
+          {
+            "stage": "deposit ARGt",
+            "hash": "0x9a52dce0c08652b313f1d99489bdbe05e863456d2ab889628dcf0279191de909"
+          },
+          {
+            "stage": "shipStrategyWithFee (sent by Aqua0 operator 0xcdbd43edb8292def7e8ac99c77860a689cc6d404)",
+            "hash": "0xc74849a497ff73207e70872d3d83ed9d5cbc1babaa8f161ee716f444a9b7071e"
+          }
+        ],
+        "swap": {
+          "amountIn": "0.1 USDC",
+          "quoted": "139.580000000000055832 ARGt",
+          "received": "139.580000000000055832 ARGt",
+          "oraclePrice": "1400 ARGt per USDC",
+          "executionPrice": "1395.8 ARGt per USDC",
+          "effectiveSpreadBps": "+29.99",
+          "transactions": [
+            {
+              "stage": "approve USDC",
+              "hash": "0xd0f215ae0beb4b7b107f9cdf2597f94fda29a745e05840738a9d151b097e65ff"
+            },
+            {
+              "stage": "swap USDC -> ARGt",
+              "hash": "0x54f61cb5ddbeea9ea6cdeef75346aba69fe08c9f59f1d2f0eea4dd89e3ef7554"
+            }
+          ]
+        }
+      },
+      {
+        "pair": "USDC/BRL",
+        "opcode": "forex",
+        "opcodeSource": "default",
+        "label": "Forex BRL",
+        "classId": "7",
+        "strategyId": "0x87e021d4a0a607f009dbb4689b593ce816c6d13fde885282ce385888290f2aa1",
+        "program": "Salt (opcode 20) -> ForexCurve (opcode 34)",
+        "params": {
+          "alpha": "0.5",
+          "beta": "0.15",
+          "delta": "0.5",
+          "maxFee": "0.25",
+          "lambda": "0.3",
+          "epsilonBps": "30",
+          "invertPrice": false
+        },
+        "usdcShip": "1",
+        "fxShip": "5.151630251423768931 BRAt",
+        "live": true,
+        "transactions": [
+          {
+            "stage": "approve BRAt",
+            "hash": "0x21334e5dde4c0c9c3f1ff8066cf18200b3d7fa5f2b6adf50017a2dd6150ce36d"
+          },
+          {
+            "stage": "deposit BRAt",
+            "hash": "0xe0c8677b43804cf8587fe1f9bdb26258e38644f1ec158a8997414325b6a3ec7b"
+          },
+          {
+            "stage": "shipStrategyWithFee (sent by Aqua0 operator 0xcdbd43edb8292def7e8ac99c77860a689cc6d404)",
+            "hash": "0xb1d40beb277fda1516f39e59eacfd535c9199c0670d78d8181420289f88406b4"
+          }
+        ],
+        "swap": {
+          "amountIn": "0.1 USDC",
+          "quoted": "0.513597612703509834 BRAt",
+          "received": "0.513597612703509834 BRAt",
+          "oraclePrice": "5.15143 BRAt per USDC",
+          "executionPrice": "5.135976 BRAt per USDC",
+          "effectiveSpreadBps": "+29.99",
+          "transactions": [
+            {
+              "stage": "push RedStone BRL price",
+              "hash": "0x46dbaaa5685b7365c30c0b815a32e0cb3f5efd856283993c6f11698d74d28bed"
+            },
+            {
+              "stage": "approve USDC",
+              "hash": "0x4f89ade1bde741d988ef421b4fc7d6684c59ad38e3d4286d7d42785bc5eeff20"
+            },
+            {
+              "stage": "swap USDC -> BRAt",
+              "hash": "0xe28f401465a86dd8557ddd8de548366b0ad5e1fe20db74f71e56cd4a6bcc172a"
+            }
+          ]
+        }
+      }
+    ],
+    "sharedBacking": {
+      "usdcPrincipal": "1",
+      "classes": [
+        {
+          "classId": "4",
+          "pair": "USDC/BRL",
+          "committedUsdc": "1",
+          "strategies": [
+            {
+              "opcode": "pegged",
+              "strategyId": "0xe16591490b549dd816c0d4cd2df92cfedbc0680eb295f4550cb47bd5f6d94be1"
+            }
+          ]
+        },
+        {
+          "classId": "6",
+          "pair": "USDC/ARS",
+          "committedUsdc": "1",
+          "strategies": [
+            {
+              "opcode": "forex",
+              "strategyId": "0xc39dd71deb079e2cd3b725f31562a74cea0e5266244170df4974739402f58597"
+            }
+          ]
+        },
+        {
+          "classId": "7",
+          "pair": "USDC/BRL",
+          "committedUsdc": "1",
+          "strategies": [
+            {
+              "opcode": "forex",
+              "strategyId": "0x87e021d4a0a607f009dbb4689b593ce816c6d13fde885282ce385888290f2aa1"
+            }
+          ]
+        }
+      ],
+      "explanation": "The same 1 USDC principal is committed to 3 strategy classes at once (class 4 USDC/BRL (pegged), class 6 USDC/ARS (forex), class 7 USDC/BRL (forex)). Each class counts it as committed backing: the deposit is shared, not split."
+    }
+  },
+  "forexLiveRunV1": {
+    "date": "2026-09-12",
+    "driver": "aqua0 CLI with SIGNER=circle (developer-controlled demo wallet), MCP_WRITE_MODE=execute, same @aqua0/shared service functions as the MCP tools",
+    "venue": {
       "router": "0x0661435C2684Dcf62c547bA75a3300f928701E3d",
       "aquaAdapter": "0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80"
     },
@@ -529,6 +691,7 @@
         }
       ],
       "explanation": "The same 1 USDC principal is committed to 3 strategy classes at once (class 4 USDC/BRL (pegged), class 6 USDC/ARS (forex), class 7 USDC/BRL (forex)). Each class counts it as committed backing: the deposit is shared, not split."
-    }
+    },
+    "status": "superseded: ran on forexVenueV1 (router 0x0661435C2684Dcf62c547bA75a3300f928701E3d, adapter 0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80) before the maxFee check was relaxed"
   }
 }

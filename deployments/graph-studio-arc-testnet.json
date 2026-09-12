@@ -4,18 +4,18 @@
   "sourceManifest": "packages/subgraph/subgraph.arc.yaml",
   "studioSlug": "aqua-0-ethglobal-arc-testnet",
   "studioUrl": "https://thegraph.com/studio/subgraph/aqua-0-ethglobal-arc-testnet",
-  "queryEndpoint": "https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/ethglobal-arc-d179c59",
-  "versionLabel": "ethglobal-arc-d179c59",
-  "deploymentCid": "QmVbx7DnfVxAZVXpETz2YQ4LD9b8fSyFnAaCexaoKVLmDy",
+  "queryEndpoint": "https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/ethglobal-arc-3d0b9ef",
+  "versionLabel": "ethglobal-arc-3d0b9ef",
+  "deploymentCid": "QmWSmaVSWJ1hG8L5ShPj3n7z8fwpExj7mAVYXGfGtZ7gk9",
   "publicMcp": "https://ethglobal-mcp.18-207-103-187.nip.io/mcp",
   "publicDashboard": "https://ethglobal-demo.18-207-103-187.nip.io/",
   "status": "live",
-  "verifiedAtUtc": "2026-09-12T17:58:57Z",
-  "sources": "vault core, pegged venue (AquaAdapter 0xbF72D34b804636496c3308796908152b82624Ca5 + AquaSwapVMRouter), forex venue (AquaAdapter 0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80 + AquaForexSwapVMRouter 0x0661435C2684Dcf62c547bA75a3300f928701E3d)",
-  "deployedAtUtc": "2026-09-12T17:57:19Z",
+  "verifiedAtUtc": "2026-09-12T18:53:49Z",
+  "sources": "vault core, pegged venue (AquaAdapter 0xbF72D34b804636496c3308796908152b82624Ca5 + AquaSwapVMRouter), forex venue (AquaAdapter 0xc9cD056FCF2EF46116259fb094BD897c7E7C0EfB + AquaForexSwapVMRouter 0x475d0E487779743Fb52c8E7729A1718934D4187e)",
+  "deployedAtUtc": "2026-09-12T18:52:17Z",
   "previousVersion": {
-    "versionLabel": "ethglobal-d3ad9d9",
-    "deploymentCid": "QmY8nDAgVvaafu3aD99HN3Lm3Fx4WVsKKMx6X1Xrj49ujE"
+    "versionLabel": "ethglobal-arc-d179c59",
+    "deploymentCid": "QmVbx7DnfVxAZVXpETz2YQ4LD9b8fSyFnAaCexaoKVLmDy"
   },
-  "syncCheck": "synced to Arc head (block 61768042 vs 61768050), no indexing errors, both AquaVenueAdapters indexed (pegged, forex)"
+  "syncCheck": "synced to Arc head (block 61774568 vs 61774572), no indexing errors; /version/latest serves this version; both AquaVenueAdapters indexed (pegged, forex) with the two live forex fills on the new router"
 }

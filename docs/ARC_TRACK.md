@@ -21,7 +21,7 @@ Arc is testnet-only for Aqua0 today.
 Forex-curve USDC/BRL strategies price from real FX market data on Arc: RedStone prices signed by 3 of its 5 primary-prod signers and verified on-chain by the RedStone adapter.
 - **Feeds:** BRL (USD per 1 BRL) and MXNe (MXN per 1 USD, from Etherfuse's MXNe stablecoin), **Live** on Arc Testnet. No Aqua0 MXN vault exists yet.
 - **Why RedStone:** its gateways are free and need no API key. Pyth's free tier excludes FX feeds, Chainlink Data Feeds are on Arc mainnet only, StableFX covers only USDC/EURC, and RedStone has no ARS feed, so USDC/ARS stays on a hand-set feed.
-- **Status:** forex USDC/BRL on these feeds is **Live** on Arc: `swap` pushed a signed RedStone price, then filled 0.1 USDC → 0.513733 BRAt at 5.152785 BRAt per USDC.
+- **Status:** forex USDC/BRL on these feeds is **Live** on Arc: `swap` pushed a signed RedStone price, then filled 0.1 USDC → 0.513598 BRAt at oracle 5.15143 BRAt per USDC.
 
 Addresses and mechanics: [`ARC_DEPLOYMENT.md`](ARC_DEPLOYMENT.md#6-redstone-price-feeds-live).
 

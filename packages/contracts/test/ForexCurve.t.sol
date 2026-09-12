@@ -562,7 +562,8 @@ contract ForexCurveTest is Test {
 
         // Boundaries that are accepted
         cfg = _config();
-        (cfg.alpha, cfg.beta, cfg.delta, cfg.maxFee, cfg.lambda, cfg.epsilon) = (1e18 - 1, 0, type(uint64).max, 0, 1e18, 0.1e18 - 1);
+        (cfg.alpha, cfg.beta, cfg.delta, cfg.maxFee, cfg.lambda, cfg.epsilon) =
+            (1e18 - 1, 0, type(uint64).max, 0.5e18 - 1, 1e18, 0.1e18 - 1);
         harness.build(cfg);
         (cfg.alpha, cfg.maxFee) = (0.5e18, 0.5e18 - 1);
         harness.build(cfg);
@@ -573,33 +574,17 @@ contract ForexCurveTest is Test {
         (cfg.alpha, cfg.beta, cfg.maxFee) = (alpha, 0, maxFee);
     }
 
-    function test_Args_MaxFeeBound() public {
-        // α ≤ 1/2: the constant bound MAX < 1/2 binds
-        assertEq(harness.maxFeeLimit(0.3e18), 0.5e18 - 1);
-        assertEq(harness.maxFeeLimit(0.5e18), 0.5e18 - 1);
-        harness.build(_withMaxFee(0.3e18, 0.5e18 - 1));
-        harness.build(_withMaxFee(0.5e18, 0.5e18 - 1));
-        vm.expectRevert(ForexCurveArgsBuilder.ForexCurveInvalidFees.selector);
-        harness.build(_withMaxFee(0.3e18, 0.5e18));
-        vm.expectRevert(ForexCurveArgsBuilder.ForexCurveInvalidFees.selector);
-        harness.build(_withMaxFee(0.5e18, 0.5e18));
+    function test_Args_MaxFeeBoundIsHalfForEveryAlpha() public {
+        // MAX < 1/2 is the only bound, whatever α is
+        uint64[4] memory alphas = [uint64(0.3e18), 0.5e18, 0.9e18, 1e18 - 1];
+        for (uint256 i; i < alphas.length; ++i) {
+            assertEq(harness.maxFeeLimit(alphas[i]), 0.5e18 - 1, "maxFeeLimit is 0.5e18 - 1 for every alpha");
+            harness.build(_withMaxFee(alphas[i], 0.5e18 - 1));
+            vm.expectRevert(ForexCurveArgsBuilder.ForexCurveInvalidFees.selector);
+            harness.build(_withMaxFee(alphas[i], 0.5e18));
+        }
         vm.expectRevert(ForexCurveArgsBuilder.ForexCurveInvalidFees.selector);
         harness.build(_withMaxFee(0.5e18, 0.5e18 + 1));
-
-        // α > 1/2: 2·α·MAX < 1 − α binds; at α = 0.9 the limit is ⌊(0.1e36 − 1) / 1.8e18⌋
-        uint256 limit = harness.maxFeeLimit(0.9e18);
-        assertEq(limit, 55_555_555_555_555_555);
-        harness.build(_withMaxFee(0.9e18, uint64(limit)));
-        vm.expectRevert(ForexCurveArgsBuilder.ForexCurveInvalidFees.selector);
-        harness.build(_withMaxFee(0.9e18, uint64(limit + 1)));
-        vm.expectRevert(ForexCurveArgsBuilder.ForexCurveInvalidFees.selector);
-        harness.build(_withMaxFee(0.9e18, 0.25e18));
-
-        // α at its maximum leaves no fee
-        assertEq(harness.maxFeeLimit(1e18 - 1), 0);
-        harness.build(_withMaxFee(1e18 - 1, 0));
-        vm.expectRevert(ForexCurveArgsBuilder.ForexCurveInvalidFees.selector);
-        harness.build(_withMaxFee(1e18 - 1, 1));
 
         // The instruction parses on every swap: hand-packed args above the limit revert inside the router
         bytes memory packed = ForexCurveArgsBuilder.build(_withMaxFee(0.5e18, 0.5e18 - 1));
@@ -614,6 +599,38 @@ contract ForexCurveTest is Test {
         _ship(order, USDC_BALANCE, BRL_BALANCE);
         vm.expectRevert(ForexCurveArgsBuilder.ForexCurveInvalidFees.selector);
         _quote(order, usdc, brl, 100e6, true);
+    }
+
+    /// @dev Tomás's no_flat_zone set (α 0.9, β 0, δ 0.15, MAX 0.25, λ 0.3) validates and trades through the router. With
+    ///      β = 0 every trade pays the inventory fee.
+    function test_NoFlatZoneSet_ValidatesAndSwapsThroughRouter() public {
+        ForexCurveArgsBuilder.Args memory cfg = _config();
+        (cfg.alpha, cfg.beta, cfg.delta, cfg.maxFee, cfg.lambda) = (0.9e18, 0, 0.15e18, 0.25e18, 0.3e18);
+        assertEq(keccak256(abi.encode(harness.parse(harness.build(cfg)))), keccak256(abi.encode(cfg)), "validates");
+        ISwapVM.Order memory order = _order(_program(cfg));
+        _ship(order, USDC_BALANCE, BRL_BALANCE);
+        ForexCurveMath.Params memory params = _params(cfg);
+
+        // 10,000 USDC in: the book leaves the even split, so the rate is below the oracle's even before ε
+        (, uint256 quoted) = _quote(order, usdc, brl, 10_000e6, true);
+        (uint256 amountIn, uint256 amountOut) = _swap(order, usdc, brl, 10_000e6, true);
+        assertEq(amountIn, 10_000e6);
+        assertEq(amountOut, quoted, "quote == swap");
+        (, uint256 expected) = math.quote(params, 0.2e18, USDC_BALANCE * 1e12, BRL_BALANCE, 0, true, true, 10_000e18);
+        assertEq(amountOut, expected, "instruction == ForexCurveMath");
+        assertLt(amountOut, 50_000e18 * 997 / 1000, "inventory fee on top of epsilon");
+        (uint256 usdcAqua, uint256 brlAqua) = _balances(order);
+        assertEq(usdcAqua, USDC_BALANCE + 10_000e6, "maker USDC balance");
+        assertEq(brlAqua, BRL_BALANCE - amountOut, "maker BRL balance");
+
+        // Exact out the other way rebalances the book
+        (amountIn, amountOut) = _swap(order, brl, usdc, 5_000e6, false);
+        assertEq(amountOut, 5_000e6);
+        (uint256 expectedIn,) = math.quote(params, 0.2e18, usdcAqua * 1e12, brlAqua, 0, false, false, 5_000e18);
+        assertEq(amountIn, expectedIn, "instruction == ForexCurveMath (exact out)");
+        (uint256 usdcAfter, uint256 brlAfter) = _balances(order);
+        assertEq(usdcAfter, usdcAqua - 5_000e6, "maker USDC balance after exact out");
+        assertEq(brlAfter, brlAqua + amountIn, "maker BRL balance after exact out");
     }
 
     function test_PairFields() public view {

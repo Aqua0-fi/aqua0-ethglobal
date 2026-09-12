@@ -123,8 +123,8 @@ Closing line: *"One capital, Argentine pesos and Brazilian reais, both live on A
 ## Part 2: forex-curve flow, live on Arc Testnet
 
 `create_strategy` ships forex strategies by default. The forex venue is **Live** on Arc:
-- `AquaForexSwapVMRouter` `0x0661435C2684Dcf62c547bA75a3300f928701E3d` (ForexCurve, opcode 34), verified on Arcscan;
-- forex AquaAdapter `0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80`, verified on Arcscan, allowlisted with `VENUE_SETTLER_ROLE` on the three vaults (see [`ARC_DEPLOYMENT.md`](ARC_DEPLOYMENT.md#wiring-for-the-forex-adapter-done)), and `OPERATOR_ROLE` granted to the shared Circle operator;
+- `AquaForexSwapVMRouter` `0x475d0E487779743Fb52c8E7729A1718934D4187e` (ForexCurve, opcode 34), verified on Arcscan;
+- forex AquaAdapter `0xc9cD056FCF2EF46116259fb094BD897c7E7C0EfB`, verified on Arcscan, allowlisted with `VENUE_SETTLER_ROLE` on the three vaults (see [`ARC_DEPLOYMENT.md`](ARC_DEPLOYMENT.md#wiring-for-the-forex-adapter-done)), and `OPERATOR_ROLE` granted to the shared Circle operator;
 - ARS/USD `ManualFxOracle` `0xc05A3Fb016f973C82b0232EF50336d4C0466E70C` at 1400, owned by the demo wallet `0xAFF7…b02c`;
 - RedStone BRL feed `0xac4D10eE7FF790c2E505fBBD6A72d15D7Cbc1796` (USD per 1 BRL), **Live**, updated only from signed RedStone prices.
 
@@ -151,9 +151,9 @@ At steps 6 and 7, explain the curve. Each strategy ships 1 USDC plus its value i
 At step 8, name the trust assumption: the ARS feed is an owner-set demo oracle, because RedStone has no ARS feed. Forex strategies trade at whatever their feed says within their price band and staleness window.
 
 Live results (`forexLiveRun`):
-- `create_strategy` picked `opcode:"forex"` by default, with no fallback: USDC/ARS class 6, strategy `0x4e566aef…27a1` ([ship tx](https://testnet.arcscan.app/tx/0x1e43315d45de2dd895c22a3ab2fc1cfe24944e3bc24490042ea494eae78f65c8)); USDC/BRL class 7, strategy `0xeb17dfb7…660c` ([ship tx](https://testnet.arcscan.app/tx/0x457e8e89298ba9fe4a805311928f38dd73fa6d7eccaea85d565537d804637292)). The shared Circle operator sent both ships;
-- USDC/ARS: 0.1 USDC → 139.58 ARGt at oracle 1400, execution 1395.8, spread 29.99 bps ([tx](https://testnet.arcscan.app/tx/0x9c7e64ca0750e8f51ecd79b8e72f21e8422729401dc101edd640e6a39c6bcd0e));
-- USDC/BRL: `swap` pushed a signed RedStone price ([tx](https://testnet.arcscan.app/tx/0xf0d548c5393af0e6f5441f5fbff92b04dcbdce0912bd478822dd725611bdc8cb)), then 0.1 USDC → 0.513733 BRAt at 5.152785 BRAt per USDC, spread 30.00 bps ([tx](https://testnet.arcscan.app/tx/0x20f50a2aa481496af1818392f5da094fa02213e0f0400ebec1335d198ccabd97));
+- `create_strategy` picked `opcode:"forex"` by default, with no fallback, and reused the existing classes: USDC/ARS class 6, strategy `0xc39dd71d…8597` ([ship tx](https://testnet.arcscan.app/tx/0xc74849a497ff73207e70872d3d83ed9d5cbc1babaa8f161ee716f444a9b7071e)); USDC/BRL class 7, strategy `0x87e021d4…2aa1` ([ship tx](https://testnet.arcscan.app/tx/0xb1d40beb277fda1516f39e59eacfd535c9199c0670d78d8181420289f88406b4)). The shared Circle operator sent both ships;
+- USDC/ARS: 0.1 USDC → 139.58 ARGt at oracle 1400, execution 1395.8, spread 29.99 bps ([tx](https://testnet.arcscan.app/tx/0x54f61cb5ddbeea9ea6cdeef75346aba69fe08c9f59f1d2f0eea4dd89e3ef7554));
+- USDC/BRL: `swap` pushed a signed RedStone price ([tx](https://testnet.arcscan.app/tx/0x46dbaaa5685b7365c30c0b815a32e0cb3f5efd856283993c6f11698d74d28bed)), then 0.1 USDC → 0.513598 BRAt at oracle 5.15143, execution 5.135976, spread 29.99 bps ([tx](https://testnet.arcscan.app/tx/0xe28f401465a86dd8557ddd8de548366b0ad5e1fe20db74f71e56cd4a6bcc172a));
 - `get_shared_backing`: 1 USDC principal committed to three classes at once, class 4 (pegged USDC/BRL), class 6 and class 7.
 
 Fork results ([`scripts/test-arc-fork-forex.sh`](../scripts/test-arc-fork-forex.sh)), the repeatable proof of the curve regimes:
