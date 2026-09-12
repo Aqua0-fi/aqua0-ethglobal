@@ -243,3 +243,8 @@ Conclusiones:
 - Base persistente del oráculo de 1% (oráculo oficial vs precio operable): el pool sigue positivo pero
   el volumen cae 60-70% y pasa más de la mitad del tiempo fuera de banda. Un oráculo que no refleje el
   precio operable del ARS mata el pool por falta de flujo, no por pérdidas.
+
+## 7. Demo en Arc Testnet con USDC/BRL
+
+Decidido el 2026-09-12. Pyth no tiene feed de ARS. Todo lo específico de Arc, Pyth y el port está en
+`docs/FX_OPCODE_HANDOFF.md`.
