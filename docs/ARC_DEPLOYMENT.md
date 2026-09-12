@@ -4,7 +4,7 @@ Arc Testnet, chain id `5042002`, RPC `https://rpc.testnet.arc.network`, explorer
 
 ## 1. Aqua0 vault core: Live
 
-The team deployed the pre-existing Aqua0 vault contracts (source commit `8a9f1c2`) at start block `60613306`. The vaults are not funded yet.
+The team deployed the pre-existing Aqua0 vault contracts (source commit `8a9f1c2`) at start block `60613306`. The vaults hold the deposits from the live demo run (section 4).
 
 | Contract | Address |
 | --- | --- |
@@ -36,7 +36,7 @@ Tokens:
 
 ARGt and BRAt are testnet demo tokens, not issued stablecoins.
 
-## 2. 1inch Aqua venue and Aqua0 AquaAdapter: Deployed, awaiting wiring
+## 2. Pegged venue: 1inch Aqua, AquaSwapVMRouter and Aqua0 AquaAdapter: Live
 
 Deployed from [`packages/contracts`](../packages/contracts) with [`script/deploy-arc-aqua-venue.sh`](../packages/contracts/script/deploy-arc-aqua-venue.sh).
 
@@ -48,6 +48,8 @@ Deployed from [`packages/contracts`](../packages/contracts) with [`script/deploy
 
 The venue broadcast is committed at [`packages/contracts/broadcast/DeployAquaVenue.s.sol/5042002/run-latest.json`](../packages/contracts/broadcast/DeployAquaVenue.s.sol/5042002/run-latest.json).
 
+**Wired.** The AquaAdapter is allowlisted in the `VaultRegistry` and holds `VENUE_SETTLER_ROLE` on all three AssetVaults, so it settles swaps on Arc Testnet (section 4).
+
 **"Verified" means on-chain post-deploy checks, not arcscan source verification.** The checks cover:
 - `router.AQUA() == aqua`;
 - the adapter's `aqua()`, `aquaSwapVMRouter()` and `registry()` bindings;
@@ -55,56 +57,65 @@ The venue broadcast is committed at [`packages/contracts/broadcast/DeployAquaVen
 
 The adapter ships with `oneStrategyPerToken` on, which would stop one token from backing a second live strategy, so the adapter admin turns it off. The vault's settle-time debit and outflow limit remain the capital bound.
 
-### Pending admin wiring: four transactions
-
-These calls need `DEFAULT_ADMIN_ROLE` on the registry and `CAPITAL_ADMIN_ROLE` on the vaults, which only the core admin holds. The adapter is inert until they land.
-
-1. `VaultRegistry.setAdapterAllowed(0xbF72D34b804636496c3308796908152b82624Ca5, true)`
-2. `grantRole(keccak256("VENUE_SETTLER_ROLE"), 0xbF72D34b804636496c3308796908152b82624Ca5)` on the USDC AssetVault
-3. The same on the ARGt AssetVault
-4. The same on the BRAt AssetVault
-
-`deploy-arc-aqua-venue.sh` with `MODE=arc` prints the exact calldata. With `MODE=fork` it impersonates the admin and sends the calls on a local fork.
-
 To send writes from the MCP in execute mode, the signer also needs `OPERATOR_ROLE` on the adapter. It must be an address without contract code: an EIP-7702-delegated address is checked through ERC-1271 and rejected.
 
 ## 3. Strategy classes on Arc
 
-| Class | Pair | Status |
-| --- | --- | --- |
-| 1 | USDC / ARGt ("FXSwap ARS", key `0x9b16e2b3…802b`) | Legacy. Registered earlier by the core deployer with both vault legs. Not funded. See [`deployments/arc-testnet-strategies.json`](../deployments/arc-testnet-strategies.json). |
-| n/a | USDC / BRAt ("FXSwap BRL", key `0x104b36f3…dad8`) | A prepared `registerStrategyClass` transaction recorded as `prepared-not-broadcast`. Never sent. |
+| Class | Pair | Strategist | Status |
+| --- | --- | --- | --- |
+| 1 | USDC / ARGt ("FXSwap ARS", key `0x9b16e2b3…802b`) | Core deployer | Legacy. Registered earlier with both vault legs; not funded, no strategy shipped. |
+| 2 | USDC / ARS (ARGt), pegged | Demo wallet `0xAFF7…b02c` | **Live**: strategy [`0x384f3266…3c3c`](https://testnet.arcscan.app/tx/0x97d5fea443f9090f6b9dd2432036bdfbc2ed58d636e8ac802742d2e499968471) shipped with 0.5 USDC |
+| 3 | USDC / BRL (BRAt), pegged | Demo wallet `0xAFF7…b02c` | **Live**: strategy [`0x3fbcd975…716e`](https://testnet.arcscan.app/tx/0x7571eea087df535b0a4391a48d510abeb9ed0084cc3816946040c05214aa2293) shipped with 0.5 USDC |
+
+The earlier prepared "FXSwap BRL" class registration was never sent and is superseded by class 3. Records: [`deployments/arc-testnet-strategies.json`](../deployments/arc-testnet-strategies.json).
 
 Class ids are assigned at registration. The key is `keccak256(abi.encode(strategist, chainId, sorted tokens, keccak256(label)))`, so the class ids a run gets depend on the signing strategist.
 
-## 4. Two FX strategies on one USDC deposit: Fork-proven
+## 4. Two FX strategies on one USDC deposit: Live (pegged venue)
 
-Proven twice on a local fork of Arc, with real Arc bytecode and state. Only USDC is stubbed, because Arc's USDC calls native precompiles that a local fork lacks.
+On 2026-09-12 the demo wallet `0xAFF7Da673820fAA38289de8B03984A9cf20fb02c` ran the flow on Arc Testnet through the `aqua0` CLI in `MCP_WRITE_MODE=execute`. The CLI calls the same `@aqua0/shared` service functions as the MCP tools. Every hash is under `liveVenueRun` in [`deployments/arc-testnet-strategies.json`](../deployments/arc-testnet-strategies.json).
+
+| Step | Result | Tx |
+| --- | --- | --- |
+| Deposit | 2 USDC into the USDC AssetVault | [`0x088fb34b…c6bd`](https://testnet.arcscan.app/tx/0x088fb34b8147f936b7c10ac8066de4a59773f7d393f33eda64a4defeb8f6c6bd) |
+| USDC/ARS strategy | Class 2 registered, legs funded and committed, `[FlatFeeAmountIn 30 bps][PeggedSwap]` shipped with 0.5 USDC | [`0x97d5fea4…8471`](https://testnet.arcscan.app/tx/0x97d5fea443f9090f6b9dd2432036bdfbc2ed58d636e8ac802742d2e499968471) |
+| USDC/BRL strategy | Class 3, same steps, the same USDC committed | [`0x7571eea0…2293`](https://testnet.arcscan.app/tx/0x7571eea087df535b0a4391a48d510abeb9ed0084cc3816946040c05214aa2293) |
+| Swap USDC → ARGt | 0.1 USDC → 138.912644 ARGt | [`0x24d95d61…02fb`](https://testnet.arcscan.app/tx/0x24d95d61c83e3dfdf5ffa8530350635eb9c9b5f71b51835f31b98eb61c5102fb) |
+| Swap USDC → BRAt | 0.1 USDC → 0.545728 BRAt | [`0x811e5fd4…2539`](https://testnet.arcscan.app/tx/0x811e5fd474e554e7a3330f09f34edb09f40ca50475028be89c4de3e6cfd32539) |
+| Shared-backing read | 2 USDC principal counted once; 2 USDC committed to class 2 and to class 3 | on-chain reads |
+
+The same flow is repeatable on a local fork, with real Arc bytecode and state. Only USDC is stubbed, because Arc's USDC calls native precompiles that a local fork lacks.
 
 1. **Foundry path:** [`packages/contracts/script/run-arc-fx-strategies.sh`](../packages/contracts/script/run-arc-fx-strategies.sh) runs [`ArcFxStrategies.s.sol`](../packages/contracts/script/ArcFxStrategies.s.sol).
-2. **MCP service path:** [`scripts/test-arc-fork-strategies.sh`](../scripts/test-arc-fork-strategies.sh) drives `deposit`, `create_strategy` (twice), `quote_swap`, `swap` and `get_shared_backing` through the CLI, which calls the same service functions as the MCP tools, and asserts the result.
+2. **MCP service path:** [`scripts/test-arc-fork-strategies.sh`](../scripts/test-arc-fork-strategies.sh) drives `deposit`, `create_strategy` (twice), `quote_swap`, `swap` and `get_shared_backing` through the CLI and asserts the result.
 
-Each run:
+## 5. FXSwap venue: Deployed, awaiting wiring
 
-1. deposits 2 USDC once into the USDC AssetVault and commits it to two classes, USDC/ARGt and USDC/BRAt;
-2. deposits and commits each FX leg;
-3. ships a `[FlatFeeAmountIn 30 bps][PeggedSwap]` SwapVM program per class through `AquaAdapter.shipStrategyWithFee` (EIP-712 strategist signature);
-4. swaps through `AquaSwapVMRouter`: 0.1 USDC → 139.248 ARGt and 0.1 USDC → 0.547 BRAt, both settled through the vault hooks;
-5. reads back 2 USDC committed backing on both classes.
+Deployed with [`packages/contracts/script/deploy-arc-fx-venue.sh`](../packages/contracts/script/deploy-arc-fx-venue.sh), which runs [`DeployFXVenue.s.sol`](../packages/contracts/script/DeployFXVenue.s.sol) (broadcast: [`run-latest.json`](../packages/contracts/broadcast/DeployFXVenue.s.sol/5042002/run-latest.json)) and then deploys a second AquaAdapter bound to the new router, since an adapter binds exactly one router.
 
-On Arc Testnet the same flow runs once the wiring in section 2 lands (`run-arc-fx-strategies.sh` with `MODE=arc`, or the MCP in execute mode).
+| Contract | Address | Notes |
+| --- | --- | --- |
+| `AquaFXSwapVMRouter` | [`0xb54AE15d2372F27718f32e9f6990330cdD3edaEB`](https://testnet.arcscan.app/address/0xb54AE15d2372F27718f32e9f6990330cdD3edaEB) | FXSwap = opcode 34, 24,434 bytes (under EIP-170). EIP-712 name `AquaSwapVMRouter`, version `1.0.2-fx`, bound to the existing Aqua. Start block 61725474. |
+| Aqua0 `AquaAdapter`, FXSwap venue | [`0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5`](https://testnet.arcscan.app/address/0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5) | Bound to the FXSwap router. Start block 61725501. |
+| `ManualFxOracle` ARS/USD | [`0xc05A3Fb016f973C82b0232EF50336d4C0466E70C`](https://testnet.arcscan.app/address/0xc05A3Fb016f973C82b0232EF50336d4C0466E70C) | Answer 1400; owner is the demo wallet |
+| `ManualFxOracle` BRL/USD | [`0x1AE6542b9da89Ed2AEf00600710Bba75DbFF5e71`](https://testnet.arcscan.app/address/0x1AE6542b9da89Ed2AEf00600710Bba75DbFF5e71) | Answer 5.50; owner is the demo wallet |
 
-## 5. FXSwap router: Built, not yet deployed
+The feeds are Chainlink-compatible and owner-set by hand. FXSwap strategies trade at whatever they report, bounded by each strategy's price band and staleness window.
 
-[`script/DeployFXVenue.s.sol`](../packages/contracts/script/DeployFXVenue.s.sol) deploys two demo `ManualFxOracle` feeds (ARS / USD and BRL / USD, Chainlink-style) and an `AquaFXSwapVMRouter` bound to the existing Aqua.
+### Pending wiring for the FXSwap adapter
 
-- FXSwap is instruction index 34.
-- The router uses EIP-712 name `AquaSwapVMRouter` and version `1.0.2-fx`, so the AquaAdapter accepts it.
-- The runtime is 24,434 bytes, under EIP-170.
+The core admin holds `DEFAULT_ADMIN_ROLE` on the registry and `CAPITAL_ADMIN_ROLE` on the vaults. It must send these calls, or grant admin roles so the team can send them:
 
-After deployment, set `FXSWAP_ROUTER_ADDRESS` so the MCP accepts `opcode:"fxswap"`. Details are in the [README](../README.md#fxswap-in-brief).
+1. `VaultRegistry.setAdapterAllowed(0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5, true)`
+2. `grantRole(keccak256("VENUE_SETTLER_ROLE"), 0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5)` on the USDC AssetVault
+3. The same on the ARGt AssetVault
+4. The same on the BRAt AssetVault
 
-## 6. Arc subgraph manifest
+`deploy-arc-fx-venue.sh` with `MODE=arc` prints the exact calldata. With `MODE=fork` it impersonates the admin and sends the calls on a local fork. The strategist also needs `OPERATOR_ROLE` on this adapter.
+
+Until the wiring lands there are no live FXSwap strategies on Arc. The MCP's `create_strategy` then falls back to the pegged venue and explains why in `opcodeNote`. The full FXSwap flow is **Fork-proven** against these exact contracts with `FX_VENUE=deployed ./scripts/test-arc-fork-fxswap.sh`. Details are in the [README](../README.md#fxswap-in-brief).
+
+## 6. Arc subgraph
 
 Generate `subgraph.arc.yaml` from the canonical Base manifest so event coverage cannot drift:
 
@@ -118,13 +129,17 @@ PUBLIC_ARC_AQUA_ADAPTER=0xbF72D34b804636496c3308796908152b82624Ca5 \
 PUBLIC_ARC_AQUA_ADAPTER_START_BLOCK=61679229 \
 PUBLIC_ARC_AQUA_SWAPVM_ROUTER=0xb20bc70b485eC1352C190d26fCaB1959d219F763 \
 PUBLIC_ARC_AQUA_SWAPVM_ROUTER_START_BLOCK=61679223 \
+PUBLIC_ARC_FX_AQUA_ADAPTER=0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5 \
+PUBLIC_ARC_FX_AQUA_ADAPTER_START_BLOCK=61725501 \
+PUBLIC_ARC_FXSWAP_ROUTER=0xb54AE15d2372F27718f32e9f6990330cdD3edaEB \
+PUBLIC_ARC_FXSWAP_ROUTER_START_BLOCK=61725474 \
 pnpm --filter @aqua0/subgraph generate:arc
 ```
 
 | Scope | Status |
 | --- | --- |
-| Vault core: VaultFactory, VaultRegistry, Composer, FillerRegistry, AssetVault template | **Live** on a self-hosted Graph Node |
-| Aqua venue: AquaAdapter strategies and router `Swapped` fills (`AquaStrategy`, `AquaOrder`, `AquaFill`, per-LP fill stats); router data source is Arc-only | **Built, not yet deployed** |
-| Subgraph Studio publishing (`NETWORK=arc ./scripts/deploy-graph-studio.sh`) | **In progress**, needs the team's Studio key |
+| Subgraph Studio: [`aqua-0-ethglobal-arc-testnet`](https://thegraph.com/studio/subgraph/aqua-0-ethglobal-arc-testnet), query endpoint `https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/version/latest`, `_meta.hasIndexingErrors = false` | **Live** (earlier schema; deployed by Rithik) |
+| Both Aqua venues: `AquaStrategy`, `AquaOrder`, `AquaFill` with a `venue` label (`pegged` / `fxswap`), per-LP fill stats | **Built, not yet deployed** (Studio redeploy from this branch pending) |
+| Self-hosted Graph Node through the Arc RPC proxy | Development fallback |
 
-See [`packages/subgraph/README.md`](../packages/subgraph/README.md) and [`THE_GRAPH_TRACK.md`](THE_GRAPH_TRACK.md).
+Deploy with `./scripts/deploy-graph-studio.sh` (defaults to Arc; credentials from the gitignored `.secrets/graph-studio.env`). See [`packages/subgraph/README.md`](../packages/subgraph/README.md) and [`THE_GRAPH_TRACK.md`](THE_GRAPH_TRACK.md).

@@ -8,8 +8,8 @@ For prize-by-prize criteria and checklists, see [README: Prize tracks](../README
 
 | Circle / Arc product | Used? | How |
 | --- | --- | --- |
-| Arc (chain `5042002`) | Yes | Aqua0 vault core and three AssetVaults **Live**. 1inch Aqua, AquaSwapVMRouter and the Aqua0 AquaAdapter **Deployed, awaiting wiring**. See [`ARC_DEPLOYMENT.md`](ARC_DEPLOYMENT.md). |
-| USDC | Yes | Arc's native USDC (ERC-20 interface `0x3600…0000`, 6 dp) is the shared quote asset. One USDC deposit backs several FX strategies at once: **Fork-proven**. |
+| Arc (chain `5042002`) | Yes | The Aqua0 vault core, three AssetVaults and the pegged 1inch Aqua venue are **Live**, with two strategies shipped and filled. The FXSwap venue is **Deployed, awaiting wiring**. See [`ARC_DEPLOYMENT.md`](ARC_DEPLOYMENT.md). |
+| USDC | Yes | Arc's native USDC (ERC-20 interface `0x3600…0000`, 6 dp) is the shared quote asset. One 2 USDC deposit backs a USDC/ARS and a USDC/BRL strategy at once: **Live**. |
 | App Kits, Circle Wallets, Circle Contracts, CCTP, Gateway, StableFX | Not yet | **Planned**, see below |
 | Agent Stack, Nanopayments, Paymaster | Not yet | **Planned**, see below |
 
@@ -20,10 +20,10 @@ Arc is testnet-only for Aqua0 today.
 | Requirement | Evidence | Status |
 | --- | --- | --- |
 | Functional MVP: frontend | Judge dashboard at `https://ethglobal-demo.18-207-103-187.nip.io/` ([`apps/dashboard`](../apps/dashboard)): Arc vault cards, live Graph health, indexed data, strategy classes, ARS/BRL presets, prepare-only strategy calldata. The primary interface is the agentic terminal via MCP. | **Live** (read-only and prepare-only) |
-| Functional MVP: backend | Dashboard Node API, MCP server ([`apps/mcp`](../apps/mcp)), typed service ([`packages/shared`](../packages/shared)), subgraph, Arc contracts | **Live**; venue **Deployed, awaiting wiring** |
+| Functional MVP: backend | Dashboard Node API, MCP server ([`apps/mcp`](../apps/mcp)), typed service ([`packages/shared`](../packages/shared)), subgraph on Subgraph Studio, Arc contracts | **Live**; FXSwap venue **Deployed, awaiting wiring** |
 | Architecture diagram | [README: How it works](../README.md#how-it-works), [`ARCHITECTURE.md`](ARCHITECTURE.md) | **Live** |
 | Video demo of core functions and use of Circle developer tools | Link added at submission | **In progress** |
-| Detailed documentation | README and `docs/` | **Live** |
+| Detailed documentation | README, `docs/`, [`skills/aqua0/SKILL.md`](../skills/aqua0/SKILL.md) | **Live** |
 | GitHub repository | `https://github.com/Aqua0-fi/aqua0-ethglobal` | **Live** |
 | Arc Mainnet deployment (mainnet-conditional share of each prize) | Not deployed | **Planned** |
 
@@ -33,7 +33,7 @@ Arc is testnet-only for Aqua0 today.
 flowchart LR
   D["Judge browser dashboard"] --> API["TypeScript Node HTTP API"]
   API --> S["@aqua0/shared service"]
-  S -->|"GraphQL analytics"| G["The Graph: Arc Aqua0 vault subgraph"]
+  S -->|"GraphQL analytics"| G["The Graph: Arc subgraph on Subgraph Studio"]
   G --> A["Arc Testnet Aqua0 vault contracts"]
   API -->|"prepare-only: classForStrategy read and calldata"| R["Arc Testnet RPC"]
   R --> A
@@ -56,8 +56,10 @@ The dashboard backend has no execute endpoint and never reads `WRITE_PRIVATE_KEY
 
 ## Agent transactions on Arc
 
-A local MCP started with `MCP_WRITE_MODE=execute` sends `deposit`, `create_strategy` and `swap` transactions itself. This is limited to Arc Testnet or a local fork, and the path is **Fork-proven** by [`scripts/test-arc-fork-strategies.sh`](../scripts/test-arc-fork-strategies.sh).
+A local MCP or CLI started with `MCP_WRITE_MODE=execute` sends `deposit`, `create_strategy` and `swap` transactions itself, and `set_fx_price` when the signer owns the feed. This is limited to Arc Testnet or a local fork.
 
+- **Live on Arc Testnet:** the demo wallet ran deposit → two pegged strategies → one swap each → shared-backing read through the `aqua0` CLI, which calls the same service functions as the MCP tools. Hashes: [`deployments/arc-testnet-strategies.json`](../deployments/arc-testnet-strategies.json).
+- **Fork-proven:** the FXSwap flow, including a feed move and re-quote ([`scripts/test-arc-fork-fxswap.sh`](../scripts/test-arc-fork-fxswap.sh)).
 - The signer is a locally configured key (`WRITE_PRIVATE_KEY`), not a Circle wallet.
 - The agent acts on user instructions; it is not an autonomous agent.
 - The public endpoint is prepare-only and holds no key.
@@ -65,7 +67,7 @@ A local MCP started with `MCP_WRITE_MODE=execute` sends `deposit`, `create_strat
 ## Run
 
 ```bash
-GRAPH_ENDPOINT=https://your-subgraph-endpoint \
+GRAPH_ENDPOINT=https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/version/latest \
 WRITE_RPC_URL=https://rpc.testnet.arc.network \
 WRITE_CHAIN_ID=5042002 \
 VAULT_REGISTRY_ADDRESS=0x9E094b21C4263e0BE5BEffa0f8296B3fd982fFFf \
