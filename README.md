@@ -354,7 +354,7 @@ retained by the pool:    s = ψ' − ω         if the fee grows (the taker pays
 - **Balances** are scaled to 18 decimals (`rate = 10^(18 − decimals)`) and valued in USDC at the oracle price, so the curve sits at the live FX rate.
 - **Solver.** Multiplying by `g + s` makes `s` a quadratic in each piece (each asset's regime, and `c` = 1 or `λ`), solved exactly instead of DFX's 32-step iteration. Inside the band `s = 0` and the price is the oracle. Rounding always favours the maker.
 - **Halt and invariant.** As in DFX: a balance may end beyond `±α` of the new ideal only if it already was and the excursion does not grow, and the utility `g − ψ` may not drop.
-- **Fee bound.** The args builder requires `maxFee < min(1/2, (1 − α)/(2α))`, so each quote has one solution and a trade the size of the book cannot clear. `δ` is capped only by its `uint64` field (about 18.45).
+- **Fee bound.** `maxFee` must be below 0.5 (so each quote has one solution). `δ` is capped only by its `uint64` field (about 18.45).
 - **Fee.** `ε` applies to the output (exact in) or the input (exact out). The strategy declares it to the adapter as `feePpb`; no SwapVM flat fee is stacked on it.
 - **Oracle kind.** Only `0`, a Chainlink-style `latestRoundData` feed: the RedStone BRL feed, or the ARS `ManualFxOracle`. RedStone needs no new kind, because the signed price is pushed before the swap.
 
@@ -394,7 +394,7 @@ Big-endian and packed. Source: [`ForexCurve.sol`](packages/contracts/src/instruc
 | 59 | 8 | `alpha` | Halt band, WAD, `0 < α < 1` |
 | 67 | 8 | `beta` | Flat band half-width, WAD, `0 ≤ β < α` |
 | 75 | 8 | `delta` | Inventory fee slope, WAD |
-| 83 | 8 | `maxFee` | Inventory fee cap, WAD, `< min(1/2, (1 − α)/(2α))` |
+| 83 | 8 | `maxFee` | Inventory fee cap, WAD, must be below 0.5 (so each quote has one solution) |
 | 91 | 8 | `lambda` | Share of a shrinking fee returned to the taker, WAD, `≤ 1` |
 | 99 | 8 | `epsilon` | Proportional fee, WAD, `< 0.1` |
 | 107 | 8 | `rateLt` | Decimals multiplier of the lower-address token |

@@ -69,9 +69,8 @@ opcodes are no-ops so the router fits EIP-170 (24,553 bytes).
 Each swap reads the feed the program names, rejects a stale or out-of-band answer and values both Aqua balances in
 the quote token. Inside the flat band `beta` the price is the oracle; past it an inventory fee applies (slope
 `delta`, capped at `maxFee`), and a share `lambda` of a shrinking fee goes back to the taker. A swap that pushes the
-book past the halt band `alpha` reverts. `epsilon` is a proportional fee on every swap. The args builder requires
-`maxFee < min(1/2, (1 - alpha)/(2 alpha))`, so each quote has one solution and a trade the size of the book cannot
-clear; `delta` is capped only by its `uint64` field (about 18.45).
+book past the halt band `alpha` reverts. `epsilon` is a proportional fee on every swap. `maxFee` must be below 0.5
+(so each quote has one solution); `delta` is capped only by its `uint64` field (about 18.45).
 
 ```bash
 # Local fork: deploy the router and adapter, wire the adapter as the impersonated core admin
