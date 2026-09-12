@@ -28,12 +28,13 @@ claude mcp add aqua0 \
   -- node <repo>/apps/mcp/dist/index.js
 ```
 
-Codex takes the same variables with `codex mcp add aqua0 --env KEY=value ... -- node <repo>/apps/mcp/dist/index.js`. `GRAPH_ENDPOINT` is required or the server will not start. The venue and feed addresses default to the Arc deployment. Override them only for a fork with `AQUA_ADAPTER_ADDRESS`, `AQUA_SWAPVM_ROUTER_ADDRESS`, `FXSWAP_ROUTER_ADDRESS`, `FXSWAP_AQUA_ADAPTER_ADDRESS`, `FX_ORACLE_ARS_USD` and `FX_ORACLE_BRL_USD`. To send transactions, the person running the server sets `MCP_WRITE_MODE=execute` and `WRITE_PRIVATE_KEY` in the server's environment. To sign with a Circle developer-controlled wallet instead, they set `SIGNER=circle`, `CIRCLE_API_KEY`, `CIRCLE_ENTITY_SECRET`, and either `CIRCLE_WALLET_ID` or `CIRCLE_WALLET_SET_ID` plus `CIRCLE_USER_REF`. With a user ref, the server signs with that user's Arc Testnet EOA and creates it on first use. See Safety.
+Codex takes the same variables with `codex mcp add aqua0 --env KEY=value ... -- node <repo>/apps/mcp/dist/index.js`. `GRAPH_ENDPOINT` is required or the server will not start. The venue and feed addresses default to the Arc deployment. Override them only for a fork with `AQUA_ADAPTER_ADDRESS`, `AQUA_SWAPVM_ROUTER_ADDRESS`, `FXSWAP_ROUTER_ADDRESS`, `FXSWAP_AQUA_ADAPTER_ADDRESS`, `FX_ORACLE_ARS_USD` and `FX_ORACLE_BRL_USD`. To send transactions, the person running the server sets `MCP_WRITE_MODE=execute` and `WRITE_PRIVATE_KEY` in the server's environment. To sign with a Circle developer-controlled wallet instead, they set `SIGNER=circle`, `CIRCLE_API_KEY`, `CIRCLE_ENTITY_SECRET`, and either `CIRCLE_WALLET_ID` or `CIRCLE_WALLET_SET_ID` plus `CIRCLE_USER_REF`. With a user ref, the server signs with that user's Arc Testnet EOA and creates it on first use. With `PRIVY_APP_ID` (and `CIRCLE_WALLET_SET_ID`, no fixed wallet), the user signs in instead: `login` returns a localhost URL, and the Privy user id becomes the user ref. With `CIRCLE_OPERATOR_WALLET_ID`, a shared operator sends the strategy ships the user signs and tops up a new wallet with testnet USDC, so a new user needs no role. See Safety.
 
 ## Tool map
 
 | Job | Call in this order | Source and notes |
 | --- | --- | --- |
+| Sign in and get a wallet | `login` → give the user the URL → `whoami` once they say they're done | Local server only. Report `signer.address` (their Circle wallet on Arc Testnet) and `funding` from the login result if shown. `logout` forgets the sign-in. |
 | Check capital and backing | `health` → `get_balance {address}` → `get_shared_backing {address}` | `health` and `get_balance` read The Graph. `get_shared_backing` reads the chain and lists the principal counted once, each committed class, and the strategies on both venues. |
 | Create an FX strategy | `deposit {token:"USDC", amount}` (if no principal) → `create_strategy {pair, opcode?, params?}` | Idempotent: finished steps come back as `skipped`. Read `opcodeNote` and `live` in the response. |
 | Quote and swap | `quote_swap {pair, amount}` → confirm with the user → `swap {pair, amount, slippageBps?}` | `swap` re-quotes and enforces a minimum output on-chain. Report `pricing.oraclePrice` (or `fixedPrice`), `executionPrice` and `effectiveSpreadBps`. |
@@ -47,6 +48,8 @@ Codex takes the same variables with `codex mcp add aqua0 --env KEY=value ... -- 
 
 | User says | Call |
 | --- | --- |
+| "log me in" / "connect my wallet" | `login {}`, share the URL, then `whoami {}` |
+| "which wallet am i using" | `whoami {}` |
 | "whats in aqua0 on arc rn" | `health {}`, then `protocol_snapshot {}` |
 | "how much usdc do i have in there? 0xAFF7Da673820fAA38289de8B03984A9cf20fb02c" | `get_balance {"address":"0xAFF7Da673820fAA38289de8B03984A9cf20fb02c"}` |
 | "is my money backing both the peso and real pools??" | `get_shared_backing {}` (the signer), or pass `address` |

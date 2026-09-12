@@ -64,6 +64,8 @@ Environment:
   CIRCLE_WALLET_ID             Circle ARC-TESTNET EOA wallet to sign with
   CIRCLE_WALLET_SET_ID         Without a wallet id: wallet set holding one wallet per user ref
   CIRCLE_USER_REF              Without a wallet id: refId of the user's wallet, created on first use
+  CIRCLE_OPERATOR_WALLET_ID    Shared Circle operator wallet (OPERATOR_ROLE): sends ships users sign, tops up new users
+  AQUA0_ONBOARD_USDC           Testnet USDC sent to a signed-in wallet holding under 1 USDC, default 5 (0 disables)
   PRIVY_APP_ID                 Privy app for login (SIGNER=circle with CIRCLE_WALLET_SET_ID; the Privy user id is the refId)
   PRIVY_CLIENT_ID              Optional Privy app client for the sign-in page (e.g. one allowing localhost)
   PRIVY_LOGIN_PORT             Local sign-in page port, default 8787 (allow http://localhost:<port> in Privy)

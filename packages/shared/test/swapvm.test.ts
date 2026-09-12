@@ -46,6 +46,8 @@ import {
   parseTokenAmount,
   resolvePair,
   resolveToken,
+  buildSaltInstruction,
+  strategySalt,
   type FxSwapArgs
 } from "../src/swapvm.js";
 
@@ -431,6 +433,33 @@ test("FXSwap on a USD-per-FX feed (RedStone BRL) flips the price flag and states
     () => buildFxSwapStrategySpec(FX_ADAPTER, pair, BRL_FEED, { minPrice: 1, maxPrice: 0.5, fxAmount: 1 }, { feedQuote: "usdPerFx" }),
     /USD per BRL is invalid/
   );
+});
+
+test("a per-strategist Salt keeps two users' identical strategies on separate ids", () => {
+  const pair = resolvePair("USDC/BRL");
+  const saltA = strategySalt(keccak256(toBytes("strategist A class")));
+  const saltB = strategySalt(keccak256(toBytes("strategist B class")));
+  assert.equal(saltA.length, 18);
+
+  const plain = buildPeggedStrategySpec(ADAPTER, pair, {});
+  const a = buildPeggedStrategySpec(ADAPTER, pair, {}, { salt: saltA });
+  const b = buildPeggedStrategySpec(ADAPTER, pair, {}, { salt: saltB });
+  assert.notEqual(a.strategyId, b.strategyId);
+  assert.notEqual(a.strategyId, plain.strategyId);
+  assert.equal(a.program, `${buildSaltInstruction(saltA)}${plain.program.slice(2)}`);
+  assert.deepEqual(
+    decodeSwapVMProgram(a.program).map((instruction) => instruction.name),
+    ["Salt", "FlatFeeAmountIn", "PeggedSwap"]
+  );
+  assert.equal(a.amounts[0], plain.amounts[0]);
+
+  const fx = buildFxSwapStrategySpec(FX_ADAPTER, pair, BRL_FEED, { flatFeeBps: 30 }, { oraclePriceWad: 55n * 10n ** 17n, salt: saltA });
+  assert.deepEqual(
+    decodeSwapVMProgram(fx.program).map((instruction) => instruction.name),
+    ["Salt", "FlatFeeAmountIn", "FXSwap"]
+  );
+  assert.equal(fx.salt, saltA);
+  assert.throws(() => buildSaltInstruction("0x"), /1 to 255 bytes/);
 });
 
 test("FXSwap validation mirrors FXSwapArgsBuilder.validate, and params are checked per opcode", () => {

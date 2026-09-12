@@ -16,7 +16,9 @@ import {
   readFxPrices,
   readSharedBacking,
   resolveToolWriteMode,
+  topUpUserUsdc,
   type CreateFxStrategyInput,
+  type OnboardingFunding,
   type FxDepositInput,
   type FxPricesInput,
   type FxSwapInput,
@@ -220,6 +222,8 @@ export type LoginResult = {
   walletAddress: Lowercase<string> | null;
   blockchain: typeof CIRCLE_BLOCKCHAIN;
   sessionFile: string;
+  /** Testnet USDC the Aqua0 operator sent so a new wallet can pay gas and deposit right away. */
+  funding: OnboardingFunding;
 };
 
 type PendingLogin = {
@@ -401,11 +405,19 @@ export class Aqua0Service {
           },
           config.aqua0SessionFile
         );
+        // A top-up failure never fails the sign-in; it is reported instead.
+        const funding: OnboardingFunding = walletAddress
+          ? await topUpUserUsdc(config, walletAddress).catch((error: unknown) => ({
+              status: "failed" as const,
+              note: error instanceof Error ? error.message : String(error)
+            }))
+          : { status: "skipped", note: "no wallet address" };
         return {
           privyUserId: identity.did,
           walletAddress: walletAddress ?? null,
           blockchain: CIRCLE_BLOCKCHAIN,
-          sessionFile: sessionFilePath(config.aqua0SessionFile)
+          sessionFile: sessionFilePath(config.aqua0SessionFile),
+          funding
         };
       }
     });

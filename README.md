@@ -477,7 +477,8 @@ Aqua0 is registered in the **Continuity** track. We target Arc, 1inch and The Gr
 **How Aqua0 delivers**
 - [x] **Agent tooling transacts on Arc.** With `MCP_WRITE_MODE=execute`, `deposit`, `create_strategy` and `swap` send transactions, restricted to Arc Testnet or a local fork. The live Arc run used the `aqua0` CLI in execute mode, which calls the same service functions. The public endpoint is prepare-only. [Execute mode](#connect-the-mcp) · **Live**
 - [x] **Decisions tied to real signals.** Indexed vault capital and commitments, `classForStrategy`, venue readiness, and an on-chain quote before every swap with an enforced minimum output. FXSwap adds signed RedStone prices and oracle staleness and band checks. · **Live** (Graph signals, quote and min-out), **Fork-proven** (FXSwap oracle checks)
-- [ ] **Agent-held wallet via Circle Wallets or Agent Stack.** Execution uses a locally configured key, and the agent acts on user instructions rather than autonomously. · **Planned**
+- [x] **Circle Wallets for the agent's user.** A person signs in with Privy from the terminal (`login`), gets a Circle developer-controlled wallet on Arc, and the agent then deposits, creates strategies and swaps through Circle's API. A shared Aqua0 operator wallet sends the strategies the user signs and tops up new wallets with testnet USDC, so no per-user role is needed. [Sign in](#sign-in-with-privy-trade-with-a-circle-wallet) · **Live** (tx hashes in [`arc-testnet-strategies.json`](deployments/arc-testnet-strategies.json) `circleSignInRun`)
+- [ ] **Agent Stack and autonomy.** The agent acts on user instructions, not autonomously, and does not use Agent Stack. · **Planned**
 - [ ] **Nanopayments, Paymaster or App Kits.** Candidates: per-quote USDC nanopayments and sponsored LP transactions. · **Planned**
 
 > [!WARNING]
@@ -581,13 +582,37 @@ Create a USDC/BRL FXSwap strategy as a dry run and walk me through each step.
 
 `set_fx_price` moves only the ARS/USD feed, and only sends in execute mode when the signer owns it; otherwise it returns the prepared call. It refuses the RedStone BRL feed. Until the FXSwap adapter is wired, there are no live FXSwap strategies on Arc, so FXSwap quotes and swaps are shown on a fork ([`test-arc-fork-fxswap.sh`](scripts/test-arc-fork-fxswap.sh)).
 
+### Sign in with Privy, trade with a Circle wallet
+
+A local MCP (or `aqua0 login`) can act for a signed-in person without holding their key:
+
+1. The agent calls `login`, which opens `http://localhost:8787/login`. The user signs in with any method the Privy app enables: email, Google, a wallet.
+2. The server verifies the Privy access token against Privy's public keys (no app secret) and uses the Privy user id as the `refId` of a **Circle developer-controlled EOA on Arc Testnet**: created on first sign-in, reused after. Only the user id and wallet address are saved (`~/.aqua0/session.json`, mode 600).
+3. A shared **Aqua0 operator wallet** (a Circle EOA holding `OPERATOR_ROLE`) tops up a new wallet holding under 1 USDC with testnet USDC, so it can pay gas (USDC on Arc) and deposit.
+4. From then on `deposit`, `create_strategy` and `swap` run as that user. The user's wallet signs the strategy (EIP-712); the adapter authorizes a ship by that signature, so the operator only sends it. No per-user role is needed.
+
+```bash
+claude mcp add aqua0 \
+  -e GRAPH_ENDPOINT=https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/version/latest \
+  -e WRITE_RPC_URL=https://rpc.testnet.arc.network -e WRITE_CHAIN_ID=5042002 -e MCP_WRITE_MODE=execute \
+  -e SIGNER=circle -e CIRCLE_API_KEY=... -e CIRCLE_ENTITY_SECRET=... \
+  -e CIRCLE_WALLET_SET_ID=... -e CIRCLE_OPERATOR_WALLET_ID=... \
+  -e PRIVY_APP_ID=... -e PRIVY_CLIENT_ID=... \
+  -- node <repo>/apps/mcp/dist/index.js
+```
+
+Then: *"Log me in to Aqua0"* → *"Deposit 2 USDC"* → *"Create a USDC/BRL strategy"* → *"Swap 0.1 USDC to BRL"*. Allow `http://localhost:8787` on the Privy app client you use. `whoami` shows the signed-in user and wallet; `logout` forgets the session.
+
+> [!IMPORTANT]
+> Local sign-in chooses which Circle wallet the server signs with. It is not isolation between users: whoever runs the server holds the Circle API key and entity secret. Per-user isolation needs a hosted server that keeps those secrets.
+
 <details>
 <summary><b>Execute mode, Codex HTTP config, stdio-only clients, CLI</b></summary>
 
 **Execute mode** sends transactions itself. It needs:
 - `MCP_WRITE_MODE=execute`;
-- `WRITE_PRIVATE_KEY` for an address **without contract code**: an EIP-7702-delegated address is checked through ERC-1271 and rejected;
-- `OPERATOR_ROLE` for that address on the AquaAdapter it ships through;
+- `WRITE_PRIVATE_KEY` (or `SIGNER=circle`, see [sign-in](#sign-in-with-privy-trade-with-a-circle-wallet)) for an address **without contract code**: an EIP-7702-delegated address is checked through ERC-1271 and rejected;
+- to ship strategies, `OPERATOR_ROLE` on the AquaAdapter for that address, or a `CIRCLE_OPERATOR_WALLET_ID` operator that holds it and sends the ships the signer signs;
 - for `set_fx_price`, the signer must be the ARS/USD feed owner, or nothing is sent.
 
 The guard only allows Arc Testnet (`5042002`) or a local fork URL, refuses Ethereum and Base mainnet, and fails on reverted receipts. `dryRun: true` always returns calldata instead of sending.
@@ -812,6 +837,10 @@ Source: [`apps/mcp/src/index.ts`](apps/mcp/src/index.ts). Graph reads return raw
 | `CIRCLE_API_KEY`, `CIRCLE_ENTITY_SECRET` | Secrets for `SIGNER=circle` (`ENTITY_SECRET` is also accepted); never logged or returned |
 | `CIRCLE_WALLET_ID` | Circle `ARC-TESTNET` EOA wallet to sign with; takes precedence over the lookup below |
 | `CIRCLE_WALLET_SET_ID`, `CIRCLE_USER_REF` | Without a wallet id: sign with the wallet in the set whose `refId` is the user ref, creating an EOA on first use |
+| `CIRCLE_OPERATOR_WALLET_ID` | Shared Circle operator EOA holding `OPERATOR_ROLE`: sends the strategy ships users sign and tops up new users |
+| `AQUA0_ONBOARD_USDC` | Testnet USDC the operator sends a signed-in wallet holding under 1 USDC; default `5`, `0` disables |
+| `PRIVY_APP_ID`, `PRIVY_CLIENT_ID` | Privy app (and optional app client) for `login`; public values. The Privy user id becomes `CIRCLE_USER_REF` |
+| `PRIVY_LOGIN_PORT`, `AQUA0_SESSION_FILE` | Local sign-in page port (default `8787`, allow `http://localhost:<port>` in Privy) and saved sign-in (default `~/.aqua0/session.json`) |
 | `MCP_TRANSPORT`, `HOST`, `PORT` | `stdio` (default) or `http`, and HTTP bind settings |
 
 See [`.env.example`](.env.example); `pnpm check-env` validates it.

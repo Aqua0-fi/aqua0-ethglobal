@@ -50,6 +50,7 @@ export type SwapVMOrder = {
 
 export const SWAPVM = {
   /** AquaSwapVMRouter v1.0.2 `AquaOpcodes` dispatch indices. */
+  opcodeSalt: 20,
   opcodeFlatFeeIn: 21,
   opcodePeggedSwap: 31,
   /** useAquaInsteadOfSignature | postTransferIn hook | preTransferOut hook: what AquaAdapter accepts. */
@@ -320,6 +321,8 @@ export function buildPeggedProgram(input: {
   priceE2: bigint;
   feePpb: number;
   linearWidth: bigint;
+  /** Optional `[Salt]` prefix (see `buildSaltInstruction`). */
+  salt?: Hex | undefined;
 }): Hex {
   const scaledPrice = input.priceE2 * decimalScale(input.pair);
   if (scaledPrice % 100n !== 0n) {
@@ -341,10 +344,29 @@ export function buildPeggedProgram(input: {
     ],
     [x0, y0, input.linearWidth, rateLt, rateGt]
   );
-  return encodePacked(
+  const program = encodePacked(
     ["uint8", "uint8", "uint32", "uint8", "uint8", "bytes"],
     [SWAPVM.opcodeFlatFeeIn, 4, input.feePpb, SWAPVM.opcodePeggedSwap, 160, peggedArgs]
   );
+  return input.salt ? concat([buildSaltInstruction(input.salt), program]) : program;
+}
+
+/**
+ * `[Salt(salt)]`: SwapVM's no-op instruction (`Controls._salt`, index 20 on both routers). A strategy id is the hash of
+ * its program, so two strategists choosing the same parameters would otherwise share one id; a salt makes each
+ * strategist's program, and so its id, their own.
+ */
+export function buildSaltInstruction(salt: Hex): Hex {
+  const length = (salt.length - 2) / 2;
+  if (!/^0x[0-9a-fA-F]*$/.test(salt) || !Number.isInteger(length) || length < 1 || length > 255) {
+    throw new Error("salt must be 1 to 255 bytes of hex");
+  }
+  return encodePacked(["uint8", "uint8", "bytes"], [SWAPVM.opcodeSalt, length, salt]);
+}
+
+/** 8-byte program salt for a strategy class: the first 8 bytes of its key (strategist, chain, tokens, label). */
+export function strategySalt(strategyKey: Hex): Hex {
+  return strategyKey.slice(0, 18) as Hex;
 }
 
 const ORDER_PARAMETERS = [
@@ -425,6 +447,8 @@ export type PeggedStrategySpec = {
   usdcShip: bigint;
   fxShip: bigint;
   linearWidth: bigint;
+  /** Per-strategist program salt, when set. */
+  salt?: Hex;
   program: Hex;
   order: SwapVMOrder;
   strategyBytes: Hex;
@@ -436,7 +460,8 @@ export type PeggedStrategySpec = {
 export function buildPeggedStrategySpec(
   adapter: string,
   pair: FxPair,
-  params: StrategyParamsInput = {}
+  params: StrategyParamsInput = {},
+  options: { salt?: Hex | undefined } = {}
 ): PeggedStrategySpec {
   assertParamsFor("pegged", params);
   const priceE2 = parsePriceE2(params, pair.fx);
@@ -473,7 +498,8 @@ export function buildPeggedStrategySpec(
     fxReserve: fxShip,
     priceE2,
     feePpb,
-    linearWidth
+    linearWidth,
+    salt: options.salt
   });
   const order = buildAquaOrder(adapter, program);
   const strategyBytes = encodeSwapVMOrder(order);
@@ -486,6 +512,7 @@ export function buildPeggedStrategySpec(
     usdcShip,
     fxShip,
     linearWidth,
+    ...(options.salt ? { salt: options.salt } : {}),
     program,
     order,
     strategyBytes,
@@ -731,7 +758,12 @@ export function fxSwapOrientation(
 }
 
 /** `[FlatFeeAmountIn(flatFeePpb)]` (only when flatFeePpb > 0) followed by `[FXSwap(args)]`. */
-export function buildFxSwapProgram(input: { args: FxSwapArgs; flatFeePpb?: number | undefined }): Hex {
+export function buildFxSwapProgram(input: {
+  args: FxSwapArgs;
+  flatFeePpb?: number | undefined;
+  /** Optional `[Salt]` prefix (see `buildSaltInstruction`). */
+  salt?: Hex | undefined;
+}): Hex {
   const fxSwap = encodePacked(
     ["uint8", "uint8", "bytes"],
     [FXSWAP.opcode, FXSWAP.argsLength, encodeFxSwapArgs(input.args)]
@@ -740,16 +772,16 @@ export function buildFxSwapProgram(input: { args: FxSwapArgs; flatFeePpb?: numbe
   if (!Number.isInteger(flatFeePpb) || flatFeePpb < 0 || flatFeePpb >= SWAPVM.feeDenominatorPpb) {
     throw new Error(`flat fee of ${flatFeePpb} ppb must be an integer below 1,000,000,000 ppb (100%)`);
   }
-  if (flatFeePpb === 0) {
-    return fxSwap;
-  }
-  return concat([
-    encodePacked(["uint8", "uint8", "uint32"], [SWAPVM.opcodeFlatFeeIn, 4, flatFeePpb]),
+  const parts: Hex[] = [
+    ...(input.salt ? [buildSaltInstruction(input.salt)] : []),
+    ...(flatFeePpb === 0 ? [] : [encodePacked(["uint8", "uint8", "uint32"], [SWAPVM.opcodeFlatFeeIn, 4, flatFeePpb])]),
     fxSwap
-  ]);
+  ];
+  return parts.length === 1 ? fxSwap : concat(parts);
 }
 
 export type DecodedInstruction =
+  | { opcode: 20; name: "Salt"; salt: Hex }
   | { opcode: 21; name: "FlatFeeAmountIn"; feePpb: number }
   | {
       opcode: 31;
@@ -780,7 +812,9 @@ export function decodeSwapVMProgram(program: Hex): DecodedInstruction[] {
     }
     cursor += 4 + length * 2;
     const args = `0x${body}` as Hex;
-    if (opcode === SWAPVM.opcodeFlatFeeIn && length === 4) {
+    if (opcode === SWAPVM.opcodeSalt) {
+      instructions.push({ opcode, name: "Salt", salt: args });
+    } else if (opcode === SWAPVM.opcodeFlatFeeIn && length === 4) {
       instructions.push({ opcode, name: "FlatFeeAmountIn", feePpb: Number(BigInt(args)) });
     } else if (opcode === SWAPVM.opcodePeggedSwap && length === 160) {
       const [x0, y0, linearWidth, rateLt, rateGt] = decodeAbiParameters(
@@ -875,6 +909,8 @@ export type FxSwapStrategySpec = {
   oracle: Lowercase<string>;
   /** What the feed answer means; `minPrice`/`maxPrice` are in this orientation. */
   feedQuote: FxFeedQuote;
+  /** Per-strategist program salt, when set. */
+  salt?: Hex;
   args: FxSwapArgs;
   band: { source: "default" | "explicit" | "bandPercent"; minPrice: bigint; maxPrice: bigint };
   flatFeePpb: number;
@@ -907,7 +943,7 @@ export function buildFxSwapStrategySpec(
   pair: FxPair,
   oracle: string,
   params: StrategyParamsInput = {},
-  context: { oraclePriceWad?: bigint | undefined; feedQuote?: FxFeedQuote | undefined } = {}
+  context: { oraclePriceWad?: bigint | undefined; feedQuote?: FxFeedQuote | undefined; salt?: Hex | undefined } = {}
 ): FxSwapStrategySpec {
   assertParamsFor("fxswap", params);
   const feedQuote = context.feedQuote ?? "fxPerUsd";
@@ -967,7 +1003,7 @@ export function buildFxSwapStrategySpec(
     rateLt: orientation.rateLt,
     rateGt: orientation.rateGt
   };
-  const program = buildFxSwapProgram({ args, flatFeePpb });
+  const program = buildFxSwapProgram({ args, flatFeePpb, salt: context.salt });
 
   const unit = params.amountUnit ?? "human";
   const usdcShip =
@@ -1002,6 +1038,7 @@ export function buildFxSwapStrategySpec(
     label,
     oracle: normalizeAddress(oracle),
     feedQuote,
+    ...(context.salt ? { salt: context.salt } : {}),
     args,
     band,
     flatFeePpb,

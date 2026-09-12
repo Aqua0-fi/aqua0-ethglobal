@@ -10,7 +10,8 @@ For prize-by-prize criteria and checklists, see [README: Prize tracks](../README
 | --- | --- | --- |
 | Arc (chain `5042002`) | Yes | The Aqua0 vault core, three AssetVaults and the pegged 1inch Aqua venue are **Live**, with two strategies shipped and filled. RedStone BRL and MXNe price feeds are **Live**. The FXSwap venue is **Deployed, awaiting wiring**. See [`ARC_DEPLOYMENT.md`](ARC_DEPLOYMENT.md). |
 | USDC | Yes | Arc's native USDC (ERC-20 interface `0x3600…0000`, 6 dp) is the shared quote asset. One 2 USDC deposit backs a USDC/ARS and a USDC/BRL strategy at once: **Live**. |
-| App Kits, Circle Wallets, Circle Contracts, CCTP, Gateway, StableFX | Not yet | **Planned**, see below |
+| Circle Wallets (developer-controlled) | Yes | A person signs in with Privy from the terminal (`login`) and gets a Circle EOA wallet on Arc. Deposits, strategy creation and swaps run through Circle's API; a shared Circle operator wallet sends the strategies users sign and tops up new wallets with testnet USDC: **Live**. See [Agent transactions on Arc](#agent-transactions-on-arc). |
+| App Kits, Circle Contracts, CCTP, Gateway, StableFX | Not yet | **Planned**, see below |
 | Agent Stack, Nanopayments, Paymaster | Not yet | **Planned**, see below |
 
 Arc is testnet-only for Aqua0 today.
@@ -69,7 +70,8 @@ A local MCP or CLI started with `MCP_WRITE_MODE=execute` sends `deposit`, `creat
 
 - **Live on Arc Testnet:** the demo wallet ran deposit → two pegged strategies → one swap each → shared-backing read through the `aqua0` CLI, which calls the same service functions as the MCP tools. Hashes: [`deployments/arc-testnet-strategies.json`](../deployments/arc-testnet-strategies.json).
 - **Fork-proven:** the FXSwap flow, including a RedStone price push before the USDC/BRL swap and an ARS feed move and re-quote ([`scripts/test-arc-fork-fxswap.sh`](../scripts/test-arc-fork-fxswap.sh)).
-- The live run signed with a locally configured key (`WRITE_PRIVATE_KEY`). `SIGNER=circle` signs with a Circle developer-controlled EOA wallet instead, one per user ref. Its EIP-712 signing is checked live; no transaction has been sent from a Circle wallet yet.
+- The first live run signed with a locally configured key (`WRITE_PRIVATE_KEY`). `SIGNER=circle` signs with a Circle developer-controlled EOA wallet instead, one per user.
+- **Live on Arc Testnet, Circle wallets:** a person signed in with Privy (`aqua0 login`), which created their Circle wallet `0x34f9…450f`. The Aqua0 operator wallet `0xcdbd…d404` topped it up with 5 testnet USDC. With no role of its own, the wallet then deposited 2 USDC, created a USDC/BRL strategy (it signed the ship, the operator sent it, tx `0xea960df6…4c8b1a`) and swapped 0.1 USDC → 0.547 BRAt against it (tx `0x586c0105…3b49e4`). Every transaction went through Circle's API.
 - The agent acts on user instructions; it is not an autonomous agent.
 - The public endpoint is prepare-only and holds no key.
 

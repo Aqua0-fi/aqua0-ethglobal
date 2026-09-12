@@ -53,6 +53,14 @@ export type WriteConfig = {
   circleUserRef?: string;
   /** Pre-built Circle client (tests, embedding); otherwise built from circleApiKey and circleEntitySecret. */
   circleClient?: CircleWalletsApi;
+  /**
+   * Shared Circle operator wallet (an EOA holding OPERATOR_ROLE on the AquaAdapters). It sends shipStrategyWithFee
+   * for users whose own wallet lacks the role, while the user's wallet still signs the strategy, and it tops up
+   * newly signed-in users with testnet USDC.
+   */
+  circleOperatorWalletId?: string;
+  /** Testnet USDC the operator sends a signed-in user holding under 1 USDC ("0" disables). Default 5. */
+  onboardUsdc?: string;
   mcpWriteMode?: WriteMode;
   /** Aqua0 AquaAdapter (SwapVM venue). Defaults to the Arc Testnet deployment when WRITE_CHAIN_ID is Arc. */
   aquaAdapterAddress?: string;

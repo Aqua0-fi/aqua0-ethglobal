@@ -45,7 +45,7 @@ function createAqua0McpServer(config: McpConfig): McpServer {
   server.registerTool(
     "login",
     {
-      description: `Sign in to Aqua0 with Privy, using any login method the Privy app enables (email, Google, a wallet...). The user gets a Circle developer-controlled wallet on Arc Testnet: created on first sign-in, reused afterwards. Returns a localhost URL for the user to open in their browser; after they sign in, this server verifies the Privy token and signs execute-mode writes with that user's Circle wallet. The sign-in is saved, so it survives restarts until logout. Check progress with whoami.
+      description: `Sign in to Aqua0 with Privy, using any login method the Privy app enables (email, Google, a wallet...). The user gets a Circle developer-controlled wallet on Arc Testnet: created on first sign-in, reused afterwards. Returns a localhost URL for the user to open in their browser; after they sign in, this server verifies the Privy token and signs execute-mode writes with that user's Circle wallet. The sign-in is saved, so it survives restarts until logout. With CIRCLE_OPERATOR_WALLET_ID set, a new wallet holding under 1 USDC gets a small testnet USDC top-up from the Aqua0 operator, and the operator sends the strategy ships the user signs, so a new user can deposit, create strategies and swap right away without any role. Check progress with whoami.
 Local (stdio) servers only. Needs SIGNER=circle, CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET, CIRCLE_WALLET_SET_ID and PRIVY_APP_ID.
 Examples:
 - "log me in" / "connect my wallet" -> {} then show the URL, then whoami once they say they're done`,

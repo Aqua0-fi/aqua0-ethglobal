@@ -57,7 +57,14 @@ export type WriteSigner = {
 
 export type SignerEnvConfig = Pick<
   WriteConfig,
-  "signer" | "circleApiKey" | "circleEntitySecret" | "circleWalletSetId" | "circleWalletId" | "circleUserRef"
+  | "signer"
+  | "circleApiKey"
+  | "circleEntitySecret"
+  | "circleWalletSetId"
+  | "circleWalletId"
+  | "circleUserRef"
+  | "circleOperatorWalletId"
+  | "onboardUsdc"
 >;
 
 /** SIGNER and the CIRCLE_* settings. SIGNER defaults to local even when Circle variables are present. */
@@ -76,8 +83,19 @@ export function readSignerEnv(env: Readonly<Record<string, string | undefined>>)
     ...(entitySecret ? { circleEntitySecret: entitySecret } : {}),
     ...(env.CIRCLE_WALLET_SET_ID ? { circleWalletSetId: env.CIRCLE_WALLET_SET_ID } : {}),
     ...(env.CIRCLE_WALLET_ID ? { circleWalletId: env.CIRCLE_WALLET_ID } : {}),
-    ...(env.CIRCLE_USER_REF ? { circleUserRef: env.CIRCLE_USER_REF } : {})
+    ...(env.CIRCLE_USER_REF ? { circleUserRef: env.CIRCLE_USER_REF } : {}),
+    ...(env.CIRCLE_OPERATOR_WALLET_ID ? { circleOperatorWalletId: env.CIRCLE_OPERATOR_WALLET_ID } : {}),
+    ...(env.AQUA0_ONBOARD_USDC?.trim() ? { onboardUsdc: env.AQUA0_ONBOARD_USDC.trim() } : {})
   };
+}
+
+/** The shared operator wallet (CIRCLE_OPERATOR_WALLET_ID) as a signer, or undefined when none is configured. */
+export async function createCircleOperatorSigner(config: WriteConfig): Promise<WriteSigner | undefined> {
+  if (resolveSignerKind(config) !== "circle" || !config.circleOperatorWalletId) {
+    return undefined;
+  }
+  const { circleUserRef: _userRef, circleWalletSetId: _walletSetId, ...shared } = config;
+  return createCircleSigner({ ...shared, circleWalletId: config.circleOperatorWalletId });
 }
 
 export function resolveSignerKind(config: WriteConfig): SignerKind {

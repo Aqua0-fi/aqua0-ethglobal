@@ -16,6 +16,7 @@
  */
 import {
   encodeFunctionData,
+  erc20Abi,
   formatUnits,
   getAddress,
   hashTypedData,
@@ -66,6 +67,7 @@ import {
   parseTokenAmount,
   resolvePair,
   resolveToken,
+  strategySalt,
   toJsonSafe,
   type AmountUnit,
   type AmountValue,
@@ -89,7 +91,7 @@ import {
   type WriteConfig,
   type WriteMode
 } from "./write.js";
-import { resolveSignerAddress, type WriteSigner } from "./signer.js";
+import { createCircleOperatorSigner, resolveSignerAddress, type WriteSigner } from "./signer.js";
 
 type ReadClient = ReturnType<typeof createReadClient>;
 type ExecutionClients = Awaited<ReturnType<typeof createExecutionClients>>;
@@ -365,8 +367,16 @@ export async function executeCreateFxStrategy(
       `In execute mode the strategist is the configured signer ${ctx.signer}; got ${input.strategist}. Omit strategist, or use dryRun to prepare for another address.`
     );
   }
-  const choice = await chooseCreateOpcode(client, venue, input, pair, ctx.signer);
-  const { spec, aquaVenue, oracle } = await buildStrategySpec(client, venue, choice.opcode, pair, input.params ?? {});
+  const fxShipper = venue.fxswap ? await resolveShipper(ctx, venue.fxswap.adapter) : undefined;
+  const choice = await chooseCreateOpcode(client, venue, input, pair, fxShipper?.writer.address ?? ctx.signer);
+  const { spec, aquaVenue, oracle } = await buildStrategySpec(
+    client,
+    venue,
+    choice.opcode,
+    pair,
+    input.params ?? {},
+    ctx.signer
+  );
   const strategyKey = deriveStrategyKey({
     strategist: ctx.signer,
     chainId: venue.chainId,
@@ -376,8 +386,14 @@ export async function executeCreateFxStrategy(
   }).strategyKey;
   const alreadyLive = await isStrategyLive(client, aquaVenue.adapter, spec.strategyId);
   if (!alreadyLive) {
-    // Check wiring, router binding and operator role before sending anything.
-    const readiness = await readVenueReadiness(client, venueTarget(venue, aquaVenue), [pair.usdc, pair.fx], ctx.signer);
+    // Check wiring, router binding and the shipping operator's role before sending anything.
+    const shipper = await resolveShipper(ctx, aquaVenue.adapter);
+    const readiness = await readVenueReadiness(
+      client,
+      venueTarget(venue, aquaVenue),
+      [pair.usdc, pair.fx],
+      shipper.writer.address
+    );
     const problem = readiness.hint ?? readiness.operatorHint;
     if (problem) {
       throw new Error(`Cannot ship on the ${aquaVenue.name}: ${problem} Nothing was sent.`);
@@ -496,7 +512,14 @@ export async function prepareCreateFxStrategy(
   }
   const client = createReadClient(config);
   const choice = await chooseCreateOpcode(client, venue, input, pair, undefined);
-  const { spec, aquaVenue, oracle } = await buildStrategySpec(client, venue, choice.opcode, pair, input.params ?? {});
+  const { spec, aquaVenue, oracle } = await buildStrategySpec(
+    client,
+    venue,
+    choice.opcode,
+    pair,
+    input.params ?? {},
+    strategist
+  );
   const strategyKey = deriveStrategyKey({
     strategist,
     chainId: venue.chainId,
@@ -1521,9 +1544,90 @@ export async function readVenueReadiness(
 }
 
 // ---------------------------------------------------------------------------------------------
+// onboarding
+
+export type OnboardingFunding = {
+  status: "sent" | "skipped" | "failed";
+  amount?: string;
+  hash?: Hex;
+  note?: string;
+};
+
+const ONBOARD_USDC_DEFAULT = "5";
+
+/**
+ * Tops up a signed-in user's Circle wallet with testnet USDC from the shared operator wallet, so a new user can pay
+ * gas (USDC on Arc) and deposit straight away. Sends only on Arc Testnet (not a local fork), only when the wallet
+ * holds under 1 USDC, and only when CIRCLE_OPERATOR_WALLET_ID is set; AQUA0_ONBOARD_USDC=0 turns it off.
+ */
+export async function topUpUserUsdc(config: WriteConfig, user: string): Promise<OnboardingFunding> {
+  const usdc = resolveToken("USDC");
+  const amountText = config.onboardUsdc ?? ONBOARD_USDC_DEFAULT;
+  const amount = parseTokenAmount(amountText, usdc.decimals, { field: "AQUA0_ONBOARD_USDC" });
+  if (amount === 0n) {
+    return { status: "skipped", note: "AQUA0_ONBOARD_USDC is 0" };
+  }
+  const rpcHost = config.writeRpcUrl ? new URL(config.writeRpcUrl).hostname : "";
+  if (requireWriteChainId(config) !== ARC_TESTNET_DEPLOYMENT.chainId || ["127.0.0.1", "localhost", "0.0.0.0"].includes(rpcHost)) {
+    return { status: "skipped", note: "top-ups only run on Arc Testnet, not a local fork" };
+  }
+  const operator = await createCircleOperatorSigner(config);
+  if (!operator) {
+    return { status: "skipped", note: "no CIRCLE_OPERATOR_WALLET_ID configured" };
+  }
+  const client = createReadClient(config);
+  const [balance, operatorBalance] = await Promise.all([
+    readTokenBalance(client, usdc, user),
+    readTokenBalance(client, usdc, operator.address)
+  ]);
+  if (balance >= 10n ** BigInt(usdc.decimals)) {
+    return { status: "skipped", note: `the wallet already holds ${formatUnits(balance, usdc.decimals)} USDC` };
+  }
+  if (operatorBalance < amount + 10n ** BigInt(usdc.decimals - 2)) {
+    return { status: "skipped", note: `the Aqua0 operator wallet ${operator.address} is low on USDC; fund it from faucet.circle.com` };
+  }
+  const hash = await operator.writeContract({
+    address: getAddress(usdc.address),
+    abi: erc20Abi,
+    functionName: "transfer",
+    args: [getAddress(user), amount]
+  });
+  const receipt = await client.waitForTransactionReceipt({ hash });
+  assertReceiptSuccess(receipt, "USDC top-up", hash);
+  return { status: "sent", amount: `${formatUnits(amount, usdc.decimals)} USDC`, hash };
+}
+
+// ---------------------------------------------------------------------------------------------
 // internals
 
+/**
+ * Who sends shipStrategyWithFee: the signer when it holds OPERATOR_ROLE on the adapter, otherwise the shared Circle
+ * operator wallet. The adapter authorizes a ship by the class strategist's EIP-712 signature, not by who sends it, so
+ * a newly signed-in user needs no role of their own.
+ */
+async function resolveShipper(
+  ctx: ExecContext,
+  adapter: string
+): Promise<{ writer: WriteSigner; relayed: boolean; hasRole: boolean }> {
+  const hasRole = (account: string) =>
+    ctx.publicClient.readContract({
+      address: getAddress(adapter),
+      abi: aquaAdapterAbi,
+      functionName: "hasRole",
+      args: [OPERATOR_ROLE, getAddress(account)]
+    });
+  if (await hasRole(ctx.signer)) {
+    return { writer: ctx.writer, relayed: false, hasRole: true };
+  }
+  ctx.operator ??= await createCircleOperatorSigner(ctx.config);
+  if (!ctx.operator || ctx.operator.address === ctx.signer) {
+    return { writer: ctx.writer, relayed: false, hasRole: false };
+  }
+  return { writer: ctx.operator, relayed: true, hasRole: await hasRole(ctx.operator.address) };
+}
+
 type ExecContext = {
+  config: WriteConfig;
   chainId: number;
   publicClient: ExecutionClients["publicClient"];
   /** Sends and signs: the WRITE_PRIVATE_KEY account or the Circle wallet. */
@@ -1532,6 +1636,8 @@ type ExecContext = {
   account: WriteSigner["account"];
   signer: Lowercase<string>;
   steps: StrategyStep[];
+  /** Shared Circle operator wallet, resolved on first use (CIRCLE_OPERATOR_WALLET_ID). */
+  operator?: WriteSigner | undefined;
 };
 
 type VaultPosition = {
@@ -1579,6 +1685,7 @@ async function createExecContext(config: WriteConfig): Promise<ExecContext> {
   assertExecutionAllowed(config);
   const { publicClient, signer: writer } = await createExecutionClients(config);
   return {
+    config,
     chainId: requireWriteChainId(config),
     publicClient,
     writer,
@@ -1665,6 +1772,13 @@ function requireFxSwapFeed(
     );
   }
   return { fxVenue: venue.fxswap, feed: info.address, info };
+}
+
+/** Program salt for a strategist's class (strategist, chain, pair, label), so its strategy id is its own. */
+function strategySaltFor(chainId: number, strategist: string, pair: FxPair, label: string): Hex {
+  return strategySalt(
+    deriveStrategyKey({ strategist, chainId, token0: pair.usdc.address, token1: pair.fx.address, label }).strategyKey
+  );
 }
 
 function manualFeed(address: string): FxFeed {
@@ -1872,19 +1986,25 @@ async function buildStrategySpec(
   venue: SwapVMVenue,
   opcode: StrategyOpcode,
   pair: FxPair,
-  params: StrategyParamsInput
+  params: StrategyParamsInput,
+  strategist: string
 ): Promise<{ spec: StrategySpec; aquaVenue: AquaVenue; oracle?: FxOracleReading }> {
   if (opcode === "pegged") {
-    return { spec: buildPeggedStrategySpec(venue.pegged.adapter, pair, params), aquaVenue: venue.pegged };
+    const unsalted = buildPeggedStrategySpec(venue.pegged.adapter, pair, params);
+    const salt = strategySaltFor(venue.chainId, strategist, pair, unsalted.label);
+    return { spec: buildPeggedStrategySpec(venue.pegged.adapter, pair, params, { salt }), aquaVenue: venue.pegged };
   }
   const { fxVenue, feed, info } = requireFxSwapFeed(venue, pair);
   const { reading: oracle } = await readLiveFeed(client, info, pair);
   if (oracle.answer <= 0n) {
     throw new Error(`The ${pair.fx.fiat}/USD feed ${feed} reports a non-positive answer (${oracle.answer})`);
   }
-  const spec = buildFxSwapStrategySpec(fxVenue.adapter, pair, feed, fxSwapParamsForFeed(info, params), {
-    oraclePriceWad: oracle.feedPriceWad,
-    feedQuote: info.quote
+  const fxParams = fxSwapParamsForFeed(info, params);
+  const context = { oraclePriceWad: oracle.feedPriceWad, feedQuote: info.quote };
+  const label = buildFxSwapStrategySpec(fxVenue.adapter, pair, feed, fxParams, context).label;
+  const spec = buildFxSwapStrategySpec(fxVenue.adapter, pair, feed, fxParams, {
+    ...context,
+    salt: strategySaltFor(venue.chainId, strategist, pair, label)
   });
   if (oracle.feedPriceWad < spec.band.minPrice || oracle.feedPriceWad > spec.band.maxPrice) {
     const unit = feedUnit(pair.fx.fiat, info.quote);
@@ -1983,15 +2103,10 @@ async function shipStrategy(
   const client = ctx.publicClient;
   const { pair } = spec;
   const adapter = getAddress(aquaVenue.adapter);
-  const [usdcAvailable, fxAvailable, isOperator, domainVersionHash, nonce, block] = await Promise.all([
+  const [usdcAvailable, fxAvailable, shipper, domainVersionHash, nonce, block] = await Promise.all([
     readVaultUint(client, pair.usdc.vault, "availableFor", classId),
     readVaultUint(client, pair.fx.vault, "availableFor", classId),
-    client.readContract({
-      address: adapter,
-      abi: aquaAdapterAbi,
-      functionName: "hasRole",
-      args: [OPERATOR_ROLE, getAddress(ctx.signer)]
-    }),
+    resolveShipper(ctx, aquaVenue.adapter),
     client.readContract({ address: adapter, abi: aquaAdapterAbi, functionName: "DOMAIN_VERSION_HASH" }),
     client.readContract({
       address: adapter,
@@ -2011,9 +2126,11 @@ async function shipStrategy(
       `${pair.fx.symbol} backing available to class ${classId} is ${formatUnits(fxAvailable, pair.fx.decimals)} but this strategy ships ${formatUnits(spec.fxShip, pair.fx.decimals)}`
     );
   }
-  if (!isOperator) {
+  if (!shipper.hasRole) {
     throw new Error(
-      `Signer ${ctx.signer} lacks OPERATOR_ROLE on AquaAdapter ${aquaVenue.adapter}; the adapter admin must grantRole(${OPERATOR_ROLE}, ${ctx.signer})`
+      shipper.relayed
+        ? `The Aqua0 operator wallet ${shipper.writer.address} lacks OPERATOR_ROLE on AquaAdapter ${aquaVenue.adapter}; the adapter admin must grantRole(${OPERATOR_ROLE}, ${shipper.writer.address})`
+        : `Signer ${ctx.signer} lacks OPERATOR_ROLE on AquaAdapter ${aquaVenue.adapter}. Set CIRCLE_OPERATOR_WALLET_ID to a Circle wallet that holds the role, so it sends ships the user signs, or have the adapter admin grantRole(${OPERATOR_ROLE}, ${ctx.signer})`
     );
   }
   if (domainVersionHash.toLowerCase() !== keccak256(toBytes(SWAPVM.adapterDomain.version))) {
@@ -2039,13 +2156,17 @@ async function shipStrategy(
       deadline
     })
   );
+  // The strategist signed above; the operator only sends. Steps are shared, so the relay shows in the user's steps.
+  const shipCtx: ExecContext = shipper.relayed
+    ? { ...ctx, writer: shipper.writer, account: shipper.writer.account, signer: shipper.writer.address }
+    : ctx;
   await sendTransaction(
-    ctx,
-    "shipStrategyWithFee",
+    shipCtx,
+    shipper.relayed ? `shipStrategyWithFee (sent by Aqua0 operator ${shipper.writer.address})` : "shipStrategyWithFee",
     aquaVenue.adapter,
     () =>
       client.simulateContract({
-        account: ctx.account,
+        account: shipCtx.account,
         address: adapter,
         abi: aquaAdapterAbi,
         functionName: "shipStrategyWithFee",
@@ -2145,24 +2266,37 @@ async function resolveLiveStrategy(
   for (const aquaVenue of ordered) {
     let spec: StrategySpec | undefined;
     let specError: string | undefined;
+    const candidates: StrategySpec[] = [];
     try {
+      let build: (salt?: Hex) => StrategySpec;
       if (aquaVenue.opcode === "pegged") {
-        spec = buildPeggedStrategySpec(aquaVenue.adapter, pair, params);
+        build = (salt) => buildPeggedStrategySpec(aquaVenue.adapter, pair, params, salt ? { salt } : {});
       } else {
         const { feed, info } = requireFxSwapFeed(venue, pair);
-        spec = buildFxSwapStrategySpec(aquaVenue.adapter, pair, feed, fxSwapParamsForFeed(info, params), {
-          oraclePriceWad:
-            params.bandPercent === undefined
-              ? (referenceFeedPriceWad(pair, info.quote) ?? WAD)
-              : (await readLiveFeed(client, info, pair)).reading.feedPriceWad,
-          feedQuote: info.quote
-        });
+        const oraclePriceWad =
+          params.bandPercent === undefined
+            ? (referenceFeedPriceWad(pair, info.quote) ?? WAD)
+            : (await readLiveFeed(client, info, pair)).reading.feedPriceWad;
+        build = (salt) =>
+          buildFxSwapStrategySpec(aquaVenue.adapter, pair, feed, fxSwapParamsForFeed(info, params), {
+            oraclePriceWad,
+            feedQuote: info.quote,
+            ...(salt ? { salt } : {})
+          });
       }
+      spec = build();
+      // create_strategy salts programs per strategist; strategies shipped before that are unsalted.
+      if (preferStrategist) {
+        candidates.push(build(strategySaltFor(venue.chainId, preferStrategist, pair, spec.label)));
+      }
+      candidates.push(spec);
     } catch (error) {
       specError = error instanceof Error ? error.message : String(error);
     }
-    if (spec && (await isStrategyLive(client, aquaVenue.adapter, spec.strategyId))) {
-      return finalizeLiveStrategy(client, aquaVenue, pair, spec.strategyId, spec.order, "pair-params");
+    for (const candidate of candidates) {
+      if (await isStrategyLive(client, aquaVenue.adapter, candidate.strategyId)) {
+        return finalizeLiveStrategy(client, aquaVenue, pair, candidate.strategyId, candidate.order, "pair-params");
+      }
     }
     if (specError === undefined && !paramsPinProgram(aquaVenue.opcode, params)) {
       const found = await findLiveStrategyForPair(client, venue, aquaVenue, pair, preferStrategist);
@@ -2602,7 +2736,7 @@ function strategyIdentity(
     return {
       ...common,
       program: {
-        instructions: "FlatFeeAmountIn (opcode 21) -> PeggedSwap (opcode 31)",
+        instructions: `${spec.salt ? "Salt (opcode 20) -> " : ""}FlatFeeAmountIn (opcode 21) -> PeggedSwap (opcode 31)`,
         price: `${formatUnits(spec.priceE2, 2)} ${spec.pair.fx.fiat} per 1 USDC`,
         priceE2: spec.priceE2.toString(),
         feePpb: spec.feePpb,
@@ -2621,8 +2755,9 @@ function strategyIdentity(
   return {
     ...common,
     program: {
-      instructions:
-        spec.flatFeePpb > 0 ? "FlatFeeAmountIn (opcode 21) -> FXSwap (opcode 34)" : "FXSwap (opcode 34)",
+      instructions: `${spec.salt ? "Salt (opcode 20) -> " : ""}${
+        spec.flatFeePpb > 0 ? "FlatFeeAmountIn (opcode 21) -> FXSwap (opcode 34)" : "FXSwap (opcode 34)"
+      }`,
       priceSource: `oracle ${spec.oracle} (${feedUnit(fiat, spec.feedQuote)}), read on every swap`,
       priceBand: {
         min: `${formatWad(spec.band.minPrice)} ${feedUnit(fiat, spec.feedQuote)}`,
@@ -2664,6 +2799,8 @@ function summarizeInstructions(instructions: readonly DecodedInstruction[]): str
   return instructions
     .map((instruction) => {
       switch (instruction.name) {
+        case "Salt":
+          return "Salt";
         case "FlatFeeAmountIn":
           return `FlatFeeAmountIn ${formatUnits(BigInt(instruction.feePpb), 5)} bps`;
         case "PeggedSwap":
