@@ -498,24 +498,33 @@
           "classId": "4",
           "pair": "USDC/BRL",
           "committedUsdc": "1",
-          "opcodes": [
-            "pegged"
+          "strategies": [
+            {
+              "opcode": "pegged",
+              "strategyId": "0xe16591490b549dd816c0d4cd2df92cfedbc0680eb295f4550cb47bd5f6d94be1"
+            }
           ]
         },
         {
           "classId": "6",
           "pair": "USDC/ARS",
           "committedUsdc": "1",
-          "opcodes": [
-            "forex"
+          "strategies": [
+            {
+              "opcode": "forex",
+              "strategyId": "0x4e566aef574b3d7cc33b40e65fc92df1d78485466414a8612945be0158f527a1"
+            }
           ]
         },
         {
           "classId": "7",
           "pair": "USDC/BRL",
           "committedUsdc": "1",
-          "opcodes": [
-            "forex"
+          "strategies": [
+            {
+              "opcode": "forex",
+              "strategyId": "0xeb17dfb7ae5e216328fb98de09005db624250397c9c91dc4be5a464a27e1660c"
+            }
           ]
         }
       ],
