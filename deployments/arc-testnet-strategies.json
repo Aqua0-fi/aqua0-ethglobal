@@ -47,7 +47,175 @@
         "to": "0x9E094b21C4263e0BE5BEffa0f8296B3fd982fFFf",
         "functionName": "registerStrategyClass",
         "data": "0xe27ae8f2104b36f3ccc46a4d242bf7ff813a87f728eb5c74d6e83c83d2a7ef6834d2dad8"
-      }
+      },
+      "note": "Superseded by liveVenueRun (class 3, strategist 0xAFF7...b02c) on 2026-09-12."
     }
-  ]
+  ],
+  "liveVenueRun": {
+    "date": "2026-09-12",
+    "venue": {
+      "aquaAdapter": "0xbF72D34b804636496c3308796908152b82624Ca5",
+      "aquaSwapVMRouter": "0xb20bc70b485eC1352C190d26fCaB1959d219F763"
+    },
+    "strategist": "0xAFF7Da673820fAA38289de8B03984A9cf20fb02c",
+    "driver": "aqua0 CLI in MCP_WRITE_MODE=execute (same @aqua0/shared service functions as the MCP tools)",
+    "deposit": {
+      "token": "USDC",
+      "amount": "2",
+      "transactions": [
+        {
+          "stage": "approve USDC",
+          "hash": "0x6c64d6971c60f4a56b5c6f3ba773db2d3afe8da0a23b9b9bd255404055a4aec1"
+        },
+        {
+          "stage": "deposit USDC",
+          "hash": "0x088fb34b8147f936b7c10ac8066de4a59773f7d393f33eda64a4defeb8f6c6bd"
+        }
+      ]
+    },
+    "strategies": [
+      {
+        "pair": "USDC/ARS",
+        "opcode": "pegged",
+        "classId": "2",
+        "strategyId": "0x384f32667db7617584572f4dff566efb85b2bba4b857c88aa4aa49cc75407c3c",
+        "usdcShip": "0.5",
+        "live": true,
+        "transactions": [
+          {
+            "stage": "registerStrategyClass",
+            "hash": "0x69554c7e9c8a17aef3ee029e84c22a8f24da968faa170e7d736a2dfb9235cc25"
+          },
+          {
+            "stage": "registerStrategy (USDC vault)",
+            "hash": "0x5587843787a04fcb81c8d3be07e57b6e018e0fb1884a0b9215f54e81f035b467"
+          },
+          {
+            "stage": "registerStrategy (ARGt vault)",
+            "hash": "0xfc96db746c8988055dc469b156d53ec23830eb6b1a8adbc2f609c0c4327a377f"
+          },
+          {
+            "stage": "mint ARGt (open-mint demo token)",
+            "hash": "0x930fbcf1f95c59e40cc1269cafb0a5334003f8e4d5b7779d43162c9c96a439f2"
+          },
+          {
+            "stage": "approve ARGt",
+            "hash": "0xc234b22ff0a4f9a91f5a3aa6bd1fca162636a609d5fbb38a48bae4e3c7691133"
+          },
+          {
+            "stage": "deposit ARGt",
+            "hash": "0x161f488d43ae54dfe28ded1944fd1ab87409a05322446a758b926ae787530d2c"
+          },
+          {
+            "stage": "setCommitment (USDC vault)",
+            "hash": "0x3062a192f60567c6494529df5a25306dfa129d7d6a3510402e2c4fd9dd42c02f"
+          },
+          {
+            "stage": "setCommitment (ARGt vault)",
+            "hash": "0x828f3fc75f47f4f9eadad7f9f6f0396c2e42af531f870818ae9e1145c23f4d95"
+          },
+          {
+            "stage": "shipStrategyWithFee",
+            "hash": "0x97d5fea443f9090f6b9dd2432036bdfbc2ed58d636e8ac802742d2e499968471"
+          }
+        ]
+      },
+      {
+        "pair": "USDC/BRL",
+        "opcode": "pegged",
+        "classId": "3",
+        "strategyId": "0x3fbcd97542ef8641651db1bf76f9a4653de89c693de1b6bac607b6d69744716e",
+        "usdcShip": "0.5",
+        "live": true,
+        "transactions": [
+          {
+            "stage": "registerStrategyClass",
+            "hash": "0x63afb5cd94ccac9108c7b59dee9b774a31edf1483bfd3683cc640c3f4fa01c75"
+          },
+          {
+            "stage": "registerStrategy (USDC vault)",
+            "hash": "0xed54df7a408c974e3ad765fc6f6a76921527a1062fdcd30f4d31b947bbd3c78a"
+          },
+          {
+            "stage": "registerStrategy (BRAt vault)",
+            "hash": "0x2f23b866a9ad604ce645943af410df159a0c814f7f4cd38a5e430890415ef492"
+          },
+          {
+            "stage": "mint BRAt (open-mint demo token)",
+            "hash": "0x245736398adb992009f3a4a663b43d430d51788eb671efd2853df9e7f85f1496"
+          },
+          {
+            "stage": "approve BRAt",
+            "hash": "0xb3f842d0c77ee72d045c0897cb626db6526fc5e1dd290ea2c46e935a162154f2"
+          },
+          {
+            "stage": "deposit BRAt",
+            "hash": "0x142c3ef40d5c69a8c9ef68304f2e0eb920b81373ff0217155f6c1926b28250fb"
+          },
+          {
+            "stage": "setCommitment (USDC vault)",
+            "hash": "0x87aeb2ebe6f3a78e4eb71571354c8eac3b6a4e5f58edbceccd9000f943859902"
+          },
+          {
+            "stage": "setCommitment (BRAt vault)",
+            "hash": "0xef524f5a2f459b55893b412d4292a316bce4f71328beb499c4d4bc71ade472af"
+          },
+          {
+            "stage": "shipStrategyWithFee",
+            "hash": "0x7571eea087df535b0a4391a48d510abeb9ed0084cc3816946040c05214aa2293"
+          }
+        ]
+      }
+    ],
+    "swaps": [
+      {
+        "pair": "USDC/ARS",
+        "strategyId": "0x384f32667db7617584572f4dff566efb85b2bba4b857c88aa4aa49cc75407c3c",
+        "amountIn": "0.1 USDC",
+        "received": "138.912644288426254099 ARGt",
+        "transactions": [
+          {
+            "stage": "approve USDC",
+            "hash": "0x9fd757135172c32957d0d001e1f41831a7f0064ffaa480cc427ecaf46c087090"
+          },
+          {
+            "stage": "swap USDC -> ARGt",
+            "hash": "0x24d95d61c83e3dfdf5ffa8530350635eb9c9b5f71b51835f31b98eb61c5102fb"
+          }
+        ]
+      },
+      {
+        "pair": "USDC/BRL",
+        "strategyId": "0x3fbcd97542ef8641651db1bf76f9a4653de89c693de1b6bac607b6d69744716e",
+        "amountIn": "0.1 USDC",
+        "received": "0.545728245418817426 BRAt",
+        "transactions": [
+          {
+            "stage": "approve USDC",
+            "hash": "0xd04d25030615a7f827e55ef743206f1f1769237692147db3d53a6417f275f5ed"
+          },
+          {
+            "stage": "swap USDC -> BRAt",
+            "hash": "0x811e5fd474e554e7a3330f09f34edb09f40ca50475028be89c4de3e6cfd32539"
+          }
+        ]
+      }
+    ],
+    "sharedBacking": {
+      "usdcPrincipal": "2",
+      "sharedBacking": true,
+      "classes": [
+        {
+          "classId": "2",
+          "pair": "USDC/ARS",
+          "usdcCommittedBacking": "2"
+        },
+        {
+          "classId": "3",
+          "pair": "USDC/BRL",
+          "usdcCommittedBacking": "2"
+        }
+      ]
+    }
+  }
 }
