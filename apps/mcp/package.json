@@ -2,8 +2,16 @@
   "name": "@aqua0/mcp",
   "version": "0.1.0",
   "description": "Aqua0 MCP server: shared-liquidity FX strategies on 1inch Aqua and SwapVM, Arc Testnet, with The Graph reads. Stdio by default, prepare-only unless MCP_WRITE_MODE=execute.",
-  "keywords": ["mcp", "model-context-protocol", "aqua0", "1inch", "swapvm", "arc", "the-graph"],
-  "license": "UNLICENSED",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "aqua0",
+    "1inch",
+    "swapvm",
+    "arc",
+    "the-graph"
+  ],
+  "license": "MIT",
   "homepage": "https://github.com/Aqua0-fi/aqua0-ethglobal#connect-the-mcp",
   "repository": {
     "type": "git",

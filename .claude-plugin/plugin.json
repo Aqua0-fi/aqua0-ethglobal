@@ -8,5 +8,15 @@
   },
   "homepage": "https://github.com/Aqua0-fi/aqua0-ethglobal#try-it",
   "repository": "https://github.com/Aqua0-fi/aqua0-ethglobal",
-  "keywords": ["aqua0", "1inch", "aqua", "swapvm", "arc", "the-graph", "mcp", "fx"]
+  "keywords": [
+    "aqua0",
+    "1inch",
+    "aqua",
+    "swapvm",
+    "arc",
+    "the-graph",
+    "mcp",
+    "fx"
+  ],
+  "license": "MIT"
 }
