@@ -482,6 +482,59 @@
         }
       ],
       "explanation": "The same 1 USDC principal is committed to 3 strategy classes at once (class 4 USDC/BRL (pegged), class 6 USDC/ARS (forex), class 7 USDC/BRL (forex)). Each class counts it as committed backing: the deposit is shared, not split."
+    },
+    "rebalance": {
+      "date": "2026-09-12",
+      "why": "The live run's 0.1 USDC swaps left each book about 10% off an even split, so a further 0.1 USDC swap crossed the 15% flat band and quoted about 264 bps. A reverse swap of the same FX amount restored the flat band.",
+      "note": "On Arc the CLI's reported `received` for a swap into USDC was the wallet balance change, which includes the swap transaction's USDC gas; the on-chain amounts below come from the USDC Transfer logs.",
+      "strategies": [
+        {
+          "pair": "USDC/ARS",
+          "quoteBefore": "0.1 USDC -> 136.304047104614612927 ARGt (+263.99 bps)",
+          "swap": {
+            "amountIn": "139.58 ARGt",
+            "quoted": "0.0994 USDC",
+            "receivedOnChain": "0.099400 USDC",
+            "gasPaidUsdc": "0.027886",
+            "transactions": [
+              {
+                "stage": "approve ARGt",
+                "hash": "0xcecb11607aa09353c147b5c61b757dd57d131845b3b7d9a7ae985aca638368d8"
+              },
+              {
+                "stage": "swap ARGt -> USDC",
+                "hash": "0x704996240d7eb3d71242acb0ea08f466295606f9bfa0c43ff0a77794d86ca7b4"
+              }
+            ]
+          },
+          "quoteAfter": "0.1 USDC -> 139.580000000000055832 ARGt (+29.99 bps)"
+        },
+        {
+          "pair": "USDC/BRL",
+          "quoteBefore": "0.1 USDC -> 0.501544470829909875 BRAt (+263.60 bps)",
+          "swap": {
+            "amountIn": "0.513598 BRAt",
+            "quoted": "0.099404 USDC",
+            "receivedOnChain": "0.099404 USDC",
+            "gasPaidUsdc": "0.021961",
+            "transactions": [
+              {
+                "stage": "push RedStone BRL price",
+                "hash": "0x5066ab306a29241f9dd5cdaac221c7ebe2bd0666ae992305e66bb5e48929c30a"
+              },
+              {
+                "stage": "approve BRAt",
+                "hash": "0x91e69c34a0f067b0514819fdbcd5880ba13994f96dd9c31a5353b12753e67ad1"
+              },
+              {
+                "stage": "swap BRAt -> USDC",
+                "hash": "0xdc6809a9ae165d849250cac93ec49c9918513fc0d7aaab25595e7dba6f02ec6f"
+              }
+            ]
+          },
+          "quoteAfter": "0.1 USDC -> 0.513577955441523277 BRAt (+30.00 bps)"
+        }
+      ]
     }
   },
   "forexLiveRunV1": {

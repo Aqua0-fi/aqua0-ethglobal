@@ -1017,7 +1017,7 @@ export async function executeFxSwap(config: WriteConfig, input: FxSwapInput) {
   const minAmountOut = resolveMinAmountOut(input, tokenOut, quoted) ?? 0n;
   await approveIfNeeded(ctx, tokenIn, strategy.venue.router, amountIn);
   const before = await readTokenBalance(client, tokenOut, ctx.signer);
-  await sendTransaction(
+  const swapHash = await sendTransaction(
     ctx,
     `swap ${tokenIn.symbol} -> ${tokenOut.symbol}`,
     strategy.venue.router,
@@ -1039,7 +1039,12 @@ export async function executeFxSwap(config: WriteConfig, input: FxSwapInput) {
       (await readVenueReadiness(client, venueTarget(venue, strategy.venue), [strategy.pair.usdc, strategy.pair.fx]))
         .hint
   );
-  const received = (await readTokenBalance(client, tokenOut, ctx.signer)) - before;
+  // The swap's own Transfer logs give what it paid. On Arc, USDC is also the gas token, so the balance change after a
+  // swap into USDC is short by the swap transaction's gas; it is only the fallback.
+  const receipt = await client.getTransactionReceipt({ hash: swapHash });
+  const received =
+    receivedFromTransferLogs(receipt.logs, tokenOut.address, ctx.signer) ??
+    (await readTokenBalance(client, tokenOut, ctx.signer)) - before;
   return {
     mode: "execute" as const,
     chainId: ctx.chainId,
@@ -1055,6 +1060,30 @@ export async function executeFxSwap(config: WriteConfig, input: FxSwapInput) {
     ...(reference?.oracle ? { oracle: reference.oracle } : {}),
     steps: ctx.steps
   };
+}
+
+const ERC20_TRANSFER_TOPIC = keccak256(toBytes("Transfer(address,address,uint256)"));
+
+/** Total of `token` that ERC-20 Transfer logs sent to `recipient`, or undefined when no such log exists. */
+export function receivedFromTransferLogs(
+  logs: readonly { address: string; topics: readonly string[]; data: string }[],
+  token: string,
+  recipient: string
+): bigint | undefined {
+  let total: bigint | undefined;
+  for (const log of logs) {
+    const [topic, , to] = log.topics;
+    if (
+      log.address.toLowerCase() !== token.toLowerCase() ||
+      topic?.toLowerCase() !== ERC20_TRANSFER_TOPIC ||
+      !to ||
+      `0x${to.slice(-40)}`.toLowerCase() !== recipient.toLowerCase()
+    ) {
+      continue;
+    }
+    total = (total ?? 0n) + BigInt(log.data);
+  }
+  return total;
 }
 
 // ---------------------------------------------------------------------------------------------
