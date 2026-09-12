@@ -163,3 +163,25 @@ Lectura:
   Hace falta agregarle un halt o un cap, y con eso queda muy cerca de Shell con `β=0`.
 - **DODO fijo** queda bien en los invariantes pero pierde en slippage (10× el de StableSwap para
   el mismo tamaño) y mantiene la canilla `k·r²` (506 p con 1% de BRL).
+
+## 5. Referencia cerrada de la curva elegida (`scripts/fxforex_math.py`, 2026-09-12)
+
+Curva de Shell v1 con oráculo (DFX v2), dos activos, resuelta en forma cerrada: la incógnita es
+`s = ψ' − ω` (numerario que retiene el pool); multiplicando el punto fijo por `(g+s)` queda una
+cuadrática por tramo (dentro de banda / cuadrático / con cap, por activo). Se contrasta contra la
+iteración de 32 pasos de DFX en ~20k trades por juego de parámetros, en todos los tramos.
+
+- Coincide con DFX al nivel del ulp del libro (`|diff|/book ≈ 1e-16`; en enteros es 1 wei).
+- Utilidad `g − ψ` nunca baja; dentro de `±β` el precio es exactamente el oráculo; roundtrip, split
+  y secuencias cerradas: 0 casos donde el taker gana. Inversa exactIn/exactOut a 1e-11.
+- Precio continuo al cruzar `β` (fee cuadrática, C¹) y costo monótono en tamaño.
+- Halts: cualquier trade que deje un balance fuera de `±α` revierte; dust y drenajes revierten.
+  Con el libro sin BRL, el maker paga como máximo el premium del tramo (12% con los defaults),
+  no `k·r²`.
+- Error de oráculo: con `ε=0` el atacante se lleva toda la banda `β` (32% de U) y gana
+  `banda × error`. Sumar `conf/p` de Pyth a `ε` lo lleva a 0 para error ≤ `conf`.
+- Tabla de premium por `(β, δ)` para elegir parámetros; con `β=0.35` no hay slippage hasta
+  ~35% del libro, `δ` decide cuánto sube después.
+
+Sigue faltando: elegir `α, β, δ, ε` para el par real, y decidir `λ` (cuánto de la mejora se
+devuelve al taker cuando rebalancea; `λ=0.3` es el default de DFX).
