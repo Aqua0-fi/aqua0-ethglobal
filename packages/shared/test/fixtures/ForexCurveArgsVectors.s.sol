@@ -76,7 +76,7 @@ contract ForexCurveArgsVectors is Script {
         }
 
         // 4. Quote token at the greater address plus inverted feed, every field at an extreme, to pin big-endian widths.
-        //    maxFee is the largest value validate accepts at that α (maxFeeLimit(1e18 − 1) = 0)
+        //    maxFee is the largest value validate accepts (maxFeeLimit = 0.5e18 − 1 for every α, α at its maximum included)
         {
             (uint8 flags, uint64 rateLt, uint64 rateGt) = ForexCurveArgsBuilder.pairFields(USDC, 6, LOW_LOCAL, 0, true);
             ForexCurveArgsBuilder.Args memory args = ForexCurveArgsBuilder.Args({
@@ -99,7 +99,7 @@ contract ForexCurveArgsVectors is Script {
             vectors = _vector("quote-is-gt-extremes", args, bytes32(type(uint256).max), true);
         }
 
-        // 5. maxFee at its limit for α = 1/2 (0.5e18 − 1), δ at the uint64 maximum, λ = 0
+        // 5. maxFee at its limit (0.5e18 − 1), δ at the uint64 maximum, λ = 0
         {
             (uint8 flags, uint64 rateLt, uint64 rateGt) = ForexCurveArgsBuilder.pairFields(USDC, 6, BRAT, 18, false);
             ForexCurveArgsBuilder.Args memory args = _recommended(flags, rateLt, rateGt);
@@ -110,7 +110,7 @@ contract ForexCurveArgsVectors is Script {
             vectors = _vector("usdc-brl-maxfee-limit", args, bytes32(0), false);
         }
 
-        // maxFeeLimit(α) for a few α, as decimal strings
+        // maxFeeLimit(α) for a few α, as decimal strings (0.5e18 − 1 for every α)
         string memory l = "maxFeeLimit";
         vm.serializeString(l, "300000000000000000", vm.toString(ForexCurveArgsBuilder.maxFeeLimit(0.3e18)));
         vm.serializeString(l, "500000000000000000", vm.toString(ForexCurveArgsBuilder.maxFeeLimit(0.5e18)));

@@ -763,13 +763,23 @@ test("forex args validation covers flags, oracle, band and every curve range", (
   // delta's uint64 field tops out near 18.45; there is no other cap.
   assert.doesNotThrow(() => encode({ delta: 18n * WAD }));
   assert.throws(() => encode({ delta: 1n << 64n }), /uint64/);
-  // maxFee < min(1/2, (1 - alpha) / (2 alpha)): just under 0.5 at alpha 0.5, lower as alpha nears 1.
+  // maxFee < 0.5 for every alpha: 0.5e18 - 1 is accepted, 0.5e18 is not.
   assert.equal(base.alpha, WAD / 2n);
   assert.doesNotThrow(() => encode({ maxFee: WAD / 2n - 1n, lambda: WAD }));
-  assert.throws(() => encode({ maxFee: WAD / 2n }), /ForexCurveInvalidFees\(500000000000000000, .*\): maxFee/);
+  assert.throws(
+    () => encode({ maxFee: WAD / 2n }),
+    /ForexCurveInvalidFees\(500000000000000000, .*\): maxFee \(inventory fee cap\) must be below 0\.5 \(so each quote has one solution\)/
+  );
   const alpha09 = (9n * WAD) / 10n;
+  assert.equal(forexMaxFeeLimit(alpha09), WAD / 2n - 1n);
+  assert.equal(forexMaxFeeLimit(WAD - 1n), WAD / 2n - 1n);
   assert.doesNotThrow(() => encode({ alpha: alpha09, maxFee: forexMaxFeeLimit(alpha09) }));
+  assert.doesNotThrow(() => encode({ alpha: WAD - 1n, maxFee: WAD / 2n - 1n }));
   assert.throws(() => encode({ alpha: alpha09, maxFee: forexMaxFeeLimit(alpha09) + 1n }), /ForexCurveInvalidFees/);
+  // Tomás's no_flat_zone set: alpha 0.9, beta 0, delta 0.15, maxFee 0.25, lambda 0.3
+  assert.doesNotThrow(() =>
+    encode({ alpha: alpha09, beta: 0n, delta: (15n * WAD) / 100n, maxFee: WAD / 4n, lambda: (3n * WAD) / 10n })
+  );
   assert.throws(() => encode({ lambda: WAD + 1n }), /ForexCurveInvalidFees\(.*\): lambda \(rebate share\)/);
   assert.doesNotThrow(() => encode({ epsilon: 10n ** 17n - 1n }));
   assert.throws(() => encode({ epsilon: 10n ** 17n }), /ForexCurveInvalidFees\(.*\): epsilon \(proportional fee\)/);

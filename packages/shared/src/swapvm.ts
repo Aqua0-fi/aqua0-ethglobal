@@ -1234,6 +1234,8 @@ export const FOREX = {
   wad: 10n ** 18n,
   /** epsilon < 10% (WAD). */
   epsilonLimit: 10n ** 17n,
+  /** maxFee < 0.5 (WAD), for every alpha. */
+  maxFeeLimit: 5n * 10n ** 17n,
   /** rateLt and rateGt are 10^(18 - decimals), at most 1e18. */
   maxRate: 10n ** 18n
 } as const;
@@ -1281,14 +1283,11 @@ export type ForexArgs = {
 };
 
 /**
- * Largest maxFee ForexCurve accepts for a valid alpha (0 < alpha < 1): maxFee < min(1/2, (1 - alpha) / (2 alpha)),
- * checked on-chain as 2 * max(alpha, 1 - alpha) * maxFee < (1 - alpha) in WAD. Below 1/2 the fee cannot outgrow the
- * trade, so each quote has one solution; the alpha term stops a trade the size of the book from clearing.
+ * Largest maxFee ForexCurve accepts: 0.5e18 - 1 for every valid alpha (0 < alpha < 1). Below 0.5 the fee cannot
+ * outgrow the trade, so each quote has one solution. Takes alpha to mirror ForexCurveArgsBuilder.maxFeeLimit.
  */
-export function forexMaxFeeLimit(alpha: bigint): bigint {
-  const wad = FOREX.wad;
-  const larger = alpha > wad - alpha ? alpha : wad - alpha;
-  return ((wad - alpha) * wad - 1n) / (2n * larger);
+export function forexMaxFeeLimit(_alpha: bigint): bigint {
+  return FOREX.maxFeeLimit - 1n;
 }
 
 /** Field widths, then the parameter ranges of the 123-byte layout. */
@@ -1348,10 +1347,9 @@ export function validateForexArgs(args: ForexArgs): void {
   // delta has no range check beyond its uint64 field (at most about 18.45), as on-chain.
   const feesError = (detail: string) =>
     new Error(`ForexCurveInvalidFees(${args.maxFee}, ${args.lambda}, ${args.epsilon}): ${detail}`);
-  const maxFeeLimit = forexMaxFeeLimit(args.alpha);
-  if (args.maxFee > maxFeeLimit) {
+  if (args.maxFee > forexMaxFeeLimit(args.alpha)) {
     throw feesError(
-      `maxFee (inventory fee cap) must be below min(1/2, (1 - alpha) / (2 alpha)): at most ${formatUnits(maxFeeLimit, 18)} with alpha ${formatUnits(args.alpha, 18)}; got ${formatUnits(args.maxFee, 18)}`
+      `maxFee (inventory fee cap) must be below 0.5 (so each quote has one solution); got ${formatUnits(args.maxFee, 18)}`
     );
   }
   if (args.lambda > FOREX.wad) {
