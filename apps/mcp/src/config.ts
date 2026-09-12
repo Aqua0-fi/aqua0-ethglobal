@@ -24,6 +24,11 @@ export function readMcpConfig(
     ...(env.WRITE_CHAIN_ID ? { writeChainId: parsePositiveInt(env.WRITE_CHAIN_ID, "WRITE_CHAIN_ID") } : {}),
     ...(env.VAULT_REGISTRY_ADDRESS ? { vaultRegistryAddress: env.VAULT_REGISTRY_ADDRESS } : {}),
     ...(env.WRITE_PRIVATE_KEY ? { writePrivateKey: env.WRITE_PRIVATE_KEY } : {}),
+    ...(env.AQUA_ADAPTER_ADDRESS ? { aquaAdapterAddress: env.AQUA_ADAPTER_ADDRESS } : {}),
+    ...(env.AQUA_SWAPVM_ROUTER_ADDRESS
+      ? { aquaSwapVMRouterAddress: env.AQUA_SWAPVM_ROUTER_ADDRESS }
+      : {}),
+    ...(env.FXSWAP_ROUTER_ADDRESS ? { fxswapRouterAddress: env.FXSWAP_ROUTER_ADDRESS } : {}),
     mcpWriteMode: readWriteMode(env.MCP_WRITE_MODE),
     transport,
     host: env.HOST ?? "0.0.0.0",

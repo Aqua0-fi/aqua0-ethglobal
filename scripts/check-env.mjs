@@ -14,10 +14,20 @@ const optional = [
   "VAULT_REGISTRY_ADDRESS",
   "MCP_WRITE_MODE",
   "WRITE_PRIVATE_KEY",
+  "AQUA_ADAPTER_ADDRESS",
+  "AQUA_SWAPVM_ROUTER_ADDRESS",
+  "FXSWAP_ROUTER_ADDRESS",
   "MCP_TRANSPORT",
   "HOST",
   "PORT"
 ];
+
+for (const name of ["VAULT_REGISTRY_ADDRESS", "AQUA_ADAPTER_ADDRESS", "AQUA_SWAPVM_ROUTER_ADDRESS", "FXSWAP_ROUTER_ADDRESS"]) {
+  if (process.env[name] && !/^0x[0-9a-fA-F]{40}$/.test(process.env[name])) {
+    console.error(`${name} must be a 20-byte hex address`);
+    process.exit(1);
+  }
+}
 
 const missing = required.filter((name) => !process.env[name]);
 

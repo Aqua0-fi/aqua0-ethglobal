@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createAqua0Service } from "@aqua0/shared";
+import { createAqua0Service, type AmountUnit, type StrategyParamsInput } from "@aqua0/shared";
 
 import { readCliConfig } from "./config.js";
 
@@ -20,17 +20,25 @@ Usage:
   aqua0 fees <address> [seconds]
   aqua0 opportunities
   aqua0 snapshot
+  aqua0 create-strategy --pair USDC/ARS [--price 1400] [--fee-bps 30] [--usdc-amount 1] [--label <text>] [--opcode pegged] [--dry-run true]
   aqua0 create-strategy --strategist <addr> --token0 <addr> --token1 <addr> --label <text> --vault <addr>...
   aqua0 authorize --vault <addr> --strategy-id <id> --backing true|false
+  aqua0 deposit --token USDC --amount 2 [--unit human|raw] [--receiver <addr>] [--dry-run true]
+  aqua0 quote --pair USDC/ARS --amount 0.1 [--token-in USDC] [--strategy-id <bytes32>]
+  aqua0 swap --pair USDC/ARS --amount 0.1 [--token-in USDC] [--slippage-bps 50] [--dry-run true]
+  aqua0 shared-backing [address]
 
 Environment:
-  GRAPH_ENDPOINT          Required Graph endpoint
-  GRAPH_AUTH_TOKEN       Optional Graph bearer token
-  WRITE_RPC_URL          RPC used for write preparation/execution reads
-  WRITE_CHAIN_ID         Chain id for Shape-C write preparation
-  VAULT_REGISTRY_ADDRESS Shape-C VaultRegistry address
-  MCP_WRITE_MODE         prepare|execute, defaults to prepare
-  WRITE_PRIVATE_KEY      Required only for guarded execute mode`);
+  GRAPH_ENDPOINT             Required Graph endpoint
+  GRAPH_AUTH_TOKEN           Optional Graph bearer token
+  WRITE_RPC_URL              RPC used for write preparation/execution reads
+  WRITE_CHAIN_ID             Chain id for Aqua0 vault write preparation
+  VAULT_REGISTRY_ADDRESS     Aqua0 vault registry address (Arc default for pair commands)
+  AQUA_ADAPTER_ADDRESS       Aqua0 AquaAdapter (Arc default)
+  AQUA_SWAPVM_ROUTER_ADDRESS AquaSwapVMRouter (Arc default)
+  FXSWAP_ROUTER_ADDRESS      FXSwap router; opcode fxswap is refused until set
+  MCP_WRITE_MODE             prepare|execute, defaults to prepare
+  WRITE_PRIVATE_KEY          Required only for guarded execute mode`);
 }
 
 try {
@@ -70,6 +78,20 @@ try {
       break;
     case "create-strategy": {
       const parsed = parseFlags(args);
+      const pair = optionalFlag(parsed, "pair");
+      if (pair) {
+        printJson(
+          await aqua0.createFxStrategy({
+            pair,
+            chain: optionalFlag(parsed, "chain"),
+            opcode: optionalFlag(parsed, "opcode"),
+            strategist: optionalFlag(parsed, "strategist"),
+            params: readStrategyParams(parsed),
+            dryRun: optionalBoolean(parsed, "dry-run")
+          })
+        );
+        break;
+      }
       const input = {
         strategist: requireFlag(parsed, "strategist"),
         token0: requireFlag(parsed, "token0"),
@@ -100,6 +122,50 @@ try {
       );
       break;
     }
+    case "deposit": {
+      const parsed = parseFlags(args);
+      printJson(
+        await aqua0.deposit({
+          token: optionalFlag(parsed, "token"),
+          vault: optionalFlag(parsed, "vault"),
+          amount: requireFlag(parsed, "amount"),
+          unit: optionalUnit(parsed, "unit"),
+          receiver: optionalFlag(parsed, "receiver"),
+          dryRun: optionalBoolean(parsed, "dry-run")
+        })
+      );
+      break;
+    }
+    case "quote":
+    case "swap": {
+      const parsed = parseFlags(args);
+      const input = {
+        pair: optionalFlag(parsed, "pair"),
+        strategyId: optionalFlag(parsed, "strategy-id"),
+        tokenIn: optionalFlag(parsed, "token-in"),
+        amount: requireFlag(parsed, "amount"),
+        unit: optionalUnit(parsed, "unit"),
+        taker: optionalFlag(parsed, "taker"),
+        params: readStrategyParams(parsed)
+      };
+      if (command === "quote") {
+        printJson(await aqua0.quoteSwap(input));
+      } else {
+        const slippage = optionalFlag(parsed, "slippage-bps");
+        printJson(
+          await aqua0.swap({
+            ...input,
+            slippageBps: slippage === undefined ? undefined : Number(slippage),
+            minAmountOut: optionalFlag(parsed, "min-amount-out"),
+            dryRun: optionalBoolean(parsed, "dry-run")
+          })
+        );
+      }
+      break;
+    }
+    case "shared-backing":
+      printJson(await aqua0.getSharedBacking({ address: args[0] }));
+      break;
     default:
       console.error(`Unknown command: ${command}`);
       printHelp();
@@ -142,6 +208,35 @@ function requireFlag(flags: Map<string, string[]>, name: string): string {
     throw new Error(`Missing --${name}`);
   }
   return value;
+}
+
+function optionalFlag(flags: Map<string, string[]>, name: string): string | undefined {
+  return flags.get(name)?.[0];
+}
+
+function optionalBoolean(flags: Map<string, string[]>, name: string): boolean | undefined {
+  const value = optionalFlag(flags, name);
+  return value === undefined ? undefined : parseBoolean(value, name);
+}
+
+function optionalUnit(flags: Map<string, string[]>, name: string): AmountUnit | undefined {
+  const value = optionalFlag(flags, name);
+  if (value === undefined || value === "human" || value === "raw") {
+    return value;
+  }
+  throw new Error(`--${name} must be human or raw`);
+}
+
+function readStrategyParams(flags: Map<string, string[]>): StrategyParamsInput {
+  return {
+    price: optionalFlag(flags, "price"),
+    feeBps: optionalFlag(flags, "fee-bps"),
+    feePpb: optionalFlag(flags, "fee-ppb"),
+    usdcAmount: optionalFlag(flags, "usdc-amount"),
+    fxAmount: optionalFlag(flags, "fx-amount"),
+    linearWidth: optionalFlag(flags, "linear-width"),
+    label: optionalFlag(flags, "label")
+  };
 }
 
 function requireFlags(flags: Map<string, string[]>, name: string): string[] {

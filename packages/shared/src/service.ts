@@ -4,6 +4,21 @@ import {
   USDC_ERC20_INTERFACE_ADDRESS
 } from "./constants.js";
 import {
+  executeCreateFxStrategy,
+  executeFxDeposit,
+  executeFxSwap,
+  prepareCreateFxStrategy,
+  prepareFxDeposit,
+  prepareFxSwap,
+  quoteFxSwap,
+  readSharedBacking,
+  resolveToolWriteMode,
+  type CreateFxStrategyInput,
+  type FxDepositInput,
+  type FxSwapInput,
+  type SharedBackingInput
+} from "./fx.js";
+import {
   addBigIntStrings,
   GraphClient,
   GraphRequestError,
@@ -626,6 +641,36 @@ export class Aqua0Service {
     owner: string;
   }): PreparedTransaction {
     return prepareWithdraw(input);
+  }
+
+  /**
+   * USDC/FX SwapVM strategy on Arc: class -> vault legs -> backing -> commitments -> ship.
+   * Executes only when MCP_WRITE_MODE=execute (and not dryRun); otherwise returns prepared payloads.
+   */
+  createFxStrategy(input: CreateFxStrategyInput & { dryRun?: boolean | undefined }) {
+    return resolveToolWriteMode(this.#config, input.dryRun) === "execute"
+      ? executeCreateFxStrategy(this.#config, input)
+      : prepareCreateFxStrategy(this.#config, input);
+  }
+
+  deposit(input: FxDepositInput & { dryRun?: boolean | undefined }) {
+    return resolveToolWriteMode(this.#config, input.dryRun) === "execute"
+      ? executeFxDeposit(this.#config, input)
+      : prepareFxDeposit(this.#config, input);
+  }
+
+  quoteSwap(input: FxSwapInput) {
+    return quoteFxSwap(this.#config, input);
+  }
+
+  swap(input: FxSwapInput & { dryRun?: boolean | undefined }) {
+    return resolveToolWriteMode(this.#config, input.dryRun) === "execute"
+      ? executeFxSwap(this.#config, input)
+      : prepareFxSwap(this.#config, input);
+  }
+
+  getSharedBacking(input: SharedBackingInput = {}) {
+    return readSharedBacking(this.#config, input);
   }
 
   assertExecutionAllowed(): void {
