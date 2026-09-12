@@ -217,5 +217,67 @@
         }
       ]
     }
+  },
+  "circleSignInRun": {
+    "date": "2026-09-12",
+    "driver": "aqua0 CLI with SIGNER=circle after aqua0 login (Privy), same @aqua0/shared service functions as the MCP tools",
+    "user": {
+      "signIn": "Privy (did:privy user id as the Circle wallet refId)",
+      "circleWallet": "0x34f90ed31798a8017f558e37e26c62f58731450f",
+      "operatorRole": false
+    },
+    "operator": {
+      "circleWallet": "0xcdbd43edb8292def7e8ac99c77860a689cc6d404",
+      "operatorRoleGrants": [
+        { "adapter": "0xbF72D34b804636496c3308796908152b82624Ca5", "hash": "0x55fbeca775df38b430c0fde7752aa62cdec04ed88eaba1fb4d849be56610f306" },
+        { "adapter": "0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5", "hash": "0x0a63803cd1d553077fba5f1440f5482e3bc38c3caf75e24ec806cb3be655ff3a" }
+      ]
+    },
+    "topUp": {
+      "amount": "5 USDC",
+      "from": "operator",
+      "hash": "0xc65c2227c0c1da3cf03639324aa8a0bb5bf3e03cb495fbc54337a6d55be651a0"
+    },
+    "deposit": {
+      "token": "USDC",
+      "amount": "2",
+      "transactions": [
+        { "stage": "approve USDC", "hash": "0x26bf516577f086e3084188f2a2c156ddb38e93fd17726c150477f2e0504acf52" },
+        { "stage": "deposit USDC", "hash": "0xdaa3fb055ca0bbc6ac0456c54cbf7bebb06b65e9a8836eb040ba4f5395c91c1b" }
+      ]
+    },
+    "strategy": {
+      "pair": "USDC/BRL",
+      "opcode": "pegged",
+      "label": "New user BRL",
+      "classId": "5",
+      "strategyId": "0x38fe804ef178aee541d485e9494a4d8313a8150cb0e6022ba8c4d7c43e6019ed",
+      "program": "Salt (opcode 20) -> FlatFeeAmountIn (opcode 21) -> PeggedSwap (opcode 31)",
+      "live": true,
+      "transactions": [
+        { "stage": "registerStrategyClass", "hash": "0x251ae7ee77218eafc064d9941187f500286a47e53559a06bbb547452a335f9a8" },
+        { "stage": "registerStrategy (USDC vault)", "hash": "0x5e776a8508da1e4877485012ab45085ad95670f19d855fb430e1bed1b7442f30" },
+        { "stage": "registerStrategy (BRAt vault)", "hash": "0xfa376f6d0946eb3a96a41ed7f9b039c3cdda1d7ce661aab9926503e44ed44a36" },
+        { "stage": "setCommitment (USDC vault)", "hash": "0x263c98dd7431e2309254b8c3dd5a6c8945b6d1ebdea1d612af2a82ad9cd38de2" },
+        { "stage": "mint BRAt (open-mint demo token)", "hash": "0xea753c02032b25802e294b142c137e27a8cc51f0f7fc216645a19409ba8ab2fe" },
+        { "stage": "approve BRAt", "hash": "0xd8ad5b6671f5b0a860c6bc986ae4bea6f33e542ac4f516b101d1b7f38e4982ed" },
+        { "stage": "deposit BRAt", "hash": "0xea7b6920dc3adec35cb7d89afa54425531948d52dcb6ed26dedb54de36ce8ceb" },
+        { "stage": "setCommitment (BRAt vault)", "hash": "0x113e3c2c95c20845db6a33c6925888ccc0ef01b9921535ce141247d5fed74d8c" },
+        {
+          "stage": "shipStrategyWithFee (signed by the user, sent by the operator)",
+          "hash": "0xea960df6e4310026d68747d6c0bee6fb13ab58ada0a7a93880062e61cd4c8b1a"
+        }
+      ]
+    },
+    "swap": {
+      "pair": "USDC/BRL",
+      "strategyId": "0x38fe804ef178aee541d485e9494a4d8313a8150cb0e6022ba8c4d7c43e6019ed",
+      "amountIn": "0.1 USDC",
+      "received": "0.547047596524127151 BRAt",
+      "transactions": [
+        { "stage": "approve USDC", "hash": "0x21a36d7975490577a868442023b0546e0cb0f69e2b05bf9be95fff8a59bbecab" },
+        { "stage": "swap USDC -> BRAt", "hash": "0x586c010520c29b0ccc50b34a4f4d0bd16cc9628b77624bedb830031a2d3b49e4" }
+      ]
+    }
   }
 }

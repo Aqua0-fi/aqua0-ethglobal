@@ -46,6 +46,8 @@ import {
   parseTokenAmount,
   resolvePair,
   resolveToken,
+  buildSaltInstruction,
+  strategySalt,
   type FxSwapArgs
 } from "../src/swapvm.js";
 
@@ -233,6 +235,7 @@ test("Arc deployment constants stay in sync with deployments/arc-testnet.json (F
       fxswapRouter?: string | null;
       fxAquaAdapter?: string | null;
       fxOracles?: { arsUsd?: string | null; brlUsd?: string | null; owner?: string | null } | null;
+      redstone?: { multiFeedAdapter?: string | null; feeds?: { BRL?: string | null; MXNe?: string | null } } | null;
     };
     assets: Record<string, string>;
     vaults: Record<string, string>;
@@ -253,7 +256,10 @@ test("Arc deployment constants stay in sync with deployments/arc-testnet.json (F
     ["fxAquaAdapter", file.contracts.fxAquaAdapter, fx.fxAquaAdapter],
     ["fxOracles.arsUsd", file.contracts.fxOracles?.arsUsd, fx.fxOracles.arsUsd],
     ["fxOracles.brlUsd", file.contracts.fxOracles?.brlUsd, fx.fxOracles.brlUsd],
-    ["fxOracles.owner", file.contracts.fxOracles?.owner, fx.fxOracles.owner]
+    ["fxOracles.owner", file.contracts.fxOracles?.owner, fx.fxOracles.owner],
+    ["redstone.multiFeedAdapter", file.contracts.redstone?.multiFeedAdapter, fx.redstone.multiFeedAdapter],
+    ["redstone.feeds.BRL", file.contracts.redstone?.feeds?.BRL, fx.redstone.feeds.BRL],
+    ["redstone.feeds.MXNe", file.contracts.redstone?.feeds?.MXNe, fx.redstone.feeds.MXNe]
   ];
   for (const [name, inFile, inConstants] of pairs) {
     assert.equal(inConstants?.toLowerCase() ?? null, inFile?.toLowerCase() ?? null, name);
@@ -398,6 +404,64 @@ test("default FXSwap USDC/ARS strategy and human-unit params encode the Solidity
   assert.throws(() => parseDurationSeconds("soon"), /duration/);
 });
 
+test("FXSwap on a USD-per-FX feed (RedStone BRL) flips the price flag and states the band in the feed's orientation", () => {
+  const pair = resolvePair("USDC/BRL");
+  const usdPerBrl = 194n * 10n ** 15n;
+  const brlPerUsd = (WAD * WAD) / usdPerBrl;
+  const redstone = buildFxSwapStrategySpec(FX_ADAPTER, pair, BRL_FEED, {}, { oraclePriceWad: usdPerBrl, feedQuote: "usdPerFx" });
+  const manual = buildFxSwapStrategySpec(FX_ADAPTER, pair, BRL_FEED, {}, { oraclePriceWad: brlPerUsd });
+  assert.equal(redstone.feedQuote, "usdPerFx");
+  assert.equal(manual.feedQuote, "fxPerUsd");
+  assert.equal(redstone.args.flags, manual.args.flags ^ FXSWAP.flagInvertPrice);
+  assert.equal(redstone.args.rateLt, manual.args.rateLt);
+  assert.equal(redstone.args.rateGt, manual.args.rateGt);
+  // Default band: half to double the 5.50 BRL per USD reference, as USD per BRL.
+  const reference = (WAD * WAD) / (55n * 10n ** 17n);
+  assert.equal(redstone.band.minPrice, reference / 2n);
+  assert.equal(redstone.band.maxPrice, reference * 2n);
+  // Same value-balanced ship whichever way the feed quotes.
+  assert.equal(redstone.fxShip, manual.fxShip);
+  assert.notEqual(redstone.strategyId, manual.strategyId);
+
+  const banded = buildFxSwapStrategySpec(FX_ADAPTER, pair, BRL_FEED, { bandPercent: 10 }, {
+    oraclePriceWad: usdPerBrl,
+    feedQuote: "usdPerFx"
+  });
+  assert.equal(banded.band.minPrice, (usdPerBrl * 9n) / 10n);
+  assert.equal(banded.band.maxPrice, (usdPerBrl * 11n) / 10n);
+  assert.throws(
+    () => buildFxSwapStrategySpec(FX_ADAPTER, pair, BRL_FEED, { minPrice: 1, maxPrice: 0.5, fxAmount: 1 }, { feedQuote: "usdPerFx" }),
+    /USD per BRL is invalid/
+  );
+});
+
+test("a per-strategist Salt keeps two users' identical strategies on separate ids", () => {
+  const pair = resolvePair("USDC/BRL");
+  const saltA = strategySalt(keccak256(toBytes("strategist A class")));
+  const saltB = strategySalt(keccak256(toBytes("strategist B class")));
+  assert.equal(saltA.length, 18);
+
+  const plain = buildPeggedStrategySpec(ADAPTER, pair, {});
+  const a = buildPeggedStrategySpec(ADAPTER, pair, {}, { salt: saltA });
+  const b = buildPeggedStrategySpec(ADAPTER, pair, {}, { salt: saltB });
+  assert.notEqual(a.strategyId, b.strategyId);
+  assert.notEqual(a.strategyId, plain.strategyId);
+  assert.equal(a.program, `${buildSaltInstruction(saltA)}${plain.program.slice(2)}`);
+  assert.deepEqual(
+    decodeSwapVMProgram(a.program).map((instruction) => instruction.name),
+    ["Salt", "FlatFeeAmountIn", "PeggedSwap"]
+  );
+  assert.equal(a.amounts[0], plain.amounts[0]);
+
+  const fx = buildFxSwapStrategySpec(FX_ADAPTER, pair, BRL_FEED, { flatFeeBps: 30 }, { oraclePriceWad: 55n * 10n ** 17n, salt: saltA });
+  assert.deepEqual(
+    decodeSwapVMProgram(fx.program).map((instruction) => instruction.name),
+    ["Salt", "FlatFeeAmountIn", "FXSwap"]
+  );
+  assert.equal(fx.salt, saltA);
+  assert.throws(() => buildSaltInstruction("0x"), /1 to 255 bytes/);
+});
+
 test("FXSwap validation mirrors FXSwapArgsBuilder.validate, and params are checked per opcode", () => {
   const vector = FXSWAP_VECTORS["usdc-ars-defaults"];
   assert.ok(vector);
@@ -438,7 +502,17 @@ test("venues: FXSwap addresses default to the Arc deployment and can be overridd
   assert.equal(venue.fxswap?.router, ARC_TESTNET_DEPLOYMENT.fxVenue.fxswapRouter?.toLowerCase());
   assert.equal(venue.fxswap?.adapter, FX_ADAPTER.toLowerCase());
   assert.equal(venue.fxswap?.oracles.ARGt, ARS_FEED.toLowerCase());
-  assert.equal(venue.fxswap?.oracles.BRAt, BRL_FEED.toLowerCase());
+  // USDC/BRL reads RedStone's BRL feed (USD per 1 BRL) unless FX_ORACLE_BRL_USD overrides it with a BRL-per-USD feed.
+  assert.equal(venue.fxswap?.oracles.BRAt, ARC_TESTNET_DEPLOYMENT.fxVenue.redstone.feeds.BRL?.toLowerCase());
+  assert.deepEqual(venue.fxswap?.feeds.BRAt, {
+    address: ARC_TESTNET_DEPLOYMENT.fxVenue.redstone.feeds.BRL?.toLowerCase(),
+    source: "redstone",
+    quote: "usdPerFx",
+    redstone: { feedId: "BRL", adapter: ARC_TESTNET_DEPLOYMENT.fxVenue.redstone.multiFeedAdapter?.toLowerCase() }
+  });
+  assert.equal(venue.fxswap?.feeds.ARGt?.source, "manual");
+  const manualBrl = resolveSwapVMVenue({ writeChainId: 5042002, fxOracleBrlUsdAddress: BRL_FEED }).fxswap?.feeds.BRAt;
+  assert.deepEqual(manualBrl, { address: BRL_FEED.toLowerCase(), source: "manual", quote: "fxPerUsd" });
   assert.equal(venue.pegged.adapter, ADAPTER.toLowerCase());
   const override = `0x${"ab".repeat(20)}`;
   assert.equal(resolveSwapVMVenue({ writeChainId: 5042002, fxOracleArsUsdAddress: override }).fxswap?.oracles.ARGt, override);

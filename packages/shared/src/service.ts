@@ -16,7 +16,9 @@ import {
   readFxPrices,
   readSharedBacking,
   resolveToolWriteMode,
+  topUpUserUsdc,
   type CreateFxStrategyInput,
+  type OnboardingFunding,
   type FxDepositInput,
   type FxPricesInput,
   type FxSwapInput,
@@ -30,6 +32,17 @@ import {
   normalizeAddress,
   type FetchLike
 } from "./graph.js";
+import { CIRCLE_BLOCKCHAIN } from "./circle.js";
+import {
+  clearSession,
+  readSession,
+  sessionFilePath,
+  startPrivyLogin,
+  writeSession,
+  type Aqua0Session,
+  type PrivyEnvConfig
+} from "./privy.js";
+import { resolveSignerAddress, resolveSignerKind, type SignerKind } from "./signer.js";
 import {
   assertExecutionAllowed,
   executeAuthorizeStrategy,
@@ -47,7 +60,8 @@ import {
   type WriteMode
 } from "./write.js";
 
-export type Aqua0ServiceConfig = WriteConfig & {
+export type Aqua0ServiceConfig = WriteConfig &
+  PrivyEnvConfig & {
   graphEndpoint: string;
   graphAuthToken?: string;
   graphTimeoutMs?: number;
@@ -78,6 +92,8 @@ export type Aqua0Info = {
     chainId?: number;
     vaultRegistryAddress?: Lowercase<string>;
     executionConfigured: boolean;
+    /** Execute-mode signer and its address (null when none is configured or it could not be resolved). */
+    signer: { kind: SignerKind; address: Lowercase<string> | null; error?: string };
   };
 };
 
@@ -201,15 +217,40 @@ export type VaultMetadata = {
   updatedAtTimestamp: string;
 };
 
+export type LoginResult = {
+  privyUserId: string;
+  walletAddress: Lowercase<string> | null;
+  blockchain: typeof CIRCLE_BLOCKCHAIN;
+  sessionFile: string;
+  /** Testnet USDC the Aqua0 operator sent so a new wallet can pay gas and deposit right away. */
+  funding: OnboardingFunding;
+};
+
+type PendingLogin = {
+  status: "pending" | "signed-in" | "failed";
+  url: string;
+  startedAt: string;
+  completed: Promise<LoginResult>;
+  error?: string;
+};
+
 export class Aqua0Service {
   readonly #config: Aqua0ServiceConfig;
   readonly #graph: GraphClient;
+  #login: PendingLogin | undefined;
+  /** Whether circleUserRef is a Privy user id from sign-in, rather than a fixed CIRCLE_USER_REF. */
+  #userRefFromSignIn = false;
 
   constructor(config: Aqua0ServiceConfig) {
     this.#config = {
       ...config,
       mcpWriteMode: config.mcpWriteMode ?? "prepare"
     };
+    const session = this.#savedSession();
+    if (session) {
+      this.#config.circleUserRef = session.did;
+      this.#userRefFromSignIn = true;
+    }
     this.#graph = new GraphClient({
       endpoint: config.graphEndpoint,
       ...(config.graphAuthToken ? { authToken: config.graphAuthToken } : {}),
@@ -252,7 +293,7 @@ export class Aqua0Service {
     }
   }
 
-  info(): Aqua0Info {
+  async info(): Promise<Aqua0Info> {
     return {
       architecture: AQUA0_ARCHITECTURE,
       chain: ARC_TESTNET,
@@ -269,9 +310,170 @@ export class Aqua0Service {
         ...(this.#config.vaultRegistryAddress
           ? { vaultRegistryAddress: normalizeAddress(this.#config.vaultRegistryAddress) }
           : {}),
-        executionConfigured: isExecutionAllowedByConfig(this.#config)
+        executionConfigured: isExecutionAllowedByConfig(this.#config),
+        signer: await this.#signerInfo()
       }
     };
+  }
+
+  /** Signer kind and address only; a Circle lookup failure is reported (secrets redacted), not thrown. */
+  async #signerInfo(): Promise<Aqua0Info["write"]["signer"]> {
+    const kind = resolveSignerKind(this.#config);
+    try {
+      return { kind, address: (await resolveSignerAddress(this.#config)) ?? null };
+    } catch (error) {
+      return { kind, address: null, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  /** Whether this configuration signs per user with a Circle wallet set, so Privy sign-in can pick the user. */
+  #signInCapable(): boolean {
+    const config = this.#config;
+    return (
+      resolveSignerKind(config) === "circle" &&
+      Boolean(config.circleWalletSetId) &&
+      !config.circleWalletId &&
+      (!config.circleUserRef || this.#userRefFromSignIn)
+    );
+  }
+
+  /** A saved Privy sign-in matching this app and wallet set, used when no CIRCLE_USER_REF is configured. */
+  #savedSession(): Aqua0Session | undefined {
+    const config = this.#config;
+    if (!this.#signInCapable() || config.circleUserRef) {
+      return undefined;
+    }
+    const session = readSession(config.aqua0SessionFile);
+    if (!session) {
+      return undefined;
+    }
+    const otherApp = config.privyAppId !== undefined && session.privyAppId !== config.privyAppId;
+    const otherSet = session.circleWalletSetId !== undefined && session.circleWalletSetId !== config.circleWalletSetId;
+    return otherApp || otherSet ? undefined : session;
+  }
+
+  /**
+   * Starts a local Privy sign-in and returns the page URL right away; `completed` settles once the user signs in.
+   * The verified Privy user id becomes the Circle wallet refId (the wallet is created on first sign-in) and is saved,
+   * so later runs sign with the same wallet until logout.
+   */
+  async startLogin(): Promise<{ url: string; completed: Promise<LoginResult> }> {
+    const config = this.#config;
+    const appId = config.privyAppId;
+    if (!appId) {
+      throw new Error("PRIVY_APP_ID is required to sign in with Privy");
+    }
+    if (!this.#signInCapable()) {
+      throw new Error(
+        config.circleUserRef && !this.#userRefFromSignIn
+          ? "CIRCLE_USER_REF is set, so this server always signs as that user; unset it to sign in with Privy"
+          : "Sign-in gives each user their own Circle wallet: set SIGNER=circle, CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET and CIRCLE_WALLET_SET_ID, and leave CIRCLE_WALLET_ID unset"
+      );
+    }
+    if (this.#login?.status === "pending") {
+      return { url: this.#login.url, completed: this.#login.completed };
+    }
+    const walletSetId = config.circleWalletSetId;
+    const login = await startPrivyLogin<LoginResult>({
+      appId,
+      ...(config.privyClientId ? { clientId: config.privyClientId } : {}),
+      ...(config.privyLoginPort ? { port: config.privyLoginPort } : {}),
+      onIdentity: async (identity) => {
+        const previous = { ref: config.circleUserRef, fromSignIn: this.#userRefFromSignIn };
+        config.circleUserRef = identity.did;
+        this.#userRefFromSignIn = true;
+        let walletAddress: Lowercase<string> | undefined;
+        try {
+          walletAddress = await resolveSignerAddress(config);
+        } catch (error) {
+          if (previous.ref === undefined) {
+            delete config.circleUserRef;
+          } else {
+            config.circleUserRef = previous.ref;
+          }
+          this.#userRefFromSignIn = previous.fromSignIn;
+          throw error;
+        }
+        writeSession(
+          {
+            version: 1,
+            privyAppId: appId,
+            did: identity.did,
+            ...(walletSetId ? { circleWalletSetId: walletSetId } : {}),
+            ...(walletAddress ? { walletAddress } : {}),
+            signedInAt: new Date().toISOString()
+          },
+          config.aqua0SessionFile
+        );
+        // A top-up failure never fails the sign-in; it is reported instead.
+        const funding: OnboardingFunding = walletAddress
+          ? await topUpUserUsdc(config, walletAddress).catch((error: unknown) => ({
+              status: "failed" as const,
+              note: error instanceof Error ? error.message : String(error)
+            }))
+          : { status: "skipped", note: "no wallet address" };
+        return {
+          privyUserId: identity.did,
+          walletAddress: walletAddress ?? null,
+          blockchain: CIRCLE_BLOCKCHAIN,
+          sessionFile: sessionFilePath(config.aqua0SessionFile),
+          funding
+        };
+      }
+    });
+    const pending: PendingLogin = {
+      status: "pending",
+      url: login.url,
+      startedAt: new Date().toISOString(),
+      completed: login.completed
+    };
+    this.#login = pending;
+    login.completed.then(
+      () => {
+        pending.status = "signed-in";
+      },
+      (error: unknown) => {
+        pending.status = "failed";
+        pending.error = error instanceof Error ? error.message : String(error);
+      }
+    );
+    return { url: login.url, completed: login.completed };
+  }
+
+  /** Who this server signs as: the Privy sign-in (if any), the signer address, and any sign-in in progress. */
+  async whoami() {
+    const config = this.#config;
+    const signedIn = this.#userRefFromSignIn && config.circleUserRef !== undefined;
+    const session = signedIn ? readSession(config.aqua0SessionFile) : undefined;
+    return {
+      signedIn,
+      ...(signedIn ? { privyUserId: config.circleUserRef } : {}),
+      ...(session ? { signedInAt: session.signedInAt } : {}),
+      signer: await this.#signerInfo(),
+      signInAvailable: Boolean(config.privyAppId) && this.#signInCapable(),
+      ...(this.#login
+        ? {
+            login: {
+              status: this.#login.status,
+              url: this.#login.url,
+              startedAt: this.#login.startedAt,
+              ...(this.#login.error ? { error: this.#login.error } : {})
+            }
+          }
+        : {}),
+      note: "Privy sign-in picks which Circle wallet this server signs with. The Circle credentials stay with whoever runs the server."
+    };
+  }
+
+  /** Forgets the Privy sign-in: deletes the saved session and stops signing as that user. */
+  logout() {
+    const removed = clearSession(this.#config.aqua0SessionFile);
+    const wasSignedIn = this.#userRefFromSignIn && this.#config.circleUserRef !== undefined;
+    if (this.#userRefFromSignIn) {
+      delete this.#config.circleUserRef;
+      this.#userRefFromSignIn = false;
+    }
+    return { signedOut: wasSignedIn || removed, sessionFileRemoved: removed };
   }
 
   async getBalance(address: string) {

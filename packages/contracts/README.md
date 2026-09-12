@@ -57,6 +57,27 @@ Each strategy is `[FlatFeeAmountIn][PeggedSwap]`. USDC's pegged-curve rate multi
 gap and the FX price, so the flat zone sits at the configured price. It is a fixed-price stable strategy: it does
 not follow a moving FX rate.
 
+## RedStone FX feeds
+
+FXSwap strategies price from RedStone `redstone-primary-prod` data: free signed prices from RedStone's public
+gateways, no API key and no keeper of our own.
+
+- `src/oracles/AquaRedStoneFeeds.sol`: `AquaRedStoneMultiFeedAdapter` stores the values, and one
+  `AquaRedStonePriceFeed` per symbol exposes Chainlink-style `latestRoundData` for FXSwap (oracle kind 0). `BRL`
+  quotes USD per 1 BRL, so FXSwap sets its invert flag; `MXNe` quotes MXN per 1 USD. Both use 8 decimals.
+- Anyone refreshes a feed by calling `updateDataFeedsValuesPartial(bytes32[])` with a signed payload appended to
+  the calldata. A value is stored only when 3 of the 5 primary-prod signers agree and the data is newer than the
+  stored value and at most 3 minutes old. Reads revert after 30 hours without an update.
+- `script/DeployRedStoneFeeds.s.sol` deploys the adapter and both feeds. There is no owner and nothing to wire.
+- `test/AquaRedStoneFeeds.t.sol` replays the update sent on Arc (`test/fixtures/redstone-arc-update.json`), so the
+  signature, threshold and median checks run without a fork.
+- RedStone sources are vendored under `lib/redstone` (see its README).
+
+```bash
+forge script script/DeployRedStoneFeeds.s.sol --rpc-url https://rpc.testnet.arc.network \
+  --account <keystore-name> --password-file <path-to-password-file> --broadcast
+```
+
 ## Wire facts (swap-vm v1.0.2 `AquaSwapVMRouter`)
 
 | Item | Value |

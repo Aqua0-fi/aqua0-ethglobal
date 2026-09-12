@@ -50,6 +50,7 @@ export type SwapVMOrder = {
 
 export const SWAPVM = {
   /** AquaSwapVMRouter v1.0.2 `AquaOpcodes` dispatch indices. */
+  opcodeSalt: 20,
   opcodeFlatFeeIn: 21,
   opcodePeggedSwap: 31,
   /** useAquaInsteadOfSignature | postTransferIn hook | preTransferOut hook: what AquaAdapter accepts. */
@@ -320,6 +321,8 @@ export function buildPeggedProgram(input: {
   priceE2: bigint;
   feePpb: number;
   linearWidth: bigint;
+  /** Optional `[Salt]` prefix (see `buildSaltInstruction`). */
+  salt?: Hex | undefined;
 }): Hex {
   const scaledPrice = input.priceE2 * decimalScale(input.pair);
   if (scaledPrice % 100n !== 0n) {
@@ -341,10 +344,29 @@ export function buildPeggedProgram(input: {
     ],
     [x0, y0, input.linearWidth, rateLt, rateGt]
   );
-  return encodePacked(
+  const program = encodePacked(
     ["uint8", "uint8", "uint32", "uint8", "uint8", "bytes"],
     [SWAPVM.opcodeFlatFeeIn, 4, input.feePpb, SWAPVM.opcodePeggedSwap, 160, peggedArgs]
   );
+  return input.salt ? concat([buildSaltInstruction(input.salt), program]) : program;
+}
+
+/**
+ * `[Salt(salt)]`: SwapVM's no-op instruction (`Controls._salt`, index 20 on both routers). A strategy id is the hash of
+ * its program, so two strategists choosing the same parameters would otherwise share one id; a salt makes each
+ * strategist's program, and so its id, their own.
+ */
+export function buildSaltInstruction(salt: Hex): Hex {
+  const length = (salt.length - 2) / 2;
+  if (!/^0x[0-9a-fA-F]*$/.test(salt) || !Number.isInteger(length) || length < 1 || length > 255) {
+    throw new Error("salt must be 1 to 255 bytes of hex");
+  }
+  return encodePacked(["uint8", "uint8", "bytes"], [SWAPVM.opcodeSalt, length, salt]);
+}
+
+/** 8-byte program salt for a strategy class: the first 8 bytes of its key (strategist, chain, tokens, label). */
+export function strategySalt(strategyKey: Hex): Hex {
+  return strategyKey.slice(0, 18) as Hex;
 }
 
 const ORDER_PARAMETERS = [
@@ -425,6 +447,8 @@ export type PeggedStrategySpec = {
   usdcShip: bigint;
   fxShip: bigint;
   linearWidth: bigint;
+  /** Per-strategist program salt, when set. */
+  salt?: Hex;
   program: Hex;
   order: SwapVMOrder;
   strategyBytes: Hex;
@@ -436,7 +460,8 @@ export type PeggedStrategySpec = {
 export function buildPeggedStrategySpec(
   adapter: string,
   pair: FxPair,
-  params: StrategyParamsInput = {}
+  params: StrategyParamsInput = {},
+  options: { salt?: Hex | undefined } = {}
 ): PeggedStrategySpec {
   assertParamsFor("pegged", params);
   const priceE2 = parsePriceE2(params, pair.fx);
@@ -473,7 +498,8 @@ export function buildPeggedStrategySpec(
     fxReserve: fxShip,
     priceE2,
     feePpb,
-    linearWidth
+    linearWidth,
+    salt: options.salt
   });
   const order = buildAquaOrder(adapter, program);
   const strategyBytes = encodeSwapVMOrder(order);
@@ -486,6 +512,7 @@ export function buildPeggedStrategySpec(
     usdcShip,
     fxShip,
     linearWidth,
+    ...(options.salt ? { salt: options.salt } : {}),
     program,
     order,
     strategyBytes,
@@ -541,6 +568,9 @@ export const FXSWAP_DEFAULTS = {
   maxStaleness: 604_800,
   oracleDecimals: 0
 } as const;
+
+/** What an FX feed answer means: FX units per 1 USD, or USD per 1 FX unit. */
+export type FxFeedQuote = "fxPerUsd" | "usdPerFx";
 
 /** FX units per 1 USD (WAD) the default price band is built around. */
 export const FXSWAP_REFERENCE_PRICE_WAD: Readonly<Record<string, bigint>> = {
@@ -728,7 +758,12 @@ export function fxSwapOrientation(
 }
 
 /** `[FlatFeeAmountIn(flatFeePpb)]` (only when flatFeePpb > 0) followed by `[FXSwap(args)]`. */
-export function buildFxSwapProgram(input: { args: FxSwapArgs; flatFeePpb?: number | undefined }): Hex {
+export function buildFxSwapProgram(input: {
+  args: FxSwapArgs;
+  flatFeePpb?: number | undefined;
+  /** Optional `[Salt]` prefix (see `buildSaltInstruction`). */
+  salt?: Hex | undefined;
+}): Hex {
   const fxSwap = encodePacked(
     ["uint8", "uint8", "bytes"],
     [FXSWAP.opcode, FXSWAP.argsLength, encodeFxSwapArgs(input.args)]
@@ -737,16 +772,16 @@ export function buildFxSwapProgram(input: { args: FxSwapArgs; flatFeePpb?: numbe
   if (!Number.isInteger(flatFeePpb) || flatFeePpb < 0 || flatFeePpb >= SWAPVM.feeDenominatorPpb) {
     throw new Error(`flat fee of ${flatFeePpb} ppb must be an integer below 1,000,000,000 ppb (100%)`);
   }
-  if (flatFeePpb === 0) {
-    return fxSwap;
-  }
-  return concat([
-    encodePacked(["uint8", "uint8", "uint32"], [SWAPVM.opcodeFlatFeeIn, 4, flatFeePpb]),
+  const parts: Hex[] = [
+    ...(input.salt ? [buildSaltInstruction(input.salt)] : []),
+    ...(flatFeePpb === 0 ? [] : [encodePacked(["uint8", "uint8", "uint32"], [SWAPVM.opcodeFlatFeeIn, 4, flatFeePpb])]),
     fxSwap
-  ]);
+  ];
+  return parts.length === 1 ? fxSwap : concat(parts);
 }
 
 export type DecodedInstruction =
+  | { opcode: 20; name: "Salt"; salt: Hex }
   | { opcode: 21; name: "FlatFeeAmountIn"; feePpb: number }
   | {
       opcode: 31;
@@ -777,7 +812,9 @@ export function decodeSwapVMProgram(program: Hex): DecodedInstruction[] {
     }
     cursor += 4 + length * 2;
     const args = `0x${body}` as Hex;
-    if (opcode === SWAPVM.opcodeFlatFeeIn && length === 4) {
+    if (opcode === SWAPVM.opcodeSalt) {
+      instructions.push({ opcode, name: "Salt", salt: args });
+    } else if (opcode === SWAPVM.opcodeFlatFeeIn && length === 4) {
       instructions.push({ opcode, name: "FlatFeeAmountIn", feePpb: Number(BigInt(args)) });
     } else if (opcode === SWAPVM.opcodePeggedSwap && length === 160) {
       const [x0, y0, linearWidth, rateLt, rateGt] = decodeAbiParameters(
@@ -870,6 +907,10 @@ export type FxSwapStrategySpec = {
   pair: FxPair;
   label: string;
   oracle: Lowercase<string>;
+  /** What the feed answer means; `minPrice`/`maxPrice` are in this orientation. */
+  feedQuote: FxFeedQuote;
+  /** Per-strategist program salt, when set. */
+  salt?: Hex;
   args: FxSwapArgs;
   band: { source: "default" | "explicit" | "bandPercent"; minPrice: bigint; maxPrice: bigint };
   flatFeePpb: number;
@@ -892,23 +933,24 @@ export type FxSwapStrategySpec = {
 export type StrategySpec = PeggedStrategySpec | FxSwapStrategySpec;
 
 /**
- * `[FlatFeeAmountIn]?[FXSwap]` for a USDC/FX pair whose feed quotes FX units per 1 USD. `oraclePriceWad` (the
- * live feed answer in WAD) is needed for `bandPercent` and for the default `fxAmount` (value-balanced ship).
+ * `[FlatFeeAmountIn]?[FXSwap]` for a USDC/FX pair. `context.feedQuote` says what the feed answer means: FX units per
+ * 1 USD (`fxPerUsd`, the default: the manual feeds, RedStone MXNe) or USD per 1 FX unit (`usdPerFx`: RedStone BRL).
+ * `oraclePriceWad` (the live feed answer in WAD, in the feed's orientation) is needed for `bandPercent` and for the
+ * default `fxAmount` (value-balanced ship).
  */
 export function buildFxSwapStrategySpec(
   adapter: string,
   pair: FxPair,
   oracle: string,
   params: StrategyParamsInput = {},
-  context: { oraclePriceWad?: bigint | undefined } = {}
+  context: { oraclePriceWad?: bigint | undefined; feedQuote?: FxFeedQuote | undefined; salt?: Hex | undefined } = {}
 ): FxSwapStrategySpec {
   assertParamsFor("fxswap", params);
-  const orientation = fxSwapOrientation(
-    pair.usdc.address,
-    pair.usdc.decimals,
-    pair.fx.address,
-    pair.fx.decimals
-  );
+  const feedQuote = context.feedQuote ?? "fxPerUsd";
+  const orientation =
+    feedQuote === "usdPerFx"
+      ? fxSwapOrientation(pair.fx.address, pair.fx.decimals, pair.usdc.address, pair.usdc.decimals)
+      : fxSwapOrientation(pair.usdc.address, pair.usdc.decimals, pair.fx.address, pair.fx.decimals);
   const a =
     params.a === undefined ? FXSWAP_DEFAULTS.a : parseTokenAmount(params.a, 4, { field: "a (amplification A)" });
   const gamma =
@@ -935,7 +977,7 @@ export function buildFxSwapStrategySpec(
     throw new Error("flat fee is finer than 1 ppb (0.0000001%)");
   }
   const flatFeePpb = flatFeeWad === undefined ? 0 : Number(flatFeeWad / 10n ** 9n);
-  const band = resolveFxSwapBand(pair, params, context.oraclePriceWad);
+  const band = resolveFxSwapBand(pair, params, context.oraclePriceWad, feedQuote);
   const maxStaleness =
     params.maxStaleness === undefined
       ? FXSWAP_DEFAULTS.maxStaleness
@@ -961,7 +1003,7 @@ export function buildFxSwapStrategySpec(
     rateLt: orientation.rateLt,
     rateGt: orientation.rateGt
   };
-  const program = buildFxSwapProgram({ args, flatFeePpb });
+  const program = buildFxSwapProgram({ args, flatFeePpb, salt: context.salt });
 
   const unit = params.amountUnit ?? "human";
   const usdcShip =
@@ -974,8 +1016,10 @@ export function buildFxSwapStrategySpec(
   let fxShip: bigint;
   if (params.fxAmount !== undefined) {
     fxShip = parseTokenAmount(params.fxAmount, pair.fx.decimals, { unit, field: "fxAmount" });
-  } else if (context.oraclePriceWad !== undefined) {
-    fxShip = (usdcShip * decimalScale(pair) * context.oraclePriceWad) / FXSWAP.wad;
+  } else if (context.oraclePriceWad !== undefined && context.oraclePriceWad > 0n) {
+    const fxPerUsdWad =
+      feedQuote === "usdPerFx" ? (FXSWAP.wad * FXSWAP.wad) / context.oraclePriceWad : context.oraclePriceWad;
+    fxShip = (usdcShip * decimalScale(pair) * fxPerUsdWad) / FXSWAP.wad;
   } else {
     throw new Error("fxAmount defaults to usdcAmount x the live oracle price; read the feed first or pass fxAmount");
   }
@@ -993,6 +1037,8 @@ export function buildFxSwapStrategySpec(
     pair,
     label,
     oracle: normalizeAddress(oracle),
+    feedQuote,
+    ...(context.salt ? { salt: context.salt } : {}),
     args,
     band,
     flatFeePpb,
@@ -1011,7 +1057,8 @@ export function buildFxSwapStrategySpec(
 function resolveFxSwapBand(
   pair: FxPair,
   params: StrategyParamsInput,
-  oraclePriceWad: bigint | undefined
+  oraclePriceWad: bigint | undefined,
+  feedQuote: FxFeedQuote
 ): FxSwapStrategySpec["band"] {
   const explicit = params.minPrice !== undefined || params.maxPrice !== undefined;
   if (params.bandPercent !== undefined) {
@@ -1031,8 +1078,13 @@ function resolveFxSwapBand(
       maxPrice: (oraclePriceWad * (FXSWAP.wad + fraction)) / FXSWAP.wad
     };
   }
-  const reference = FXSWAP_REFERENCE_PRICE_WAD[pair.fx.symbol];
-  const field = `(${pair.fx.fiat} per 1 USD)`;
+  const usdPerFx = feedQuote === "usdPerFx";
+  // The default band is half to double the reference price, expressed in the feed's orientation.
+  const fxPerUsdReference = FXSWAP_REFERENCE_PRICE_WAD[pair.fx.symbol];
+  const reference =
+    fxPerUsdReference === undefined || !usdPerFx ? fxPerUsdReference : (FXSWAP.wad * FXSWAP.wad) / fxPerUsdReference;
+  const unitLabel = usdPerFx ? `USD per ${pair.fx.fiat}` : `${pair.fx.fiat} per USD`;
+  const field = usdPerFx ? `(USD per 1 ${pair.fx.fiat})` : `(${pair.fx.fiat} per 1 USD)`;
   const minPrice =
     params.minPrice !== undefined
       ? parseTokenAmount(params.minPrice, 18, { field: `minPrice ${field}` })
@@ -1050,7 +1102,7 @@ function resolveFxSwapBand(
   }
   if (minPrice === 0n || minPrice > maxPrice) {
     throw new Error(
-      `price band ${formatUnits(minPrice, 18)}..${formatUnits(maxPrice, 18)} ${pair.fx.fiat} per USD is invalid: need 0 < minPrice <= maxPrice`
+      `price band ${formatUnits(minPrice, 18)}..${formatUnits(maxPrice, 18)} ${unitLabel} is invalid: need 0 < minPrice <= maxPrice`
     );
   }
   return { source: explicit ? "explicit" : "default", minPrice, maxPrice };

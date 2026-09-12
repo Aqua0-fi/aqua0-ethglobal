@@ -76,6 +76,11 @@ if (
   process.exit(1);
 }
 
+if (process.env.SIGNER && process.env.SIGNER !== "local" && process.env.SIGNER !== "circle") {
+  console.error("SIGNER must be local or circle");
+  process.exit(1);
+}
+
 if (
   process.env.MCP_TRANSPORT &&
   process.env.MCP_TRANSPORT !== "stdio" &&

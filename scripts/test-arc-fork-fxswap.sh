@@ -6,7 +6,9 @@
 #   FX_VENUE=fresh     (default) deploy ARS/USD + BRL/USD ManualFxOracle feeds and an AquaFXSwapVMRouter with
 #                      packages/contracts/script/DeployFXVenue.s.sol, then an AquaAdapter bound to that router
 #   FX_VENUE=deployed  use the FXSwap venue already deployed on Arc Testnet (deployments/arc-testnet.json); the
-#                      feed owner hands feed ownership to the throwaway signer on the fork
+#                      feed owner hands the ARS/USD feed to the throwaway signer on the fork, and USDC/BRL prices
+#                      from the deployed RedStone BRL feed: quotes apply the latest signed RedStone payload as an
+#                      eth_call state override, and swap pushes a signed payload on-chain before swapping
 # then wires the adapter as the impersonated core admin (fork only) and runs:
 #   deposit 2 USDC -> create USDC/ARS + USDC/BRL with --opcode fxswap -> quote + swap 0.1 USDC on each
 #   -> non-owner set-fx-price is refused -> owner moves ARS/USD +5% -> the ARS quote follows the oracle
@@ -283,7 +285,23 @@ node --input-type=module -e '
     check(BigInt(s.received.raw) > 0n, `${s.pair} swap received nothing`);
     check(s.opcode === "fxswap" && s.strategyId === c.strategyId, `${s.pair} swapped on ${s.opcode} ${s.strategyId}`);
     check(s.pricing?.priceSource === "oracle", `${s.pair} swap pricing is not oracle-based`);
-    check(BigInt(s.received.raw) === BigInt(read(`quote_${c.pair === "USDC/ARS" ? "ars" : "brl"}`).amountOut.raw), `${s.pair} received differs from the quote`);
+    // A RedStone price can move between the standalone quote and the swap, so compare with the swap own quote then.
+    const pushedRedstone = (s.steps ?? []).some((step) => step.stage.startsWith("push RedStone") && step.status === "sent");
+    const expected = pushedRedstone
+      ? BigInt(s.quotedAmountOut.raw)
+      : BigInt(read(`quote_${c.pair === "USDC/ARS" ? "ars" : "brl"}`).amountOut.raw);
+    check(BigInt(s.received.raw) === expected, `${s.pair} received differs from the quote`);
+  }
+
+  if (venueMode === "deployed") {
+    check(/RedStone/.test(brl.oracle?.source ?? ""), `USDC/BRL feed source is ${brl.oracle?.source}`);
+    check(brl.program?.invertPrice === true, "USDC/BRL on the RedStone feed (USD per BRL) must set the invert flag");
+    check(brl.program?.maxStalenessSeconds === 3600, `USDC/BRL max staleness ${brl.program?.maxStalenessSeconds} != 3600`);
+    check(read("quote_brl").redstone?.feedId === "BRL", "the BRL quote did not use a signed RedStone payload");
+    check(
+      (read("swap_brl").steps ?? []).some((step) => step.stage === "push RedStone BRL price" && step.status === "sent"),
+      "swap did not push the RedStone BRL price before swapping"
+    );
   }
 
   const set = read("set_ars_price");
