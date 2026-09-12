@@ -6,7 +6,7 @@ The Graph is load-bearing in this project. Analytics tools do not fall back to R
 
 For the ETHGlobal submission, use a live Graph provider endpoint (Subgraph Studio or The Graph Network) for `GRAPH_ENDPOINT`. The AWS Graph Node in `deploy/aws` is useful for reproducible development and for Arc Testnet, but the judge-facing endpoint should be a Graph provider endpoint rather than a local/static dataset.
 
-The current Base Shape-C deployment is a good provider target because Base is supported by The Graph and the complete canonical accounting-event manifest already indexes it.
+The provider deployment target for this hackathon is the live **Arc Testnet Shape-C deployment**. The Graph now lists Arc Testnet (`arc-testnet`, chain ID `5042002`) as a supported network, so the judge-facing provider subgraph should index the same Arc contracts used by the Arc + FXSwap demo.
 
 1. In Subgraph Studio, create a subgraph and copy its slug and deploy key.
 2. Run:
@@ -20,7 +20,7 @@ GRAPH_STUDIO_DEPLOY_KEY=<secret-deploy-key> \
 3. Copy the resulting Studio query endpoint into `GRAPH_ENDPOINT` for the MCP service. Keep the query/deploy API keys out of git.
 4. Run `health`, `protocol_snapshot`, and an agent query through the MCP to demonstrate that the provider endpoint is actually load-bearing.
 
-The deploy script intentionally deploys `packages/subgraph/subgraph.base.yaml`. Arc Testnet is also indexed by our self-hosted Graph Node, but it requires an Arc RPC compatibility proxy because the public Arc RPC limits the number of event signatures in one `eth_getLogs` topic OR-list.
+The deploy script intentionally deploys `packages/subgraph/subgraph.arc.yaml`. The self-hosted AWS Graph Node remains useful as a development/fallback indexer, but the hackathon provider deployment should use The Graph's native Arc Testnet support rather than the old Base-provider workaround.
 
 ## Demo proof
 
