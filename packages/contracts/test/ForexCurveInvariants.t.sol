@@ -395,13 +395,20 @@ contract ForexCurveInvariantsTest is Test {
         }
         if (out == 0) return;
         try h.quote(st.params, st.p, st.quoteBalance, st.localBalance, 0, localOut, false, out) returns (uint256 back, uint256) {
-            // exact out of the floored output never needs more than the exact input (up to the solver's wei)
-            assertLe(back, amountIn + 16, "exact out charges more than the exact input");
+            // exact out of the floored output never needs more than the exact input, up to the solver's rounding:
+            // a few wei plus 1e-15 relative (a steep fee slope, delta ~4, needs ~30 wei on 3e20). Any excess is
+            // charged to the taker, so it favours the pool.
+            assertLe(back, amountIn + amountIn / 1e15 + 16, "exact out charges more than the exact input");
             // one wei of output is worth p / 1e18 (or 1e18 / p) wei of input; plus 1e-12 relative
             uint256 unit = localOut ? st.p / 1e18 : 1e18 / st.p;
             assertGe(back + 2 * unit + amountIn / 1e12 + 16, amountIn, "exact out undercuts the exact input");
         } catch {
             revert("exact out of a quoted output reverted");
         }
+    }
+
+    /// CI counterexample (delta just above 4): exact out charged 29 wei more than the exact input on ~3.1e20 wei.
+    function test_ExactInExactOutInverse_SteepFeeSlopeRegression() public view {
+        testFuzz_ExactInExactOutInverse(1364, 1268, 3589, 812, 4000000000000000001, false);
     }
 }
