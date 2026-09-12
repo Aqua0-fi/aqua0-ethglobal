@@ -204,12 +204,57 @@
       "operatorRoleGrantTx": "0x50c38bc1bfd2dec897388d1bafa6c6384b958c1d134dcd8272b43f3fd48d39fc"
     },
     "coreWiring": {
-      "status": "pending (core admin)",
-      "admin": "0xBaA361817C8676b4A8a8C5e6fd050253f81f407C",
-      "calls": [
-        "VaultRegistry.setAdapterAllowed(forexAquaAdapter, true)",
-        "grantRole(VENUE_SETTLER_ROLE, forexAquaAdapter) on the USDC, ARGt and BRAt AssetVaults"
-      ]
+      "status": "wired",
+      "date": "2026-09-12",
+      "note": "The core admin granted the team key the roles needed to wire venues itself; the team key then sent the forex wiring.",
+      "rolesGrantedToTeamKey": {
+        "by": "0xBaA361817C8676b4A8a8C5e6fd050253f81f407C",
+        "account": "0x7E61A5EbCCd26d9D91690C6037d7224F5384730D",
+        "transactions": [
+          {
+            "contract": "VaultRegistry",
+            "role": "DEFAULT_ADMIN_ROLE",
+            "hash": "0x5524f4a817532c5d40f3af232bf9da0b615c7351d2b37c28f33ea99308a65daf"
+          },
+          {
+            "contract": "AssetVault usdc",
+            "role": "CAPITAL_ADMIN_ROLE",
+            "hash": "0xe78ea34128c4264b4ebbec9fed69bed65424502305002f6a110c02f9cae8bf1b"
+          },
+          {
+            "contract": "AssetVault argt",
+            "role": "CAPITAL_ADMIN_ROLE",
+            "hash": "0x8042c9a8b24d5156fd264fe601279841279011b48bf6ee30848c267ff7caf9a8"
+          },
+          {
+            "contract": "AssetVault brat",
+            "role": "CAPITAL_ADMIN_ROLE",
+            "hash": "0x4825602330cbfe5ab5d07a48fbd290533e787729b57288f48db114b68a166412"
+          }
+        ]
+      },
+      "transactions": [
+        {
+          "call": "VaultRegistry.setAdapterAllowed(forexAquaAdapter, true)",
+          "hash": "0x6991957627a2440fbe17d2854af4344727124f02b5b97184e60b14eea39461a9"
+        },
+        {
+          "call": "AssetVault usdc grantRole(VENUE_SETTLER_ROLE, forexAquaAdapter)",
+          "hash": "0xabb80a89b83301e9b5d23542c9d18306bd10a6aeb494645ae7e6479c8210dc42"
+        },
+        {
+          "call": "AssetVault argt grantRole(VENUE_SETTLER_ROLE, forexAquaAdapter)",
+          "hash": "0xdb32e2892676637708a634a06ad53afcbab755edcc6a7d58e81d4a48a07e1431"
+        },
+        {
+          "call": "AssetVault brat grantRole(VENUE_SETTLER_ROLE, forexAquaAdapter)",
+          "hash": "0x6994050e5bdf09fbc79512a9aee8419e9a965214daaf41c7bae64cd8ad9b6754"
+        }
+      ],
+      "verified": {
+        "isAllowedAdapter": true,
+        "venueSettlerRoleOnAllVaults": true
+      }
     }
   }
 }
