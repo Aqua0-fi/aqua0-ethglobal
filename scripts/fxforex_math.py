@@ -140,6 +140,9 @@ def trade_closed(x, y, i, a, P):
     """returns o (signed change of asset j) solving the DFX fixed point exactly, piecewise quadratic."""
     g = x + y; omega = psi(x, y, P)
     bx, by = x, y
+    # exact fast path: flat zone before and after (psi = omega = 0) => s = 0, o = -a
+    nx0, ny0 = (x + a, y - a) if i == 0 else (x - a, y + a)
+    if omega == 0 and nx0 > 0 and ny0 > 0 and psi(nx0, ny0, P) == 0: return -a
     # new balances as functions of s: input asset fixed at b+a, output asset b - a + s
     parts = [None, None]
     parts[i] = ((bx if i == 0 else by) + a, 0.0)

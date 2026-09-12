@@ -203,3 +203,43 @@ devuelve al taker cuando rebalancea; `λ=0.3` es el default de DFX).
   parámetros.
 - Observación: el loop de 32 iteraciones de DFX no converge para trades grandes o `δ` alto (62 fallos
   de 20k con `δ=3`, y el caso real de 1000 EURC). La forma cerrada no tiene ese problema.
+
+## 6. Simulaciones de pools chicos (`scripts/fxforex_sim.py`, 2026-09-12)
+
+USDC/BRL, USDC/ARS, BRL/ARS con libros de 5k, 25k y 100k USD, 30 días por hora. Precio real: BRL vol 15%,
+ARS crawl 24%/año + vol 20% + riesgo de salto. Oráculo tipo Pyth: fresco con ruido y `conf` (BRL 7 bps,
+ARS 50 bps), escenarios con 1h/6h de atraso y con base persistente de 1%. Takers ~12/día, tamaño
+mediano $100, cada uno con una tolerancia de costo entre 20 y 300 bps por encima de la cual no opera.
+Arbitrajista que busca el trade óptimo contra el precio real cada hora, gas $0.02. PnL = valor del LP
+contra haber holdeado el inventario inicial.
+
+Monte Carlo (8 caminos), PnL mensual vs hold, DFX prod (`β=.35 ε=15bps λ=1`) y conservador (`β=.15 ε=30bps λ=.3`):
+
+| | $5k DFX | $5k cons. | $25k DFX | $25k cons. |
+|---|---|---|---|---|
+| USDC/BRL | +1.6% [0.9, 2.5], 11 halts | +2.6% [2.2, 2.9], 4 halts | +0.7% [0.1, 1.6] | +0.9% [0.5, 1.2] |
+| USDC/ARS | +4.5% [3.3, 5.2], 13 halts | +4.4% [3.1, 5.0], 4 halts | +1.1% [0.3, 2.2] | +1.5% [1.1, 1.9] |
+| BRL/ARS | +5.8% [4.8, 6.7], 10 halts | +4.8% [3.9, 5.4], 4 halts | +1.4% [-0.2, 2.8] | +1.8% [1.2, 2.3] |
+
+Conclusiones:
+- Con oráculo fresco y `conf` en el spread, los tres pares son rentables en todos los tamaños. El % es
+  mayor en libros chicos porque el flujo es el mismo en dólares; en absoluto son $100-300 por mes.
+- `conf` en el spread es lo que sostiene el ARS: sin él, el mismo pool de 25k pasa de +1.25% a -3.8%
+  con 305 trades de arbitraje. Es la única defensa dentro de la banda plana.
+- Frescura del oráculo: en BRL, 1h de atraso pasa de +1.2% a -1.8%. En ARS el `conf` de 50 bps ya
+  cubre el movimiento horario. Devaluación de 15% en una hora: con oráculo fresco el pool no es
+  arbitrado; con 1h de atraso pierde 140 extra, con 6h pierde 475 extra, todo en la banda plana.
+- Libros de 5k con flujo mediano de $100 tienen 10-13 halts por mes y 30-100 takers que se van por
+  precio. A 25k desaparecen los halts. Con 48 trades/día un libro de 5k con DFX prod pierde (-1.4%,
+  51 halts) y con parámetros conservadores gana (+7.3%, 19 halts): la banda angosta y `λ=0.3` evitan
+  regalar el rebalanceo.
+- `λ` no importa mientras el libro no sale de la banda; cuando sale, `λ=0.3-0.5` gana un poco más
+  que `λ=1` y reduce los arbitrajes.
+- `ε`: entre 5 y 100 bps el PnL en ARS es casi plano porque los takers con tolerancia se van cuando
+  sube; el volumen cae de 51k a 22k. Con `conf` de 50 bps ya puesto, `ε` de 15-30 bps es suficiente.
+- Riesgo de inventario: con sesgo comprador de dólares el libro queda largo de ARS y la devaluación
+  le pega más que al hold (-1.4% aun con oráculo fresco). La curva no cubre eso; la banda angosta lo
+  limita, y el resto es decisión del maker (rebalancear o cubrir).
+- Base persistente del oráculo de 1% (oráculo oficial vs precio operable): el pool sigue positivo pero
+  el volumen cae 60-70% y pasa más de la mitad del tiempo fuera de banda. Un oráculo que no refleje el
+  precio operable del ARS mata el pool por falta de flujo, no por pérdidas.
