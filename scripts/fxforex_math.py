@@ -55,6 +55,60 @@ def trade_iter(x, y, i, a, P, iters=64):
         if abs(o - prev) <= 1e-15 * max(1.0, abs(o)): return o
     return o
 
+def trade_iter_dfx(x, y, i, a, P):
+    """DFX calculateTrade verbatim (getOriginSwapData starts with the output balance reduced by the
+    full input, i.e. o = -a). stops when output changes by less than 1e13 in 64.64 (5.4e-7 numeraire),
+    max 32 iterations, else reverts Curve/swap-convergence-failed."""
+    j = 1 - i; g0 = x + y; ob = [x, y]
+    omega = psi(x, y, P)
+    nb = list(ob); nb[i] += a; nb[j] -= a; ng = g0
+    o = -a
+    step = 1e13 / 2 ** 64
+    for _ in range(32):
+        ps = psi(nb[0], nb[1], P)
+        prev = o
+        o = -(a + omega - ps) if omega < ps else -(a + P["lam"] * (omega - ps))
+        if math.floor(o / step) == math.floor(prev / step): return o
+        ng = g0 + a + o; nb[j] = ob[j] + o
+    raise Revert("convergence failed")
+
+def trade_bisect_decimal(x, y, i, a, P, digits=40):
+    """independent solver: residual R(s) = s - c(psi(s) - omega) is increasing in s (slope of psi < 1),
+    so bisect it in Decimal. no quadratics, no fixed-point iteration."""
+    D = Decimal
+    Pd = {k: D(str(v)) for k, v in P.items()}
+    x, y, a = D(str(x)), D(str(y)), D(str(a))
+    def psid(nx, ny):
+        I = (nx + ny) / 2; tot = D(0)
+        for b in (nx, ny):
+            if b < I:
+                m = I * (1 - Pd["beta"]) - b
+                if m > 0: tot += min(m * Pd["delta"] / I, Pd["maxf"]) * m
+            else:
+                m = b - I * (1 + Pd["beta"])
+                if m > 0: tot += min(m * Pd["delta"] / I, Pd["maxf"]) * m
+        return tot
+    omega = psid(x, y)
+    def R(s):
+        nx = x + a if i == 0 else x - a + s
+        ny = y - a + s if i == 0 else y + a
+        if nx <= 0 or ny <= 0: return None
+        ps = psid(nx, ny); c = D(1) if omega < ps else Pd["lam"]
+        return s - c * (ps - omega)
+    # R(lo) <= 0 at lo = -omega (psi >= 0, c <= 1); also s must keep the output balance positive: s > a - b_out
+    b_out = y if i == 0 else x
+    lo = max(-omega * D("1.0001") - D("1e-30"), a - b_out + (x + y) * D("1e-30"))
+    hi = 2 * (x + y)
+    for _ in range(digits * 4):
+        mid = (lo + hi) / 2
+        r = R(mid)
+        if r is None: lo = mid           # infeasible (negative balance) only happens below the root
+        elif r > 0: hi = mid
+        else: lo = mid
+        if hi - lo < D(10) ** (-digits): break
+    s = (lo + hi) / 2
+    return float(s - a)
+
 # ----------------------------------------------------------------- closed form
 def _regime_coeffs(m0, k, reg, g, P):
     """coefficients (A,B,C) of T(s) = mu(s)*(g+s) for one asset in a given regime. m(s) = m0 + k s."""
@@ -125,11 +179,29 @@ def trade_closed(x, y, i, a, P):
     s = best[1]
     return s - a
 
+MAX_DIFF = -0x10C6F7A0B5EE / 2 ** 64          # DFX enforceSwapInvariant tolerance in numeraire (~ -1e-6)
+
 def enforce_halts(x, y, nx, ny, P):
-    I = (nx + ny) / 2
-    for b, nb in ((x, nx), (y, ny)):
-        if nb > I * (1 + P["alpha"]) and nb > b: raise Revert("upper halt")
-        if nb < I * (1 - P["alpha"]) and nb < b: raise Revert("lower halt")
+    """verbatim DFX enforceHalts: a balance may sit beyond the halt only if it was already beyond and
+    the excursion (distance past the halt) does not grow."""
+    oI, nI = (x + y) / 2, (nx + ny) / 2; al = P["alpha"]
+    for ob, nb in ((x, nx), (y, ny)):
+        if nb > nI:
+            nH = nI * (1 + al)
+            if nb > nH:
+                oH = oI * (1 + al)
+                if ob < oH: raise Revert("upper halt")
+                if nb - nH > ob - oH: raise Revert("upper halt")
+        else:
+            nH = nI * (1 - al)
+            if nb < nH:
+                oH = oI * (1 - al)
+                if ob > oH: raise Revert("lower halt")
+                if nH - nb > oH - ob: raise Revert("lower halt")
+
+def enforce_swap_invariant(x, y, nx, ny, P):
+    diff = (nx + ny - psi(nx, ny, P)) - (x + y - psi(x, y, P))
+    if not (0 < diff or diff >= MAX_DIFF): raise Revert("swap invariant")
 
 def quote(p, U, B, amount, brl_out, exact_in, P=DEF, conf=0.0, solver=trade_closed):
     """(amountIn, amountOut). eps_eff = eps + conf/p (pyth confidence as extra spread)."""
@@ -142,15 +214,16 @@ def quote(p, U, B, amount, brl_out, exact_in, P=DEF, conf=0.0, solver=trade_clos
         nx, ny = (x + a, y + o) if i == 0 else (x + o, y + a)
         if nx <= 0 or ny <= 0: raise Revert("drain")
         enforce_halts(x, y, nx, ny, P)
+        enforce_swap_invariant(x, y, nx, ny, P)
         return o
     if brl_out:
         if exact_in:
             o = run(0, amount); return amount, -o * (1 - eps) / p
-        need = p * amount * (1 + eps); inp = run(1, -need); return inp, amount
+        inp = run(1, -p * amount); return inp * (1 + eps), amount
     else:
         if exact_in:
             o = run(1, p * amount); return amount, -o * (1 - eps)
-        need = amount * (1 + eps); inp = run(0, -need); return inp / p, amount
+        inp = run(0, -amount); return inp * (1 + eps) / p, amount
 
 # ----------------------------------------------------------------- tests
 def rel(a, b): return abs(a - b) / max(abs(b), 1e-30)
@@ -184,6 +257,31 @@ def t1_closed_vs_iter(P, n=20000):
         key = tuple(next(r for r in REGS if _check_regime(b, I, r, P)) for b in (nx, ny))
         pieces[key] = pieces.get(key, 0) + 1
     return worst, worst_abs, tried, pieces
+
+def t1b_closed_vs_decimal(P, n=1500):
+    worst = (0, None)
+    for _ in range(n):
+        p, U, B = rnd_state(P); i, a = rnd_trade(P, p, U, B); x, y = U, p * B
+        if (x if i == 0 else y) + a <= 0: continue
+        try: oc = trade_closed(x, y, i, a, P)
+        except Revert: continue
+        od = trade_bisect_decimal(x, y, i, a, P)
+        d = abs(oc - od) / (x + y)
+        if d > worst[0]: worst = (d, (x, y, i, a, oc, od))
+    return worst
+
+def t1c_closed_vs_dfx_verbatim(P, n=5000):
+    """faithful DFX loop (coarse stop). reports its own error vs the closed form, in numeraire units."""
+    worst = 0; conv_fail = 0
+    for _ in range(n):
+        p, U, B = rnd_state(P); i, a = rnd_trade(P, p, U, B); x, y = U, p * B
+        if (x if i == 0 else y) + a <= 0: continue
+        try: oc = trade_closed(x, y, i, a, P)
+        except Revert: continue
+        try: od = trade_iter_dfx(x, y, i, a, P)
+        except Revert: conv_fail += 1; continue
+        worst = max(worst, abs(oc - od))
+    return worst, conv_fail
 
 def t2_invariants(P, n=5000):
     """utility g - psi never decreases; inside band price == oracle; taker never gains on roundtrip/split/sequences."""
@@ -318,12 +416,42 @@ def t7_impact_table(P, p=5.0, U=1e6, B=2e5):
             rows.append((beta, delta, row))
     return rows
 
+def t0_onchain_dfx_vectors():
+    """DFX v2 EURC/USDC curve 0x8cd86fbC94BeBFD910CaaE7aE4CE374886132c48 on Ethereum, read 2026-09-12 with cast.
+    viewCurve = (alpha .5, beta .35, delta .5, epsilon .0015, lambda 1). assimilator rates (8 dec) and raw balances (6 dec)."""
+    rE, rU = 1.159545, 0.99986417
+    xE, xU = 1627.848764 * rE, 1179.110189 * rU
+    P = dict(alpha=0.5, beta=0.35, delta=0.5, maxf=0.25, lam=1.0, eps=0.0015)
+    origin = {100: 86.099665, 500: 430.498329, 800: 688.797328, 900: 774.852549, 950: 816.093130, 1000: 854.918284, 1100: 926.406593}
+    rows = []
+    for usdc, oc in origin.items():                       # USDC in, EURC out
+        o = trade_closed(xU, xE, 0, usdc * rU, P); out = -o * (1 - P["eps"]) / rE
+        rows.append((f"originSwap {usdc} USDC->EURC", oc, out))
+    o = trade_closed(xU, xE, 1, 100 * rE, P); rows.append(("originSwap 100 EURC->USDC", 115.796296, -o * (1 - P["eps"]) / rU))
+    inp = trade_closed(xU, xE, 1, -900 * rE, P); rows.append(("targetSwap want 900 EURC, USDC in", 1061.500247, inp * (1 + P["eps"]) / rU))
+    reverts = []
+    for name, i, a in (("originSwap 1200 USDC (onchain lower-halt)", 0, 1200 * rU), ("originSwap 500 EURC (onchain upper-halt)", 1, 500 * rE)):
+        try:
+            o = trade_closed(xU, xE, i, a, P); nx, ny = (xU + a, xE + o) if i == 0 else (xU + o, xE + a)
+            enforce_halts(xU, xE, nx, ny, P); reverts.append((name, "NO REVERT"))
+        except Revert as e: reverts.append((name, f"revert: {e}"))
+    try: trade_iter_dfx(xU, xE, 1, 1000 * rE, P); reverts.append(("originSwap 1000 EURC (onchain convergence-failed)", "dfx loop converged?!"))
+    except Revert as e: reverts.append(("originSwap 1000 EURC (onchain convergence-failed)", f"dfx loop: {e}"))
+    return rows, reverts
+
 if __name__ == "__main__":
+    print("0 on-chain DFX EURC/USDC vectors (raw token units, 6 decimals):")
+    rows, reverts = t0_onchain_dfx_vectors()
+    for name, oc, py in rows: print(f"    {name:38s} onchain {oc:12.6f}  python {py:12.6f}  diff {py-oc:+.1e}")
+    for name, r in reverts: print(f"    {name:48s} -> {r}")
     random.seed(5)
     for P in [DEF, dict(DEF, delta=3.0, maxf=0.25), dict(DEF, beta=0.0, alpha=0.9)]:
         print(f"\n=== params {P}")
         w, wa, n, pieces = t1_closed_vs_iter(P)
         print(f"1 closed vs DFX iteration: worst |diff|/|a| {w:.2e}, |diff|/book {wa:.2e} over {n} trades; pieces hit: {pieces}")
+        wb, case = t1b_closed_vs_decimal(P)
+        print(f"1b closed vs Decimal bisection (40 digits): worst |diff|/book {wb:.2e}" + (f"  case {case}" if wb > 1e-12 else ""))
+        w, cf = t1c_closed_vs_dfx_verbatim(P); print(f"1c DFX verbatim loop vs closed: worst |diff| {w:.2e} numeraire units, convergence failures {cf}")
         print("2 invariants:", t2_invariants(P))
         w, r = t3_inverse(P); print(f"3 exactIn/exactOut inverse worst rel err {w:.2e}, reverts {r}")
     P = DEF

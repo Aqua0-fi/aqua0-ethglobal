@@ -185,3 +185,21 @@ iteración de 32 pasos de DFX en ~20k trades por juego de parámetros, en todos 
 
 Sigue faltando: elegir `α, β, δ, ε` para el par real, y decidir `λ` (cuánto de la mejora se
 devuelve al taker cuando rebalancea; `λ=0.3` es el default de DFX).
+
+### 5.1 Corroboración (2026-09-12)
+
+- **Código real de DFX** (`protocol-v2/src/{CurveMath,Swaps,assimilators/AssimilatorV2}.sol`), no un
+  resumen: micro-fee, `MAX = 0.25`, `enforceHalts` (permite operar ya fuera de `α` si la excursión no
+  crece), `enforceSwapInvariant` (`MAX_DIFF ≈ -1e-6`), inicio del loop con el output ya descontado,
+  corte de convergencia a `1e13/2^64 ≈ 5.4e-7` numerario, `ε` sobre el output en `originSwap` y
+  sobre el input después de resolver en `targetSwap`. Todo portado tal cual a `fxforex_math.py`.
+- **Pool real**: EURC/USDC de DFX v2 en Ethereum (`0x8cd86fbC…`), params `α=.5 β=.35 δ=.5 ε=.0015 λ=1`.
+  Nueve cotizaciones `viewOriginSwap`/`viewTargetSwap` leídas con `cast`, a ambos lados de la banda
+  `β`, coinciden con la forma cerrada a ≤ 1.7e-6 unidades de token (redondeo de 6 decimales). Los
+  reverts coinciden: halts en 1200 USDC y 500 EURC; con 1000 EURC el contrato falla por
+  `swap-convergence-failed` y el loop verbatim en Python lo reproduce.
+- **Solver independiente**: bisección en Decimal a 40 dígitos sobre el residuo del punto fijo, sin
+  cuadráticas ni iteración. Coincide con la forma cerrada a 1e-16 del libro en los tres juegos de
+  parámetros.
+- Observación: el loop de 32 iteraciones de DFX no converge para trades grandes o `δ` alto (62 fallos
+  de 20k con `δ=3`, y el caso real de 1000 EURC). La forma cerrada no tiene ese problema.
