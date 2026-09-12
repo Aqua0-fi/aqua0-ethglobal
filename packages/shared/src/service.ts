@@ -33,6 +33,7 @@ import {
   type FetchLike
 } from "./graph.js";
 import { CIRCLE_BLOCKCHAIN } from "./circle.js";
+import { benchmarkFxStrategy, type BenchmarkFxStrategyInput } from "./graph-benchmark.js";
 import {
   clearSession,
   readSession,
@@ -66,6 +67,8 @@ export type Aqua0ServiceConfig = WriteConfig &
   graphAuthToken?: string;
   graphTimeoutMs?: number;
   graphNetwork?: string;
+  /** The Graph Network gateway API key for benchmark_fx_strategy (GRAPH_GATEWAY_API_KEY). Never returned by info. */
+  graphGatewayApiKey?: string;
   fetch?: FetchLike;
 };
 
@@ -883,6 +886,22 @@ export class Aqua0Service {
   /** Price, freshness and owner of each forex feed (ARS/USD, BRL/USD). Read-only. */
   getFxPrices(input: FxPricesInput = {}) {
     return readFxPrices(this.#config, input);
+  }
+
+  /**
+   * Benchmark an Aqua0 forex strategy against onchain FX liquidity: one standardized (Messari DEX AMM) query pattern
+   * across the gateway's DEX subgraphs, composed with the Aqua0 subgraph's live forex strategies and fills. Read-only.
+   */
+  benchmarkFxStrategy(input: BenchmarkFxStrategyInput) {
+    return benchmarkFxStrategy(input, {
+      apiKey: this.#config.graphGatewayApiKey,
+      fetch: this.#config.fetch,
+      aqua0Graph: {
+        endpointOrigin: publicEndpointOrigin(this.#config.graphEndpoint),
+        query: <T>(query: string) => this.#graph.query<T>(query)
+      },
+      arcQuote: (pair, amount) => quoteFxSwap(this.#config, { pair, amount })
+    });
   }
 
   /**

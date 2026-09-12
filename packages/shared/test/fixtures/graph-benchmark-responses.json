@@ -1,0 +1,373 @@
+{
+  "_comment": "Trimmed responses recorded from The Graph Network gateway and Subgraph Studio on 2026-09-12. \"bad-indexers\" replays the gateway's bad-indexers error seen live for that subgraph. Some balances are rounded.",
+  "gateway": {
+    "4cKy6QQMc5tpfdx8yxfYeb9TLZmgLQe44ddW1G7NwkA6": {
+      "Aqua0BenchmarkStandardPools": {
+        "data": {
+          "_meta": {
+            "block": { "number": 25963382, "timestamp": 1789240763 },
+            "hasIndexingErrors": false,
+            "deployment": "Qmc9TiHtLDgsbgqvyfXKiyndZDnjWdrfdvETgarZbg3StY"
+          },
+          "dexAmmProtocols": [{ "name": "Uniswap V3", "slug": "uniswap-v3", "schemaVersion": "4.0.0", "network": "MAINNET" }],
+          "liquidityPools": [
+            {
+              "id": "0x95dbb3c7546f22bce375900abfdd64a4e5bd73d6",
+              "name": "Uniswap V3 Euro Coin/USD Coin 0.05%",
+              "fees": [
+                { "feePercentage": "0", "feeType": "FIXED_PROTOCOL_FEE" },
+                { "feePercentage": "0.05", "feeType": "FIXED_LP_FEE" },
+                { "feePercentage": "0.05", "feeType": "FIXED_TRADING_FEE" }
+              ],
+              "inputTokens": [
+                { "id": "0x1abaea1f7c830bd89acc67ec4af516284b1bc33c", "symbol": "EUROC", "decimals": 6 },
+                { "id": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", "symbol": "USDC", "decimals": 6 }
+              ],
+              "inputTokenBalances": ["1331194488683", "1711401832848"],
+              "totalValueLockedUSD": "3254976.97999275212614570020774"
+            },
+            {
+              "id": "0x1f195908f2ee7a6fc15d33b30c82298f568e805c",
+              "name": "Uniswap V3 EUR CoinVertible/USD Coin 0.05%",
+              "fees": [{ "feePercentage": "0.05", "feeType": "FIXED_TRADING_FEE" }],
+              "inputTokens": [
+                { "id": "0x5f7827fdeb7c20b443265fc2f40845b715385ff2", "symbol": "EURCV", "decimals": 18 },
+                { "id": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", "symbol": "USDC", "decimals": 6 }
+              ],
+              "inputTokenBalances": ["1724126000000000000000000", "1416645000000"],
+              "totalValueLockedUSD": "3416182"
+            },
+            {
+              "id": "0xd9961ea871a52456a5ad4bccb981d40ed7fdb813",
+              "name": "Uniswap V3 Euro Coin/USD Coin 0.01%",
+              "fees": [{ "feePercentage": "0.01", "feeType": "FIXED_TRADING_FEE" }],
+              "inputTokens": [
+                { "id": "0x1abaea1f7c830bd89acc67ec4af516284b1bc33c", "symbol": "EUROC", "decimals": 6 },
+                { "id": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", "symbol": "USDC", "decimals": 6 }
+              ],
+              "inputTokenBalances": ["0", "0"],
+              "totalValueLockedUSD": "0.0167029211454167348836"
+            }
+          ]
+        }
+      },
+      "Aqua0BenchmarkStandardSnapshots": {
+        "data": {
+          "liquidityPools": [
+            {
+              "id": "0x95dbb3c7546f22bce375900abfdd64a4e5bd73d6",
+              "dailySnapshots": [
+                {
+                  "timestamp": "1789170311",
+                  "dailyVolumeUSD": "1140245.527837",
+                  "dailyVolumeByTokenAmount": ["983273567229", "1140278140719"],
+                  "dailyTotalRevenueUSD": "570.1227639185"
+                },
+                {
+                  "timestamp": "1789083371",
+                  "dailyVolumeUSD": "1203763.818106",
+                  "dailyVolumeByTokenAmount": ["1036577952128", "1204141661605"],
+                  "dailyTotalRevenueUSD": "601.881909053"
+                },
+                {
+                  "timestamp": "1788996779",
+                  "dailyVolumeUSD": "980258.426316",
+                  "dailyVolumeByTokenAmount": ["847905232724", "1015888441683"],
+                  "dailyTotalRevenueUSD": "490.129213158"
+                },
+                {
+                  "timestamp": "1788907139",
+                  "dailyVolumeUSD": "1468097.430161",
+                  "dailyVolumeByTokenAmount": ["1970022975910", "2136298990036"],
+                  "dailyTotalRevenueUSD": "734.0487150805"
+                }
+              ],
+              "hourlySnapshots": [
+                { "timestamp": "1789231667", "hourlyVolumeByTokenAmount": ["41024848", "47593802"] },
+                { "timestamp": "1789228799", "hourlyVolumeByTokenAmount": ["147718224", "171199794"] },
+                { "timestamp": "1789224923", "hourlyVolumeByTokenAmount": ["692971773", "803366302"] }
+              ]
+            },
+            { "id": "0x1f195908f2ee7a6fc15d33b30c82298f568e805c", "dailySnapshots": [], "hourlySnapshots": [] }
+          ]
+        }
+      }
+    },
+    "3fy93eAT56UJsRCEht8iFhfi6wjHWXtZ9dnnbQmvFopF": {
+      "Aqua0BenchmarkStandardPools": {
+        "data": {
+          "_meta": {
+            "block": { "number": 25963382, "timestamp": 1789240763 },
+            "hasIndexingErrors": false,
+            "deployment": "QmRpHzsesvv7VTrKjEuutiZ7xEfDfd6jH4mgSeDDbUDVRN"
+          },
+          "dexAmmProtocols": [{ "name": "Curve Finance", "slug": "curve-finance", "schemaVersion": "1.3.0", "network": "MAINNET" }],
+          "liquidityPools": [
+            {
+              "id": "0x98a7f18d4e56cfe84e3d081b40001b3d5bd3eb8b",
+              "name": "Curve EURS-USDC",
+              "fees": [{ "feePercentage": "0.44999964", "feeType": "FIXED_TRADING_FEE" }],
+              "inputTokens": [
+                { "id": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", "symbol": "USDC", "decimals": 6 },
+                { "id": "0xdb25f211ab05b1c97d595516f45794528a807ad8", "symbol": "EURS", "decimals": 2 }
+              ],
+              "inputTokenBalances": ["2057388000000", "199115300"],
+              "totalValueLockedUSD": "4381190"
+            }
+          ]
+        }
+      },
+      "Aqua0BenchmarkStandardSnapshots": {
+        "data": {
+          "liquidityPools": [
+            {
+              "id": "0x98a7f18d4e56cfe84e3d081b40001b3d5bd3eb8b",
+              "dailySnapshots": [
+                {
+                  "timestamp": "1789205027",
+                  "dailyVolumeUSD": "15937.81096665",
+                  "dailyVolumeByTokenAmount": ["16108662414", "1359754"],
+                  "dailyTotalRevenueUSD": "71.7200892972792271625"
+                },
+                {
+                  "timestamp": "1789073699",
+                  "dailyVolumeUSD": "72.70646425",
+                  "dailyVolumeByTokenAmount": ["73472101", "6185"],
+                  "dailyTotalRevenueUSD": "0.327178776487203725"
+                },
+                {
+                  "timestamp": "1788944783",
+                  "dailyVolumeUSD": "252.2096455",
+                  "dailyVolumeByTokenAmount": ["254866363", "21454"],
+                  "dailyTotalRevenueUSD": "1.13494232024852435"
+                },
+                {
+                  "timestamp": "1788860507",
+                  "dailyVolumeUSD": "11.154523125",
+                  "dailyVolumeByTokenAmount": ["11333391", "945"],
+                  "dailyTotalRevenueUSD": "0.0501953060980505625"
+                },
+                {
+                  "timestamp": "1788595487",
+                  "dailyVolumeUSD": "45.7556665",
+                  "dailyVolumeByTokenAmount": ["46273245", "3895"],
+                  "dailyTotalRevenueUSD": "0.20590030250063405"
+                }
+              ],
+              "hourlySnapshots": [{ "timestamp": "1789205027", "hourlyVolumeByTokenAmount": ["16108662414", "1359754"] }]
+            }
+          ]
+        }
+      }
+    },
+    "77jZ9KWeyi3CJ96zkkj5s1CojKPHt6XJKjLFzsDCd8Fd": {
+      "Aqua0BenchmarkStandardPools": {
+        "data": {
+          "_meta": {
+            "block": { "number": 25963409, "timestamp": 1789241087 },
+            "hasIndexingErrors": false,
+            "deployment": null
+          },
+          "dexAmmProtocols": [{ "name": "SushiSwap", "slug": "sushiswap", "schemaVersion": "1.3.2", "network": "MAINNET" }],
+          "liquidityPools": [
+            {
+              "id": "0x41b30512fac87871304c3947540e412b638ffa58",
+              "name": "SushiSwap USD Coin/STASIS EURS Token",
+              "fees": [{ "feePercentage": "0.3", "feeType": "FIXED_TRADING_FEE" }],
+              "inputTokens": [
+                { "id": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", "symbol": "USDC", "decimals": 6 },
+                { "id": "0xdb25f211ab05b1c97d595516f45794528a807ad8", "symbol": "EURS", "decimals": 2 }
+              ],
+              "inputTokenBalances": ["55000000", "4600"],
+              "totalValueLockedUSD": "55"
+            }
+          ]
+        }
+      }
+    },
+    "BvYimJ6vCLkk63oWZy7WB5cVDTVVMugUAF35RAUZpQXE": {
+      "Aqua0BenchmarkStandardPools": "bad-indexers"
+    },
+    "B3Jt84tHJJjanE4W1YijyksTwtm7jqK8KcG5dcoc1ZNF": {
+      "Aqua0BenchmarkStandardPools": {
+        "data": {
+          "_meta": {
+            "block": { "number": 93690732, "timestamp": 1789241131 },
+            "hasIndexingErrors": false,
+            "deployment": "Qmc3gbKAd1eemQbaTvY93S2FpuPEipGaVKCQ97pBkXgtyN"
+          },
+          "dexAmmProtocols": [{ "name": "SushiSwap", "slug": "sushiswap", "schemaVersion": "1.3.2", "network": "MATIC" }],
+          "liquidityPools": []
+        }
+      }
+    },
+    "3hCPRGf4z88VC5rsBKU5AA9FBBq5nF3jbKJG7VZCbhjm": {
+      "Aqua0BenchmarkUniswapPools": {
+        "data": {
+          "_meta": {
+            "block": { "number": 93690073, "timestamp": 1789240143 },
+            "hasIndexingErrors": false,
+            "deployment": "QmdAaDAUDCypVB85eFUkQMkS5DE1HV4s7WJb6iSiygNvAw"
+          },
+          "pools": [
+            {
+              "id": "0x0e7754127dedd4097be750825dbb4669bc32c956",
+              "feeTier": "500",
+              "token0": { "id": "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359", "symbol": "USDC", "decimals": "6" },
+              "token1": { "id": "0xe6a537a407488807f0bbeb0038b79004f19dddfb", "symbol": "BRLA", "decimals": "18" },
+              "token0Price": "0.1937792274657337609195282660898644",
+              "token1Price": "5.160511851957049074812563167654516",
+              "totalValueLockedUSD": "92677.14365873207491079802762430338",
+              "totalValueLockedToken0": "92675.858754",
+              "totalValueLockedToken1": "550284.938268490254803126"
+            }
+          ]
+        }
+      },
+      "Aqua0BenchmarkUniswapSeries": {
+        "data": {
+          "pools": [
+            {
+              "id": "0x0e7754127dedd4097be750825dbb4669bc32c956",
+              "poolDayData": [
+                { "date": 1789171200, "volumeUSD": "0", "volumeToken0": "42280.807112", "volumeToken1": "218117.751477585850676537", "feesUSD": "0" },
+                { "date": 1789084800, "volumeUSD": "0", "volumeToken0": "100607.405235", "volumeToken1": "515630.133393524622149346", "feesUSD": "0" },
+                { "date": 1788998400, "volumeUSD": "0", "volumeToken0": "830146.544853", "volumeToken1": "4354185.569139196589370581", "feesUSD": "0" },
+                { "date": 1788912000, "volumeUSD": "0", "volumeToken0": "135058.518971", "volumeToken1": "691843.530295607190245866", "feesUSD": "0" },
+                { "date": 1788825600, "volumeUSD": "0", "volumeToken0": "239209.283076", "volumeToken1": "1227990.555256791692751289", "feesUSD": "0" },
+                { "date": 1788739200, "volumeUSD": "0", "volumeToken0": "67835.862219", "volumeToken1": "351396.348910758003860633", "feesUSD": "0" },
+                { "date": 1788652800, "volumeUSD": "0", "volumeToken0": "54055.285254", "volumeToken1": "279115.872735405899935398", "feesUSD": "0" },
+                { "date": 1788566400, "volumeUSD": "0", "volumeToken0": "48662.159627", "volumeToken1": "250558.388692228939513425", "feesUSD": "0" }
+              ],
+              "poolHourData": [],
+              "swaps": [{ "timestamp": "1789240029" }]
+            }
+          ]
+        }
+      }
+    },
+    "FUbEPQw1oMghy39fwWBFY5fE6MXPXZQtjncQy2cXdrNS": {
+      "Aqua0BenchmarkStandardPools": "bad-indexers"
+    },
+    "GENunSHWLBXm59mBSgPzQ8metBEp9YDfdqwFr91Av1UM": {
+      "Aqua0BenchmarkUniswapPools": {
+        "data": {
+          "_meta": {
+            "block": { "number": 51225443, "timestamp": 1789240233 },
+            "hasIndexingErrors": false,
+            "deployment": "QmasYjypV6nTLp4iNH4Vjf7fksRNxAkAskqDdKf2DCsQkV"
+          },
+          "pools": [
+            {
+              "id": "0x256d96010e9d9801b1f4c2320b2ad44715c8078f",
+              "feeTier": "10000",
+              "token0": { "id": "0x269cae7dc59803e5c596c95756faeebb6030e0af", "symbol": "MXNe", "decimals": "6" },
+              "token1": { "id": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", "symbol": "USDC", "decimals": "6" },
+              "token0Price": "22.23894278601701737852693196257197",
+              "token1Price": "0.04496616631563804022850557325464652",
+              "totalValueLockedUSD": "11709.44439962396423203745575212362",
+              "totalValueLockedToken0": "112634.093889",
+              "totalValueLockedToken1": "6644.721001"
+            },
+            {
+              "id": "0xa115130b9c281887e1020f6ea545dfe8f024fe76",
+              "feeTier": "3000",
+              "token0": { "id": "0x269cae7dc59803e5c596c95756faeebb6030e0af", "symbol": "MXNe", "decimals": "6" },
+              "token1": { "id": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", "symbol": "USDC", "decimals": "6" },
+              "token0Price": "0.0000000000000000000000000000000000000029389568075855848387034172747685",
+              "token1Price": "340256786836388094070642339899681200000",
+              "totalValueLockedUSD": "2.878764126420153288312028017964541",
+              "totalValueLockedToken0": "25.805952",
+              "totalValueLockedToken1": "1.403316"
+            }
+          ]
+        }
+      },
+      "Aqua0BenchmarkUniswapSeries": {
+        "data": {
+          "pools": [
+            {
+              "id": "0x256d96010e9d9801b1f4c2320b2ad44715c8078f",
+              "poolDayData": [
+                { "date": 1789084800, "volumeUSD": "1.427659", "volumeToken0": "31.802392", "volumeToken1": "1.427659", "feesUSD": "0.01427659" },
+                { "date": 1788998400, "volumeUSD": "5.984729", "volumeToken0": "133.917104", "volumeToken1": "5.984729", "feesUSD": "0.05984729" },
+                {
+                  "date": 1788912000,
+                  "volumeUSD": "1.685813646525995357346219479405819",
+                  "volumeToken0": "37.653154",
+                  "volumeToken1": "1.684533",
+                  "feesUSD": "0.01685813646525995357346219479405819"
+                },
+                { "date": 1788825600, "volumeUSD": "0.025236", "volumeToken0": "0.548479", "volumeToken1": "0.025236", "feesUSD": "0.00025236" },
+                { "date": 1788739200, "volumeUSD": "0.01", "volumeToken0": "0.217001", "volumeToken1": "0.01", "feesUSD": "0.0001" }
+              ],
+              "poolHourData": [],
+              "swaps": [{ "timestamp": "1789130869" }]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "aqua0": {
+    "_meta": {
+      "block": { "number": 61776607, "timestamp": 1789240248 },
+      "hasIndexingErrors": false,
+      "deployment": "QmWSmaVSWJ1hG8L5ShPj3n7z8fwpExj7mAVYXGfGtZ7gk9"
+    },
+    "aquaStrategies": [
+      {
+        "strategyId": "0x87e021d4a0a607f009dbb4689b593ce816c6d13fde885282ce385888290f2aa1",
+        "tokens": ["0x3600000000000000000000000000000000000000", "0xa9482a878a3784663512f0bf8d0be17ad6dea38e"],
+        "feePpb": "3000000",
+        "fillCount": "2",
+        "shippedAtTimestamp": "1789238779"
+      },
+      {
+        "strategyId": "0xc39dd71deb079e2cd3b725f31562a74cea0e5266244170df4974739402f58597",
+        "tokens": ["0x3600000000000000000000000000000000000000", "0xd8de250970842a581f89e885da0f5165037714ef"],
+        "feePpb": "3000000",
+        "fillCount": "2",
+        "shippedAtTimestamp": "1789238758"
+      }
+    ],
+    "aquaFills": [
+      {
+        "tokenIn": "0xa9482a878a3784663512f0bf8d0be17ad6dea38e",
+        "tokenOut": "0x3600000000000000000000000000000000000000",
+        "amountIn": "513598000000000000",
+        "amountOut": "99404",
+        "feesCredited": "1",
+        "timestamp": "1789239696",
+        "aquaStrategyId": "0x87e021d4a0a607f009dbb4689b593ce816c6d13fde885282ce385888290f2aa1"
+      },
+      {
+        "tokenIn": "0xd8de250970842a581f89e885da0f5165037714ef",
+        "tokenOut": "0x3600000000000000000000000000000000000000",
+        "amountIn": "139580000000000000000",
+        "amountOut": "99400",
+        "feesCredited": "1",
+        "timestamp": "1789239677",
+        "aquaStrategyId": "0xc39dd71deb079e2cd3b725f31562a74cea0e5266244170df4974739402f58597"
+      },
+      {
+        "tokenIn": "0x3600000000000000000000000000000000000000",
+        "tokenOut": "0xa9482a878a3784663512f0bf8d0be17ad6dea38e",
+        "amountIn": "100000",
+        "amountOut": "513597612703509834",
+        "feesCredited": "1",
+        "timestamp": "1789238873",
+        "aquaStrategyId": "0x87e021d4a0a607f009dbb4689b593ce816c6d13fde885282ce385888290f2aa1"
+      },
+      {
+        "tokenIn": "0x3600000000000000000000000000000000000000",
+        "tokenOut": "0xd8de250970842a581f89e885da0f5165037714ef",
+        "amountIn": "100000",
+        "amountOut": "139580000000000055832",
+        "feesCredited": "1",
+        "timestamp": "1789238793",
+        "aquaStrategyId": "0xc39dd71deb079e2cd3b725f31562a74cea0e5266244170df4974739402f58597"
+      }
+    ]
+  }
+}
