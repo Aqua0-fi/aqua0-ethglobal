@@ -1,4 +1,4 @@
-import { Address, BigInt, Bytes, ethereum } from "@graphprotocol/graph-ts";
+import { Address, BigInt, Bytes, dataSource, ethereum } from "@graphprotocol/graph-ts";
 import {
   AquaSwapSettlementBuffer,
   AquaVenueAdapter,
@@ -6,7 +6,8 @@ import {
   StrategyPrincipalSoldEvent
 } from "../generated/schema";
 
-// Ids shared by the AquaAdapter and AquaSwapVMRouter mappings.
+// Ids shared by the AquaAdapter and AquaSwapVMRouter mappings. Both include the adapter (maker) address, so the
+// pegged and FXSwap adapters never collide.
 
 export function aquaStrategyEntityId(adapter: Address, strategyId: Bytes): string {
   return adapter.toHexString() + "-" + strategyId.toHexString();
@@ -14,6 +15,14 @@ export function aquaStrategyEntityId(adapter: Address, strategyId: Bytes): strin
 
 export function aquaOrderEntityId(maker: Address, orderHash: Bytes): string {
   return maker.toHexString() + "-" + orderHash.toHexString();
+}
+
+// Venue label ("pegged" | "fxswap") from the `venue` data source context the Arc manifest generator sets on each
+// adapter and router data source. Manifests without that context (Base) leave it null.
+export function contextVenue(): string | null {
+  const value = dataSource.context().get("venue");
+  if (value == null) return null;
+  return value.toString();
 }
 
 // Swap settlement threading.
@@ -25,8 +34,9 @@ export function aquaOrderEntityId(maker: Address, orderHash: Bytes): string {
 // Graph Node processes triggers in log order, so one singleton buffer is enough:
 //   - per-LP rows land in `pending*`;
 //   - a `ClassVenueSettled` from an indexed Aqua0 adapter promotes the pending rows for the same
-//     (vault, classId) and records the settlement, then clears `pending*`;
-//   - `Swapped` consumes everything promoted in this transaction and resets the buffer.
+//     (vault, classId), tagging each with that adapter, records the settlement, then clears `pending*`;
+//   - `Swapped` consumes only the settlements and rows tagged with its maker adapter (adapter + vault + class),
+//     leaving any other adapter's entries in place, so the pegged and FXSwap venues can share vaults and classes.
 // The buffer is reset whenever a log from a different transaction arrives.
 
 const BUFFER_ID = "pending";
@@ -36,7 +46,9 @@ function resetLists(buffer: AquaSwapSettlementBuffer): void {
   buffer.pendingFeeAccruals = new Array<string>();
   buffer.venueSettlements = new Array<string>();
   buffer.principalSales = new Array<string>();
+  buffer.principalSaleVenues = new Array<string>();
   buffer.feeAccruals = new Array<string>();
+  buffer.feeAccrualVenues = new Array<string>();
 }
 
 export function loadSwapBuffer(event: ethereum.Event): AquaSwapSettlementBuffer {
@@ -52,10 +64,6 @@ export function loadSwapBuffer(event: ethereum.Event): AquaSwapSettlementBuffer 
     resetLists(buffer);
   }
   return buffer;
-}
-
-export function resetSwapBuffer(buffer: AquaSwapSettlementBuffer): void {
-  resetLists(buffer);
 }
 
 export function bufferPrincipalSale(event: ethereum.Event, historyId: string): void {
@@ -87,28 +95,35 @@ export function bufferVenueSettlement(
 
   if (AquaVenueAdapter.load(venue.toHexString()) != null) {
     const vaultHex = vault.toHexString();
+    const venueHex = venue.toHexString();
 
     const settlements = buffer.venueSettlements;
     settlements.push(historyId);
     buffer.venueSettlements = settlements;
 
     const sales = buffer.principalSales;
+    const saleVenues = buffer.principalSaleVenues;
     for (let i = 0; i < pendingSales.length; i++) {
       const row = StrategyPrincipalSoldEvent.load(pendingSales[i]);
       if (row != null && row.vault.toHexString() == vaultHex && row.strategyId.equals(strategyId)) {
         sales.push(pendingSales[i]);
+        saleVenues.push(venueHex);
       }
     }
     buffer.principalSales = sales;
+    buffer.principalSaleVenues = saleVenues;
 
     const fees = buffer.feeAccruals;
+    const feeVenues = buffer.feeAccrualVenues;
     for (let i = 0; i < pendingFees.length; i++) {
       const row = StrategyFeeAccruedEvent.load(pendingFees[i]);
       if (row != null && row.vault.toHexString() == vaultHex && row.strategyId.equals(strategyId)) {
         fees.push(pendingFees[i]);
+        feeVenues.push(venueHex);
       }
     }
     buffer.feeAccruals = fees;
+    buffer.feeAccrualVenues = feeVenues;
   }
 
   buffer.pendingPrincipalSales = new Array<string>();

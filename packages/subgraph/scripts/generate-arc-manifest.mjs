@@ -6,22 +6,41 @@ import { readFileSync, writeFileSync } from "node:fs";
 // Optional sources are dropped when their address env is unset.
 // Every source may override its start block with `<ADDRESS_ENV>_START_BLOCK`; otherwise PUBLIC_ARC_START_BLOCK applies.
 //
-// Base-carried sources are rewritten from subgraph.base.yaml. Arc-only sources (`fragment`) are not in the Base
-// manifest and are appended from manifests/<fragment> when their address env is set.
+// Base-carried sources are rewritten from subgraph.base.yaml. Arc-only sources are never in the Base manifest:
+//   - `cloneOf`: a second data source cut from a Base-carried block (same ABI + mapping, unique name);
+//   - `fragment`: appended from manifests/<fragment> ({{NAME}}, {{ADDRESS}}, {{START_BLOCK}}, {{VENUE}}).
+// Aqua venue sources carry a `venue` data source context ("pegged" | "fxswap") that the mappings stamp on
+// AquaVenueAdapter / AquaStrategy / AquaFill. `requires` names the source whose generated types the reused mapping
+// imports, so it must be present too.
+const ROUTER_FRAGMENT = "aqua-swapvm-router.arc.yaml";
 const sources = [
   { name: "VaultFactory", env: "PUBLIC_ARC_VAULT_FACTORY", required: true },
   { name: "VaultRegistry", env: "PUBLIC_ARC_VAULT_REGISTRY", required: true },
   { name: "Composer", env: "PUBLIC_ARC_COMPOSER", required: true },
   { name: "FillerRegistry", env: "PUBLIC_ARC_FILLER_REGISTRY", required: true },
-  { name: "AquaAdapter", env: "PUBLIC_ARC_AQUA_ADAPTER", required: false },
-  { name: "V4Adapter", env: "PUBLIC_ARC_V4_ADAPTER", required: false },
-  // Arc-only: Base does not index 1inch's shared router.
+  { name: "AquaAdapter", env: "PUBLIC_ARC_AQUA_ADAPTER", venue: "pegged" },
+  { name: "V4Adapter", env: "PUBLIC_ARC_V4_ADAPTER" },
+  // Arc-only. Base does not index 1inch's shared router, and the FXSwap venue exists only on Arc.
+  { name: "AquaSwapVMRouter", env: "PUBLIC_ARC_AQUA_SWAPVM_ROUTER", venue: "pegged", fragment: ROUTER_FRAGMENT },
   {
-    name: "AquaSwapVMRouter",
-    env: "PUBLIC_ARC_AQUA_SWAPVM_ROUTER",
-    required: false,
-    fragment: "aqua-swapvm-router.arc.yaml"
+    name: "FXAquaAdapter",
+    env: "PUBLIC_ARC_FX_AQUA_ADAPTER",
+    venue: "fxswap",
+    cloneOf: "AquaAdapter",
+    requires: "AquaAdapter"
+  },
+  {
+    name: "AquaFXSwapVMRouter",
+    env: "PUBLIC_ARC_FXSWAP_ROUTER",
+    venue: "fxswap",
+    fragment: ROUTER_FRAGMENT,
+    requires: "AquaSwapVMRouter"
   }
+];
+// Router data source -> the adapter whose strategies its fills link to.
+const routerAdapters = [
+  ["AquaSwapVMRouter", "AquaAdapter"],
+  ["AquaFXSwapVMRouter", "FXAquaAdapter"]
 ];
 
 const env = (name) => process.env[name]?.trim() || undefined;
@@ -49,6 +68,7 @@ if (!blockPattern.test(coreStartBlock)) {
 }
 
 const resolved = new Map();
+const seenAddresses = new Map();
 for (const source of sources) {
   const address = env(source.env);
   const startEnv = `${source.env}_START_BLOCK`;
@@ -63,16 +83,27 @@ for (const source of sources) {
   if (startOverride && !blockPattern.test(startOverride)) {
     fail(`${startEnv} must be a non-negative integer, received: ${startOverride}`);
   }
+  // Two data sources on one address would process every event twice and collide on event-entity ids.
+  const key = address.toLowerCase();
+  if (seenAddresses.has(key)) fail(`${source.env} repeats the ${seenAddresses.get(key)} address ${address}`);
+  seenAddresses.set(key, source.name);
   resolved.set(source.name, { address, startBlock: startOverride ?? coreStartBlock });
 }
 
-if (resolved.has("AquaSwapVMRouter") && !resolved.has("AquaAdapter")) {
-  console.warn(
-    "PUBLIC_ARC_AQUA_SWAPVM_ROUTER is set without PUBLIC_ARC_AQUA_ADAPTER: fills will be indexed but never linked to Aqua0 strategies."
-  );
+for (const source of sources) {
+  if (source.requires && resolved.has(source.name) && !resolved.has(source.requires)) {
+    const requiredEnv = sources.find((s) => s.name === source.requires).env;
+    fail(`${source.env} reuses the ${source.requires} mapping and its generated types; set ${requiredEnv} too.`);
+  }
+}
+for (const [router, adapter] of routerAdapters) {
+  if (resolved.has(router) && !resolved.has(adapter)) {
+    console.warn(`${router} is set without ${adapter}: its fills will be indexed but never linked to Aqua0 strategies.`);
+  }
 }
 
-let manifest = readFileSync(new URL("../subgraph.base.yaml", import.meta.url), "utf8");
+const baseManifest = readFileSync(new URL("../subgraph.base.yaml", import.meta.url), "utf8");
+let manifest = baseManifest;
 
 function sourceBlockRegex(name) {
   return new RegExp(
@@ -80,19 +111,44 @@ function sourceBlockRegex(name) {
   );
 }
 
+function venueContext(venue) {
+  return `    context:\n      venue:\n        type: String\n        data: ${venue}\n`;
+}
+
+function retarget(block, target, venue) {
+  let out = block
+    .replace(/network: base/g, "network: arc-testnet")
+    .replace(/address: "0x[a-fA-F0-9]{40}"/, `address: "${target.address}"`)
+    .replace(/startBlock: [0-9]+/, `startBlock: ${target.startBlock}`);
+  if (venue) out = out.replace("    network: arc-testnet\n", `    network: arc-testnet\n${venueContext(venue)}`);
+  return out;
+}
+
 const arcOnlyBlocks = [];
 for (const source of sources) {
   const target = resolved.get(source.name);
 
-  if (source.fragment) {
-    if (sourceBlockRegex(source.name).test(manifest)) {
+  if (source.fragment || source.cloneOf) {
+    if (sourceBlockRegex(source.name).test(baseManifest)) {
       fail(`${source.name} is Arc-only and must not be declared in subgraph.base.yaml`);
     }
     if (!target) continue;
-    const fragment = readFileSync(new URL(`../manifests/${source.fragment}`, import.meta.url), "utf8");
-    arcOnlyBlocks.push(
-      fragment.replace("{{ADDRESS}}", target.address).replace("{{START_BLOCK}}", target.startBlock)
-    );
+    if (source.fragment) {
+      const fragment = readFileSync(new URL(`../manifests/${source.fragment}`, import.meta.url), "utf8");
+      arcOnlyBlocks.push(
+        fragment
+          .replace(/\{\{NAME\}\}/g, source.name)
+          .replace(/\{\{ADDRESS\}\}/g, target.address)
+          .replace(/\{\{START_BLOCK\}\}/g, target.startBlock)
+          .replace(/\{\{VENUE\}\}/g, source.venue)
+      );
+    } else {
+      const match = baseManifest.match(sourceBlockRegex(source.cloneOf));
+      if (!match) fail(`Could not find ${source.cloneOf} data source in subgraph.base.yaml to clone for ${source.name}`);
+      arcOnlyBlocks.push(
+        retarget(match[0], target, source.venue).replace(`    name: ${source.cloneOf}\n`, `    name: ${source.name}\n`)
+      );
+    }
     continue;
   }
 
@@ -103,11 +159,7 @@ for (const source of sources) {
     manifest = manifest.replace(re, "");
     continue;
   }
-  const block = match[0]
-    .replace(/network: base/g, "network: arc-testnet")
-    .replace(/address: "0x[a-fA-F0-9]{40}"/, `address: "${target.address}"`)
-    .replace(/startBlock: [0-9]+/, `startBlock: ${target.startBlock}`);
-  manifest = manifest.replace(re, block);
+  manifest = manifest.replace(re, retarget(match[0], target, source.venue));
 }
 
 if (arcOnlyBlocks.length > 0) {
@@ -121,7 +173,12 @@ manifest = manifest.replace(/network: base/g, "network: arc-testnet");
 manifest = manifest.replace("  prune: auto", "  prune: never");
 writeFileSync(new URL("../subgraph.arc.yaml", import.meta.url), manifest);
 
-const summary = [...resolved].map(([name, { address, startBlock }]) => `  ${name} ${address} @ ${startBlock}`);
+const summary = sources
+  .filter((s) => resolved.has(s.name))
+  .map((s) => {
+    const { address, startBlock } = resolved.get(s.name);
+    return `  ${s.name} ${address} @ ${startBlock}${s.venue ? ` (venue ${s.venue})` : ""}`;
+  });
 const skipped = sources.filter((s) => !resolved.has(s.name)).map((s) => s.name);
 console.log(
   "Wrote packages/subgraph/subgraph.arc.yaml for Arc testnet (network arc-testnet, chainId 5042002):\n" +

@@ -588,6 +588,8 @@ type AquaVenueAdapter @entity(immutable: false) {
   id: ID!
   address: Bytes!
   network: String!
+  "Venue label from the manifest data source context: pegged | fxswap (null where no context is set, e.g. Base)."
+  venue: String
   aqua: Bytes
   swapVMRouter: Bytes
   oneStrategyPerToken: Boolean
@@ -610,6 +612,8 @@ type AquaStrategy @entity(immutable: false) {
   id: ID!
   adapter: AquaVenueAdapter!
   strategyId: Bytes!
+  "pegged | fxswap, copied from the adapter."
+  venue: String
   classId: BigInt
   strategy: Strategy
   network: String!
@@ -666,6 +670,8 @@ type AquaFill @entity(immutable: true) {
   timestamp: BigInt!
   network: String!
   router: Bytes!
+  "pegged | fxswap, from the router data source context (falls back to the maker adapter's venue)."
+  venue: String
   orderHash: Bytes!
   maker: Bytes!
   taker: Bytes!
@@ -729,7 +735,11 @@ type AquaSwapSettlementBuffer @entity(immutable: false) {
   pendingFeeAccruals: [String!]!
   venueSettlements: [String!]!
   principalSales: [String!]!
+  "Adapter address each promoted principal sale belongs to (parallel to principalSales)."
+  principalSaleVenues: [String!]!
   feeAccruals: [String!]!
+  "Adapter address each promoted fee accrual belongs to (parallel to feeAccruals)."
+  feeAccrualVenues: [String!]!
 }
 
 type AquaAdapterOneStrategyPerTokenSetEvent @entity(immutable: true) {

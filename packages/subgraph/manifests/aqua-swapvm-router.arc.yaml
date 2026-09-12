@@ -1,6 +1,10 @@
   - kind: ethereum/contract
-    name: AquaSwapVMRouter
+    name: {{NAME}}
     network: arc-testnet
+    context:
+      venue:
+        type: String
+        data: {{VENUE}}
     source:
       address: "{{ADDRESS}}"
       abi: AquaSwapVMRouter

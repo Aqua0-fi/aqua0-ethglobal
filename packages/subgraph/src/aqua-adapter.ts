@@ -20,7 +20,7 @@ import {
   AquaStrategyShippedEvent,
   AquaVenueAdapter
 } from "../generated/schema";
-import { aquaOrderEntityId, aquaStrategyEntityId } from "./aqua-venue";
+import { aquaOrderEntityId, aquaStrategyEntityId, contextVenue } from "./aqua-venue";
 import { addressesToBytes, eventId, network, strategyEntityId } from "./common";
 
 const ONE = BigInt.fromI32(1);
@@ -35,6 +35,8 @@ function touchAdapter(adapter: Address, event: ethereum.Event): AquaVenueAdapter
     entity.strategyCount = BigInt.zero();
     entity.fillCount = BigInt.zero();
     entity.firstSeenBlock = event.block.number;
+    // "pegged" | "fxswap" from the data source context (null on manifests without it, e.g. Base).
+    entity.venue = contextVenue();
 
     const contract = AquaAdapterContract.bind(adapter);
     const aqua = contract.try_aqua();
@@ -56,6 +58,7 @@ function loadOrCreateStrategy(adapter: AquaVenueAdapter, strategyId: Bytes, even
     entity = new AquaStrategy(id);
     entity.adapter = adapter.id;
     entity.strategyId = strategyId;
+    entity.venue = adapter.venue;
     entity.network = network();
     entity.status = "LIVE";
     entity.tokens = new Array<Bytes>();

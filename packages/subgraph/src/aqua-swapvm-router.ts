@@ -11,7 +11,7 @@ import {
   StrategyFeeAccruedEvent,
   StrategyPrincipalSoldEvent
 } from "../generated/schema";
-import { aquaOrderEntityId, loadSwapBuffer, resetSwapBuffer } from "./aqua-venue";
+import { aquaOrderEntityId, contextVenue, loadSwapBuffer } from "./aqua-venue";
 import { eventId, network, strategyEntityId } from "./common";
 
 const ONE = BigInt.fromI32(1);
@@ -83,6 +83,7 @@ export function handleSwapped(event: Swapped): void {
   fill.timestamp = event.block.timestamp;
   fill.network = network();
   fill.router = event.address;
+  fill.venue = contextVenue();
   fill.orderHash = params.orderHash;
   fill.maker = params.maker;
   fill.taker = params.taker;
@@ -102,6 +103,7 @@ export function handleSwapped(event: Swapped): void {
   const adapter = AquaVenueAdapter.load(params.maker.toHexString());
   if (adapter != null) {
     fill.adapter = adapter.id;
+    if (fill.venue === null) fill.venue = adapter.venue;
     adapter.fillCount = adapter.fillCount.plus(ONE);
     adapter.updatedAtBlock = event.block.number;
     adapter.updatedAtTimestamp = event.block.timestamp;
@@ -130,16 +132,22 @@ export function handleSwapped(event: Swapped): void {
       }
     }
 
-    // Attach the vault settlements this adapter booked inside the swap's maker hooks.
+    // Attach the vault settlements THIS adapter booked inside the swap's maker hooks (adapter + vault + class).
+    // Entries tagged with another adapter stay buffered for that adapter's own Swapped.
     const buffer = loadSwapBuffer(event);
     const makerHex = params.maker.toHexString();
     const settledVaults = new Array<string>();
     const settledClasses = new Array<string>();
 
     const bufferedSettlements = buffer.venueSettlements;
+    const keptSettlements = new Array<string>();
     for (let i = 0; i < bufferedSettlements.length; i++) {
       const row = ClassVenueSettledEvent.load(bufferedSettlements[i]);
-      if (row == null || row.venue.toHexString() != makerHex) continue;
+      if (row == null) continue;
+      if (row.venue.toHexString() != makerHex) {
+        keptSettlements.push(bufferedSettlements[i]);
+        continue;
+      }
       settlementIds.push(row.id);
       settledVaults.push(row.vault.toHexString());
       settledClasses.push(row.strategyId.toString());
@@ -155,7 +163,15 @@ export function handleSwapped(event: Swapped): void {
     const seenLpVaults = new Array<string>();
 
     const bufferedSales = buffer.principalSales;
+    const saleVenues = buffer.principalSaleVenues;
+    const keptSales = new Array<string>();
+    const keptSaleVenues = new Array<string>();
     for (let i = 0; i < bufferedSales.length; i++) {
+      if (saleVenues[i] != makerHex) {
+        keptSales.push(bufferedSales[i]);
+        keptSaleVenues.push(saleVenues[i]);
+        continue;
+      }
       const row = StrategyPrincipalSoldEvent.load(bufferedSales[i]);
       if (row == null || !hasSettlement(settledVaults, settledClasses, row.vault, row.strategyId)) continue;
       saleIds.push(row.id);
@@ -165,7 +181,15 @@ export function handleSwapped(event: Swapped): void {
     }
 
     const bufferedFees = buffer.feeAccruals;
+    const feeVenues = buffer.feeAccrualVenues;
+    const keptFees = new Array<string>();
+    const keptFeeVenues = new Array<string>();
     for (let i = 0; i < bufferedFees.length; i++) {
+      if (feeVenues[i] != makerHex) {
+        keptFees.push(bufferedFees[i]);
+        keptFeeVenues.push(feeVenues[i]);
+        continue;
+      }
       const row = StrategyFeeAccruedEvent.load(bufferedFees[i]);
       if (row == null || !hasSettlement(settledVaults, settledClasses, row.vault, row.strategyId)) continue;
       feeIds.push(row.id);
@@ -174,7 +198,11 @@ export function handleSwapped(event: Swapped): void {
       recordLpFill(row.lp, row.vault, BigInt.zero(), row.credited, seenLps, seenLpVaults, event);
     }
 
-    resetSwapBuffer(buffer);
+    buffer.venueSettlements = keptSettlements;
+    buffer.principalSales = keptSales;
+    buffer.principalSaleVenues = keptSaleVenues;
+    buffer.feeAccruals = keptFees;
+    buffer.feeAccrualVenues = keptFeeVenues;
     buffer.save();
   }
 
