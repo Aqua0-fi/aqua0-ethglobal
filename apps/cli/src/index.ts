@@ -65,6 +65,7 @@ Environment:
   CIRCLE_WALLET_SET_ID         Without a wallet id: wallet set holding one wallet per user ref
   CIRCLE_USER_REF              Without a wallet id: refId of the user's wallet, created on first use
   PRIVY_APP_ID                 Privy app for login (SIGNER=circle with CIRCLE_WALLET_SET_ID; the Privy user id is the refId)
+  PRIVY_CLIENT_ID              Optional Privy app client for the sign-in page (e.g. one allowing localhost)
   PRIVY_LOGIN_PORT             Local sign-in page port, default 8787 (allow http://localhost:<port> in Privy)
   AQUA0_SESSION_FILE           Saved sign-in, default ~/.aqua0/session.json`);
 }

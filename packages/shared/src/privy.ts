@@ -26,6 +26,8 @@ const MAX_CALLBACK_BYTES = 16_384;
 export type PrivyEnvConfig = {
   /** Privy app id (public). */
   privyAppId?: string;
+  /** Optional Privy app client id (public), e.g. a client whose allowed origins include the local login page. */
+  privyClientId?: string;
   /** Port of the local login page; allow `http://localhost:<port>` in the Privy dashboard. Default 8787. */
   privyLoginPort?: number;
   /** Where the signed-in Privy user id is saved. Default `~/.aqua0/session.json`. */
@@ -39,6 +41,7 @@ export function readPrivyEnv(env: Readonly<Record<string, string | undefined>>):
   }
   return {
     ...(env.PRIVY_APP_ID?.trim() ? { privyAppId: env.PRIVY_APP_ID.trim() } : {}),
+    ...(env.PRIVY_CLIENT_ID?.trim() ? { privyClientId: env.PRIVY_CLIENT_ID.trim() } : {}),
     ...(port === undefined ? {} : { privyLoginPort: port }),
     ...(env.AQUA0_SESSION_FILE?.trim() ? { aqua0SessionFile: env.AQUA0_SESSION_FILE.trim() } : {})
   };
@@ -149,6 +152,8 @@ export type PrivyLogin<T> = {
 
 export type PrivyLoginOptions<T> = {
   appId: string;
+  /** Privy app client id, when the login page should use a specific app client. */
+  clientId?: string;
   /** Default 8787; 0 picks a free port (tests). */
   port?: number;
   onIdentity: (identity: PrivyIdentity) => Promise<T>;
@@ -214,7 +219,7 @@ export async function startPrivyLogin<T>(options: PrivyLoginOptions<T>): Promise
         res.writeHead(302, { location: `${origin}/login` }).end();
         return;
       }
-      sendHtml(res, loginPageHtml(options.appId, state, settled));
+      sendHtml(res, loginPageHtml(options.appId, options.clientId, state, settled));
       return;
     }
     if (req.method === "GET" && path === "/login.js") {
@@ -310,8 +315,8 @@ function listen(server: Server, port: number, host: string): Promise<void> {
   });
 }
 
-function loginPageHtml(appId: string, state: string, finished: boolean): string {
-  const config = JSON.stringify({ appId, state, finished }).replace(/</g, "\\u003c");
+function loginPageHtml(appId: string, clientId: string | undefined, state: string, finished: boolean): string {
+  const config = JSON.stringify({ appId, ...(clientId ? { clientId } : {}), state, finished }).replace(/</g, "\\u003c");
   return `<!doctype html>
 <html lang="en">
 <head>

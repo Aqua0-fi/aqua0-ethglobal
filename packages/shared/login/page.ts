@@ -5,7 +5,7 @@ import { PrivyProvider, usePrivy } from "@privy-io/react-auth";
 import { createElement as h, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
-type LoginConfig = { appId: string; state: string; finished: boolean };
+type LoginConfig = { appId: string; clientId?: string; state: string; finished: boolean };
 type Outcome = { ok: boolean; title: string; text: string };
 
 const config = (window as unknown as { __AQUA0_LOGIN__: LoginConfig }).__AQUA0_LOGIN__;
@@ -91,5 +91,11 @@ function Login() {
 
 const root = document.getElementById("root");
 if (root) {
-  createRoot(root).render(h(PrivyProvider, { appId: config.appId, children: h(Login) }));
+  createRoot(root).render(
+    h(PrivyProvider, {
+      appId: config.appId,
+      ...(config.clientId ? { clientId: config.clientId } : {}),
+      children: h(Login)
+    })
+  );
 }

@@ -372,6 +372,7 @@ export class Aqua0Service {
     const walletSetId = config.circleWalletSetId;
     const login = await startPrivyLogin<LoginResult>({
       appId,
+      ...(config.privyClientId ? { clientId: config.privyClientId } : {}),
       ...(config.privyLoginPort ? { port: config.privyLoginPort } : {}),
       onIdentity: async (identity) => {
         const previous = { ref: config.circleUserRef, fromSignIn: this.#userRefFromSignIn };
