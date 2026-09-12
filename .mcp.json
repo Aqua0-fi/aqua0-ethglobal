@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "aqua0": {
+      "type": "http",
+      "url": "https://ethglobal-mcp.18-207-103-187.nip.io/mcp"
+    }
+  }
+}

@@ -1,4 +1,4 @@
-import { readPrivyEnv, readSignerEnv, type Aqua0ServiceConfig, type WriteMode } from "@aqua0/shared";
+import { ARC_TESTNET, readPrivyEnv, readSignerEnv, type Aqua0ServiceConfig, type WriteMode } from "@aqua0/shared";
 
 export type McpConfig = Aqua0ServiceConfig & {
   transport: "stdio" | "http";
@@ -6,22 +6,27 @@ export type McpConfig = Aqua0ServiceConfig & {
   port: number;
 };
 
+/** Public Subgraph Studio query URL of the Aqua0 Arc Testnet subgraph (rate limited); GRAPH_ENDPOINT overrides it. */
+export const DEFAULT_GRAPH_ENDPOINT =
+  "https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/version/latest";
+
 export function readMcpConfig(
   env: NodeJS.ProcessEnv = process.env,
   argv: string[] = process.argv.slice(2)
 ): McpConfig {
-  const graphEndpoint = env.GRAPH_ENDPOINT;
-  if (!graphEndpoint) {
-    throw new Error("GRAPH_ENDPOINT is required");
-  }
+  const graphEndpoint = env.GRAPH_ENDPOINT?.trim() || DEFAULT_GRAPH_ENDPOINT;
 
   const transport = readTransport(env, argv);
   return {
     graphEndpoint,
     ...(env.GRAPH_NETWORK ? { graphNetwork: env.GRAPH_NETWORK } : {}),
     ...(env.GRAPH_AUTH_TOKEN ? { graphAuthToken: env.GRAPH_AUTH_TOKEN } : {}),
-    ...(env.WRITE_RPC_URL ? { writeRpcUrl: env.WRITE_RPC_URL } : {}),
-    ...(env.WRITE_CHAIN_ID ? { writeChainId: parsePositiveInt(env.WRITE_CHAIN_ID, "WRITE_CHAIN_ID") } : {}),
+    // Arc Testnet by default, so `npx -y @aqua0/mcp` reads the chain with no variables. Execution still needs
+    // MCP_WRITE_MODE=execute and a signer, and stays limited to Arc Testnet or a local fork.
+    writeRpcUrl: env.WRITE_RPC_URL?.trim() || ARC_TESTNET.rpcUrl,
+    writeChainId: env.WRITE_CHAIN_ID?.trim()
+      ? parsePositiveInt(env.WRITE_CHAIN_ID, "WRITE_CHAIN_ID")
+      : ARC_TESTNET.chainId,
     ...(env.VAULT_REGISTRY_ADDRESS ? { vaultRegistryAddress: env.VAULT_REGISTRY_ADDRESS } : {}),
     ...(env.WRITE_PRIVATE_KEY ? { writePrivateKey: env.WRITE_PRIVATE_KEY } : {}),
     ...readSignerEnv(env),

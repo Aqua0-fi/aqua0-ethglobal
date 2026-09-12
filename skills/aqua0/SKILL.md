@@ -11,24 +11,30 @@ Aqua0 is shared liquidity for 1inch SwapVM. An LP deposits once into a per-asset
 
 ## Connect
 
-**Public HTTP endpoint.** No install, no signer. It runs the earlier build: 12 tools, reads plus `prepare_*` only, with Graph data from Subgraph Studio.
+**1. Claude Code plugin (easiest).** One install gives you this skill and the hosted MCP server, already connected. The hosted server is prepare-only and never signs: it runs the earlier build (reads plus `prepare_*`, Graph data from Subgraph Studio).
+
+```text
+/plugin marketplace add Aqua0-fi/aqua0-ethglobal
+/plugin install aqua0@aqua0
+```
+
+From a shell: `claude plugin marketplace add Aqua0-fi/aqua0-ethglobal`, then `claude plugin install aqua0@aqua0`. The server is listed as `plugin:aqua0:aqua0`. Do not also add the hosted endpoint by hand, or its tools show up twice.
+
+**2. Hosted endpoint by hand.** Same prepare-only server, for other clients or without the skill:
 
 ```bash
 claude mcp add --transport http aqua0 https://ethglobal-mcp.18-207-103-187.nip.io/mcp
 ```
 
-**Local stdio.** This is the full 19-tool build, including `create_strategy`, `quote_swap`, `swap`, `get_shared_backing`, `get_fx_prices` and `set_fx_price`. Run `pnpm install && pnpm build` in the repo, then:
+**3. Local stdio (full tool set).** Adds `create_strategy`, `quote_swap`, `swap`, `get_shared_backing`, `get_fx_prices`, `set_fx_price` and `login`. No clone or build:
 
 ```bash
-claude mcp add aqua0 \
-  -e GRAPH_ENDPOINT=https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/version/latest \
-  -e WRITE_RPC_URL=https://rpc.testnet.arc.network \
-  -e WRITE_CHAIN_ID=5042002 \
-  -e MCP_WRITE_MODE=prepare \
-  -- node <repo>/apps/mcp/dist/index.js
+claude mcp add aqua0 -- npx -y @aqua0/mcp
 ```
 
-Codex takes the same variables with `codex mcp add aqua0 --env KEY=value ... -- node <repo>/apps/mcp/dist/index.js`. `GRAPH_ENDPOINT` is required or the server will not start. The venue and feed addresses default to the Arc deployment. Override them only for a fork with `AQUA_ADAPTER_ADDRESS`, `AQUA_SWAPVM_ROUTER_ADDRESS`, `FXSWAP_ROUTER_ADDRESS`, `FXSWAP_AQUA_ADAPTER_ADDRESS`, `FX_ORACLE_ARS_USD` and `FX_ORACLE_BRL_USD`. To send transactions, the person running the server sets `MCP_WRITE_MODE=execute` and `WRITE_PRIVATE_KEY` in the server's environment. To sign with a Circle developer-controlled wallet instead, they set `SIGNER=circle`, `CIRCLE_API_KEY`, `CIRCLE_ENTITY_SECRET`, and either `CIRCLE_WALLET_ID` or `CIRCLE_WALLET_SET_ID` plus `CIRCLE_USER_REF`. With a user ref, the server signs with that user's Arc Testnet EOA and creates it on first use. With `PRIVY_APP_ID` (and `CIRCLE_WALLET_SET_ID`, no fixed wallet), the user signs in instead: `login` returns a localhost URL, and the Privy user id becomes the user ref. With `CIRCLE_OPERATOR_WALLET_ID`, a shared operator sends the strategy ships the user signs and tops up a new wallet with testnet USDC, so a new user needs no role. See Safety.
+It starts in prepare mode on Arc Testnet with the public Studio subgraph. Until `@aqua0/mcp` is on npm, run it from a clone instead: `pnpm install && pnpm build`, then `claude mcp add aqua0 -- node <repo>/apps/mcp/dist/index.js`.
+
+Codex takes the same variables with `codex mcp add aqua0 --env KEY=value ... -- npx -y @aqua0/mcp`. `GRAPH_ENDPOINT` defaults to the public Studio query URL; set it to use another subgraph. `WRITE_RPC_URL` and `WRITE_CHAIN_ID` default to Arc Testnet. The venue and feed addresses default to the Arc deployment. Override them only for a fork with `AQUA_ADAPTER_ADDRESS`, `AQUA_SWAPVM_ROUTER_ADDRESS`, `FXSWAP_ROUTER_ADDRESS`, `FXSWAP_AQUA_ADAPTER_ADDRESS`, `FX_ORACLE_ARS_USD` and `FX_ORACLE_BRL_USD`. To send transactions, the person running the server sets `MCP_WRITE_MODE=execute` and `WRITE_PRIVATE_KEY` in the server's environment. To sign with a Circle developer-controlled wallet instead, they set `SIGNER=circle`, `CIRCLE_API_KEY`, `CIRCLE_ENTITY_SECRET`, and either `CIRCLE_WALLET_ID` or `CIRCLE_WALLET_SET_ID` plus `CIRCLE_USER_REF`. With a user ref, the server signs with that user's Arc Testnet EOA and creates it on first use. With `PRIVY_APP_ID` (and `CIRCLE_WALLET_SET_ID`, no fixed wallet), the user signs in instead: `login` returns a localhost URL, and the Privy user id becomes the user ref. With `CIRCLE_OPERATOR_WALLET_ID`, a shared operator sends the strategy ships the user signs and tops up a new wallet with testnet USDC, so a new user needs no role. See Safety.
 
 ## Tool map
 
