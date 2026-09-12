@@ -17,7 +17,7 @@ For ETHGlobal we put Aqua0 on **Arc** and made it agent-native. From Claude Code
 > **What's live right now (2026-09-12)**
 > - **Live:** both Aqua0 venues on Arc Testnet, drawing on the same vaults ([see it on-chain](#see-it-on-chain)). On the forex venue, which runs Tomás's forex curve, `create_strategy` picked the forex curve by default for USDC/ARS and USDC/BRL, and both filled on-chain at the oracle price less the 30 bps fee. One 1 USDC principal backs those two forex strategies and a pegged USDC/BRL strategy at once. On the pegged venue, one 2 USDC deposit backs a USDC/ARS and a USDC/BRL strategy, both filled. Also live: the Aqua0 vault core, RedStone BRL and MXNe price feeds updated on-chain from signed market data, the Arc subgraph on Subgraph Studio indexing both Aqua venues, the public MCP endpoint (earlier 12-tool prepare-only build) and the judge dashboard.
 > - **Fork-proven:** the forex curve's regimes, which the small live run does not reach ([`test-arc-fork-forex.sh`](scripts/test-arc-fork-forex.sh)). Inside the flat band a swap costs the 30 bps fee, a trade past it pays the inventory fee, a trade past the halt band reverts, and a +5% ARS feed move moves the quote by 5%.
-> - **Planned:** the hosted redeploy of the 19-tool MCP, which runs locally over stdio today.
+> - **Planned:** the hosted redeploy of the 24-tool MCP, which runs locally over stdio today.
 
 <kbd>[Demo](#the-demo-in-four-steps)</kbd> <kbd>[On-chain](#see-it-on-chain)</kbd> <kbd>[How it works](#how-it-works)</kbd> <kbd>[Forex curve](#forex-curve-in-brief)</kbd> <kbd>[Prize tracks](#prize-tracks)</kbd> <kbd>[Try it](#try-it)</kbd> <kbd>[Deployments](#deployments)</kbd> <kbd>[Reference](#reference)</kbd>
 
@@ -411,7 +411,7 @@ Aqua0 is registered in the **Continuity** track. We target Arc, 1inch and The Gr
 | Prize | Pool | Fit today | Main gap |
 | --- | --- | --- | --- |
 | [The Graph: Best AI Tooling or AI Use Case](#the-graph-best-ai-tooling-or-ai-use-case) (Continuity pool) | $2,500 / $1,500 / $1,000 | Reusable Graph-backed MCP server and agent skill; the agent reads live Subgraph Studio data and acts on it | Public MCP on the earlier build |
-| [The Graph: Composable or Standardized Graph Products](#the-graph-composable-or-standardized-graph-products) | $2,500 / $1,500 / $1,000 | Stretch; not met | One subgraph, no composition: **Planned** |
+| [The Graph: Composable or Standardized Graph Products](#the-graph-composable-or-standardized-graph-products) | $2,500 / $1,500 / $1,000 | `benchmark_fx_strategy`: one Messari standardized DEX query pattern across 4 protocols on 6 chains, composed with the Aqua0 subgraph | Video; the standardized Base and Polygon subgraphs are sometimes unavailable on the gateway |
 | [Arc: Best DeFi / Onchain Finance Application](#arc-best-defi--onchain-finance-application) | $3,500 ($2,500 mainnet-conditional) | USDC-quoted shared FX liquidity, live on Arc Testnet, traded through Circle developer-controlled wallets | Testnet only; no App Kits, CCTP, Gateway or StableFX yet |
 | [Arc: Best Agentic Economy Application with Circle Agent Stack](#arc-best-agentic-economy-application-with-circle-agent-stack) | $3,500 ($2,500 mainnet-conditional) | Partial: the agent transacts in execute mode through the user's Circle wallet | No Agent Stack; the agent acts on user instructions, not autonomously |
 | [Arc: Best DeFi or Agentic Application (Continuity)](#arc-best-defi-or-agentic-application-continuity) | $3,000 ($2,000 mainnet-conditional) | Entered as the DeFi application | Same as the DeFi prize |
@@ -440,7 +440,7 @@ Aqua0 is registered in the **Continuity** track. We target Arc, 1inch and The Gr
 
 > [!WARNING]
 > **Gaps / next:**
-> 1. Redeploy the public MCP with the 19 tools (**Planned**; today they run locally).
+> 1. Redeploy the public MCP with the 24 tools (**Planned**; today they run locally).
 > 2. Have `get_shared_backing` read the indexed Aqua entities, which Studio now serves; today it uses on-chain reads, and says so in its response.
 
 ### The Graph: Composable or Standardized Graph Products
@@ -448,11 +448,26 @@ Aqua0 is registered in the **Continuity** track. We target Arc, 1inch and The Gr
 **What they're looking for:** a project that composes **two or more** Graph products (Subgraphs, Substreams, the Subgraph MCP) or builds meaningfully on a **standardized schema**, such as Messari Standardized Subgraphs. It must use live provider data and make clear what the standard or composition made easier. Querying one subgraph doesn't qualify. Public repo and a 2–4 minute video.
 
 **How Aqua0 delivers**
-- [ ] **Two or more Graph products, or a standardized schema.** Aqua0 queries one custom subgraph today. · **Planned**
-- [x] **Live provider data.** The Arc subgraph on Subgraph Studio. · **Live**
+- [x] **A standardized schema across protocols and chains.** `benchmark_fx_strategy` sends one Messari DEX AMM query pattern (`liquidityPools` filtered by `inputTokens`, then `dailySnapshots` and `hourlySnapshots`) unchanged through The Graph Network gateway to 12 Messari standardized subgraphs: Uniswap v3 on Ethereum, Base, Polygon, Arbitrum, Optimism and Celo; Curve on Ethereum; SushiSwap on Ethereum, Polygon, Arbitrum and Celo; Velodrome v2 on Optimism. It finds every pool holding USDC and a pinned EUR, BRL, MXN, ARS, SGD or CAD stablecoin, and reports fee tier, realized fee, TVL, daily volume, 24h range and last activity. [`graph-benchmark.ts`](packages/shared/src/graph-benchmark.ts), [`index.ts`](apps/mcp/src/index.ts) · **Live**
+- [x] **Composed with the Aqua0 subgraph.** The same call reads Aqua0's live forex strategies and their indexed fills and fees (`AquaStrategy`, `AquaFill`) from Subgraph Studio, next to the market pools, so an Aqua0 strategy is compared with the market from Graph data on both sides. For USDC/ARS and USDC/BRL it also returns a live Arc Testnet router quote. · **Live**
+- [x] **Live provider data.** The gateway (API key sent only as a bearer header, redacted from errors) and Subgraph Studio. · **Live**
+- [x] **What the standard made easier.** One query and one parser cover four protocols on six chains. Schema 1.3 (Curve, SushiSwap, Velodrome) and 4.0 (Uniswap v3) answer the same fields, so adding a protocol or a chain is a subgraph id and the chain's token addresses, not a new integration. Aerodrome on Base has no standardized subgraph; it and the official Uniswap v3 subgraphs need their own query, and run only as a labelled, non-standardized fallback for a chain the standardized subgraphs do not cover. · **Live**
+- [x] **Decisions from the data.** The tool returns a verdict (liquid, thin or none) with the numbers behind it, and names every source that failed. · **Live**
+- [ ] **2–4 minute demo video.** · **In progress**
 
-> [!WARNING]
-> **Gaps / next:** an MCP tool that composes the Aqua0 subgraph with the Subgraph MCP or a standardized DEX subgraph. It would benchmark an Aqua0 strategy's fills and fees against the same pair on other venues, so the agent can recommend where to commit shared capital. This prize remains a stretch and is not met.
+Live run on 2026-09-12 (7-day lookback, a 30 bps Aqua0 strategy):
+
+| Pair | Verdict | What the tool found |
+| --- | --- | --- |
+| EUR | liquid | 11 of 12 standardized subgraphs answered (Uniswap v3 on Base timed out). Uniswap v3 EURC/USDC 5 bps on Ethereum: $3.26M TVL, $966k a day; Curve EURS/USDC on Ethereum charges 45 bps. The busiest pool is Aerodrome EURC/USDC 5 bps on Base (fallback): $3.09M TVL, $3.73M a day. A 30 bps strategy is not price-competitive. |
+| BRL | thin | Uniswap v3 BRLA/USDC 5 bps on Polygon: $118k TVL, $220k a day (the subgraph does not price BRLA in USD, so volume is the USDC leg). Aerodrome BRZ/USDC 1% on Base: $10k TVL. Aqua0's USDC/BRL forex strategy on Arc Testnet: 30 bps, 2 indexed fills. |
+| MXN | none | No standardized pool. Aerodrome MXNe/USDC 1% on Base: $11.7k TVL, $9.13 of volume in the week. |
+| ARS | none | No standardized pool. Aerodrome ARST/USDC 1% on Base: $5.9k TVL. Aqua0's USDC/ARS forex strategy on Arc Testnet: 30 bps, 2 indexed fills. |
+
+Not live on the gateway when checked: PancakeSwap v3 and Curve on Optimism ("no allocations"), Balancer v2 on Ethereum (indexing error). Details: [`docs/THE_GRAPH_TRACK.md`](docs/THE_GRAPH_TRACK.md#composable-and-standardized-graph-products).
+
+> [!NOTE]
+> The Aqua0 MCP can run next to The Graph's Subgraph MCP in the same client: the agent uses the Subgraph MCP to discover more subgraphs and pools, and Aqua0 to benchmark and act. The two servers are not integrated in code.
 
 ### Arc: Best DeFi / Onchain Finance Application
 
@@ -605,7 +620,10 @@ How many Argentine pesos would 0.1 USDC buy right now? Show the execution price 
 What's the real BRL rate right now, and what value is stored on-chain?
 What rate is the ARS feed on? Prepare a +5% move and tell me who can send it.
 Create a USDC/BRL forex strategy as a dry run and walk me through each step.
+Is a 30 bps euro FX strategy competitive onchain? How deep is BRL liquidity?
 ```
+
+The last prompt runs `benchmark_fx_strategy`, which needs `GRAPH_GATEWAY_API_KEY` (a The Graph Network gateway key) in the server's environment.
 
 `set_fx_price` moves only the ARS/USD feed, and only sends in execute mode when the signer owns it; otherwise it returns the prepared call. It refuses the RedStone BRL feed. Forex strategies are live on Arc; the fork proof ([`test-arc-fork-forex.sh`](scripts/test-arc-fork-forex.sh)) also shows the inventory fee, the halt band and an ARS feed move.
 
@@ -810,7 +828,7 @@ To ship from the MCP, a signer needs `OPERATOR_ROLE` on the adapter, or a Circle
 <a id="mcp-tool-reference"></a>
 
 <details>
-<summary><b>MCP tool reference (19 tools)</b></summary>
+<summary><b>MCP tool reference (24 tools)</b></summary>
 
 All write tools send only when the server runs with `MCP_WRITE_MODE=execute` and `dryRun` isn't true. Otherwise they return calldata and typed data. `authorize_strategy` is additionally registered in execute mode.
 
@@ -834,6 +852,7 @@ All write tools send only when the server runs with `MCP_WRITE_MODE=execute` and
 | `swap` | Write | For a RedStone-priced strategy, first pushes the latest signed price (`updateDataFeedsValuesPartial`, about 130k gas). Then quotes, enforces min out on-chain (`slippageBps` default 50, or `minAmountOut`), approves, swaps; same pricing fields |
 | `get_shared_backing` | RPC read | Principal counted once, every committed class, backing and availability per vault, shipped strategies on both venues tagged by opcode. Labelled as on-chain reads. |
 | `get_fx_prices` | RPC read + RedStone gateways | BRL: the latest signed RedStone price (signing time, the three signer values, also as BRL per USD) and the value stored on-chain. ARS: the `ManualFxOracle` price, age and owner. Without a pair it also lists MXNe. Each feed shows whether it sits in the default band |
+| `benchmark_fx_strategy` | Graph: standardized DEX subgraphs + Aqua0 subgraph | `{pair, feeBps?, flatBandPercent?, tradeSizesUsd?, lookbackDays?, chains?, fallback?, includeArcQuote?}` for EUR, BRL, MXN, ARS, SGD or CAD against USDC. Sends one Messari DEX AMM query pattern through The Graph Network gateway to the standardized Uniswap v3, Curve, SushiSwap and Velodrome subgraphs on six chains; returns each pool's fee tier, realized fee, TVL, daily volume, 24h range and last activity, next to the Aqua0 strategy's fee per trade size, its indexed Arc Testnet fills and a verdict (liquid, thin or none). Read-only; needs `GRAPH_GATEWAY_API_KEY`. |
 | `set_fx_price` | Write | `{pair, price \| changePercent, dryRun?}`: `ManualFxOracle.setAnswer` on the ARS/USD feed; refuses the RedStone BRL feed. Sends only in execute mode with the feed owner as signer; a non-owner gets an error and nothing is sent. Trust assumption: forex strategies trade at whatever the feed says, bounded only by their price band and staleness window. |
 
 Source: [`apps/mcp/src/index.ts`](apps/mcp/src/index.ts). Graph reads return raw integer units as strings and never invent decimals. Agent guidance: [`skills/aqua0/SKILL.md`](skills/aqua0/SKILL.md).
@@ -848,6 +867,7 @@ Source: [`apps/mcp/src/index.ts`](apps/mcp/src/index.ts). Graph reads return raw
 | `GRAPH_ENDPOINT` | **Required.** GraphQL endpoint for the Aqua0 subgraph (the Studio query URL) |
 | `GRAPH_AUTH_TOKEN` | Optional bearer token (for example a Studio query key); never returned by `info` |
 | `GRAPH_NETWORK` | Network label for health and info, for example `arc-testnet` |
+| `GRAPH_GATEWAY_API_KEY` | The Graph Network gateway API key for `benchmark_fx_strategy`; a secret, sent only as a bearer header and redacted from errors |
 | `WRITE_RPC_URL` | RPC for on-chain reads and guarded writes |
 | `WRITE_CHAIN_ID` | Chain id for strategy keys and the execution guard (`5042002`) |
 | `VAULT_REGISTRY_ADDRESS` | Aqua0 `VaultRegistry` (Arc default for pair commands) |
@@ -930,9 +950,10 @@ Details: [`docs/CONTINUITY.md`](docs/CONTINUITY.md).
 - [x] SKILL.md for agent clients · **Live**
 - [x] Wire the forex adapter on Arc and run the forex flow there · **Live**
 - [x] Redeploy the subgraph to Studio with both Aqua venues · **Live**
-- [ ] Redeploy the public MCP with the 19 tools · **Planned**
+- [ ] Redeploy the public MCP with the 24 tools · **Planned**
 - [x] Port Tomás's forex curve to SwapVM and match all 979 reference vectors within a few wei
 - [x] Signed FX prices for the forex curve: RedStone BRL and MXNe feeds on Arc, pushed on-chain before a swap (Pyth dropped: its free tier excludes FX) · **Live** (feeds and forex swaps on them)
-- [ ] A volatility-based spread for the forex curve; a composable Graph tool · **Planned**
+- [x] A composable Graph tool: `benchmark_fx_strategy` compares Aqua0 forex strategies with the onchain market through standardized DEX subgraphs · **Live**
+- [ ] A volatility-based spread for the forex curve · **Planned**
 - [ ] Circle Wallets or Agent Stack, Paymaster, Nanopayments; StableFX as an FX source; CCTP or Gateway onboarding · **Planned**
 - [ ] Security review of ForexCurve, then Arc Mainnet · **Planned**

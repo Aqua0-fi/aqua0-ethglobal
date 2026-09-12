@@ -8,7 +8,7 @@ The pitch, demo, architecture and prize mapping are in the [README](../README.md
 | --- | --- | --- |
 | Aqua0 vault subgraph, Arc manifest, Arc RPC proxy | Rithik | **Live** |
 | Subgraph Studio deployment for Arc | Rithik | **Live**, indexing both Aqua venues (version `ethglobal-arc-3d0b9ef`) |
-| MCP server, dashboard, public deployment | Rithik | **Live** (public endpoint on the earlier prepare-only build); hosted redeploy with 19 tools **Planned** |
+| MCP server, dashboard, public deployment | Rithik | **Live** (public endpoint on the earlier prepare-only build); hosted redeploy with 24 tools **Planned** |
 | Arc deployment of the Aqua0 vault core | Tomás | **Live** |
 | Pegged venue on Arc: Aqua + AquaSwapVMRouter + AquaAdapter | Yudhishthra | **Live** (wired; two strategies shipped and filled) |
 | Arc SwapVM integration: strategy scripts, MCP strategy tools, Aqua venue indexing | Yudhishthra | Tools **Live** on Arc (pegged and forex); indexing **Live** |
