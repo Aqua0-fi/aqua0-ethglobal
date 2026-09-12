@@ -407,7 +407,7 @@ export class Aqua0Service {
         );
         // A top-up failure never fails the sign-in; it is reported instead.
         const funding: OnboardingFunding = walletAddress
-          ? await topUpUserUsdc(config, walletAddress).catch((error: unknown) => ({
+          ? await topUpUserUsdc(config, walletAddress, { userId: identity.did }).catch((error: unknown) => ({
               status: "failed" as const,
               note: error instanceof Error ? error.message : String(error)
             }))

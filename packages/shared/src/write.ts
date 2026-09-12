@@ -61,6 +61,10 @@ export type WriteConfig = {
   circleOperatorWalletId?: string;
   /** Testnet USDC the operator sends a signed-in user holding under 1 USDC ("0" disables). Default 5. */
   onboardUsdc?: string;
+  /** Most testnet USDC all top-ups may send in a rolling 24 hours. Default 50. */
+  onboardDailyCapUsdc?: string;
+  /** Top-up ledger (once per wallet and user). Default `~/.aqua0/onboarding-topups.json`. */
+  onboardLedgerFile?: string;
   mcpWriteMode?: WriteMode;
   /** Aqua0 AquaAdapter (SwapVM venue). Defaults to the Arc Testnet deployment when WRITE_CHAIN_ID is Arc. */
   aquaAdapterAddress?: string;

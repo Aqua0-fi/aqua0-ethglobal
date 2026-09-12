@@ -65,6 +65,8 @@ export type SignerEnvConfig = Pick<
   | "circleUserRef"
   | "circleOperatorWalletId"
   | "onboardUsdc"
+  | "onboardDailyCapUsdc"
+  | "onboardLedgerFile"
 >;
 
 /** SIGNER and the CIRCLE_* settings. SIGNER defaults to local even when Circle variables are present. */
@@ -85,7 +87,9 @@ export function readSignerEnv(env: Readonly<Record<string, string | undefined>>)
     ...(env.CIRCLE_WALLET_ID ? { circleWalletId: env.CIRCLE_WALLET_ID } : {}),
     ...(env.CIRCLE_USER_REF ? { circleUserRef: env.CIRCLE_USER_REF } : {}),
     ...(env.CIRCLE_OPERATOR_WALLET_ID ? { circleOperatorWalletId: env.CIRCLE_OPERATOR_WALLET_ID } : {}),
-    ...(env.AQUA0_ONBOARD_USDC?.trim() ? { onboardUsdc: env.AQUA0_ONBOARD_USDC.trim() } : {})
+    ...(env.AQUA0_ONBOARD_USDC?.trim() ? { onboardUsdc: env.AQUA0_ONBOARD_USDC.trim() } : {}),
+    ...(env.AQUA0_ONBOARD_DAILY_CAP_USDC?.trim() ? { onboardDailyCapUsdc: env.AQUA0_ONBOARD_DAILY_CAP_USDC.trim() } : {}),
+    ...(env.AQUA0_ONBOARD_LEDGER?.trim() ? { onboardLedgerFile: env.AQUA0_ONBOARD_LEDGER.trim() } : {})
   };
 }
 

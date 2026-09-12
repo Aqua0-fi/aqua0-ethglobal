@@ -839,6 +839,7 @@ Source: [`apps/mcp/src/index.ts`](apps/mcp/src/index.ts). Graph reads return raw
 | `CIRCLE_WALLET_SET_ID`, `CIRCLE_USER_REF` | Without a wallet id: sign with the wallet in the set whose `refId` is the user ref, creating an EOA on first use |
 | `CIRCLE_OPERATOR_WALLET_ID` | Shared Circle operator EOA holding `OPERATOR_ROLE`: sends the strategy ships users sign and tops up new users |
 | `AQUA0_ONBOARD_USDC` | Testnet USDC the operator sends a signed-in wallet holding under 1 USDC; default `5`, `0` disables |
+| `AQUA0_ONBOARD_DAILY_CAP_USDC`, `AQUA0_ONBOARD_LEDGER` | Top-up guard rails: each wallet and each signed-in user is topped up once, all top-ups stay under the cap (default `50` USDC) per rolling 24 hours; the ledger defaults to `~/.aqua0/onboarding-topups.json` |
 | `PRIVY_APP_ID`, `PRIVY_CLIENT_ID` | Privy app (and optional app client) for `login`; public values. The Privy user id becomes `CIRCLE_USER_REF` |
 | `PRIVY_LOGIN_PORT`, `AQUA0_SESSION_FILE` | Local sign-in page port (default `8787`, allow `http://localhost:<port>` in Privy) and saved sign-in (default `~/.aqua0/session.json`) |
 | `MCP_TRANSPORT`, `HOST`, `PORT` | `stdio` (default) or `http`, and HTTP bind settings |

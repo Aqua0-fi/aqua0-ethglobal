@@ -91,6 +91,7 @@ import {
   type WriteConfig,
   type WriteMode
 } from "./write.js";
+import { appendTopUp, readTopUpLedger, topUpRefusal, withTopUpLock } from "./onboarding.js";
 import { createCircleOperatorSigner, resolveSignerAddress, type WriteSigner } from "./signer.js";
 
 type ReadClient = ReturnType<typeof createReadClient>;
@@ -1554,13 +1555,20 @@ export type OnboardingFunding = {
 };
 
 const ONBOARD_USDC_DEFAULT = "5";
+const ONBOARD_DAILY_CAP_DEFAULT = "50";
 
 /**
  * Tops up a signed-in user's Circle wallet with testnet USDC from the shared operator wallet, so a new user can pay
  * gas (USDC on Arc) and deposit straight away. Sends only on Arc Testnet (not a local fork), only when the wallet
- * holds under 1 USDC, and only when CIRCLE_OPERATOR_WALLET_ID is set; AQUA0_ONBOARD_USDC=0 turns it off.
+ * holds under 1 USDC, and only when CIRCLE_OPERATOR_WALLET_ID is set; AQUA0_ONBOARD_USDC=0 turns it off. Each wallet
+ * and each signed-in user is topped up at most once, and all top-ups stay within AQUA0_ONBOARD_DAILY_CAP_USDC per
+ * rolling 24 hours (ledger in `onboarding.ts`).
  */
-export async function topUpUserUsdc(config: WriteConfig, user: string): Promise<OnboardingFunding> {
+export async function topUpUserUsdc(
+  config: WriteConfig,
+  user: string,
+  options: { userId?: string | undefined } = {}
+): Promise<OnboardingFunding> {
   const usdc = resolveToken("USDC");
   const amountText = config.onboardUsdc ?? ONBOARD_USDC_DEFAULT;
   const amount = parseTokenAmount(amountText, usdc.decimals, { field: "AQUA0_ONBOARD_USDC" });
@@ -1575,26 +1583,55 @@ export async function topUpUserUsdc(config: WriteConfig, user: string): Promise<
   if (!operator) {
     return { status: "skipped", note: "no CIRCLE_OPERATOR_WALLET_ID configured" };
   }
-  const client = createReadClient(config);
-  const [balance, operatorBalance] = await Promise.all([
-    readTokenBalance(client, usdc, user),
-    readTokenBalance(client, usdc, operator.address)
-  ]);
-  if (balance >= 10n ** BigInt(usdc.decimals)) {
-    return { status: "skipped", note: `the wallet already holds ${formatUnits(balance, usdc.decimals)} USDC` };
-  }
-  if (operatorBalance < amount + 10n ** BigInt(usdc.decimals - 2)) {
-    return { status: "skipped", note: `the Aqua0 operator wallet ${operator.address} is low on USDC; fund it from faucet.circle.com` };
-  }
-  const hash = await operator.writeContract({
-    address: getAddress(usdc.address),
-    abi: erc20Abi,
-    functionName: "transfer",
-    args: [getAddress(user), amount]
+  const dailyCap = parseTokenAmount(config.onboardDailyCapUsdc ?? ONBOARD_DAILY_CAP_DEFAULT, usdc.decimals, {
+    field: "AQUA0_ONBOARD_DAILY_CAP_USDC"
   });
-  const receipt = await client.waitForTransactionReceipt({ hash });
-  assertReceiptSuccess(receipt, "USDC top-up", hash);
-  return { status: "sent", amount: `${formatUnits(amount, usdc.decimals)} USDC`, hash };
+  const client = createReadClient(config);
+  return withTopUpLock(async (): Promise<OnboardingFunding> => {
+    const refusal = topUpRefusal(readTopUpLedger(config.onboardLedgerFile), {
+      wallet: user,
+      userId: options.userId,
+      amount,
+      dailyCap,
+      now: Date.now(),
+      decimals: usdc.decimals
+    });
+    if (refusal) {
+      return { status: "skipped", note: refusal };
+    }
+    const [balance, operatorBalance] = await Promise.all([
+      readTokenBalance(client, usdc, user),
+      readTokenBalance(client, usdc, operator.address)
+    ]);
+    if (balance >= 10n ** BigInt(usdc.decimals)) {
+      return { status: "skipped", note: `the wallet already holds ${formatUnits(balance, usdc.decimals)} USDC` };
+    }
+    if (operatorBalance < amount + 10n ** BigInt(usdc.decimals - 2)) {
+      return {
+        status: "skipped",
+        note: `the Aqua0 operator wallet ${operator.address} is low on USDC; fund it from faucet.circle.com`
+      };
+    }
+    const hash = await operator.writeContract({
+      address: getAddress(usdc.address),
+      abi: erc20Abi,
+      functionName: "transfer",
+      args: [getAddress(user), amount]
+    });
+    const receipt = await client.waitForTransactionReceipt({ hash });
+    assertReceiptSuccess(receipt, "USDC top-up", hash);
+    appendTopUp(
+      {
+        wallet: normalizeAddress(user),
+        ...(options.userId ? { userId: options.userId } : {}),
+        amount: amount.toString(),
+        hash,
+        at: new Date().toISOString()
+      },
+      config.onboardLedgerFile
+    );
+    return { status: "sent", amount: `${formatUnits(amount, usdc.decimals)} USDC`, hash };
+  });
 }
 
 // ---------------------------------------------------------------------------------------------
