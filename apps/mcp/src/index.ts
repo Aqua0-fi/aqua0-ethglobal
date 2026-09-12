@@ -5,6 +5,13 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createAqua0Service, isExecutionAllowedByConfig } from "@aqua0/shared";
 import { z } from "zod";
+import {
+  describeStrategySignal,
+  LIVE_FOREX_STRATEGIES,
+  readKeeperJournal,
+  readSignalsSnapshot,
+  summarizeKeeperStatus
+} from "@aqua0/shared";
 
 import { readMcpConfig, type McpConfig } from "./config.js";
 
@@ -508,6 +515,46 @@ Examples:
       annotations: { destructiveHint: true, idempotentHint: false, openWorldHint: true }
     },
     async (input) => jsonText(await aqua0.setFxPrice(input))
+  );
+
+  server.registerTool(
+    "get_signals",
+    {
+      description: `Current health of the live forex books on Arc Testnet (USDC/ARS and USDC/BRL): per strategy the oracle price, age, staleness window and band check, the effective spread of a 0.1 USDC probe quote in both directions, the Aqua book balances, which side is heavy, and the trade that would restore an even split. The same signals the Aqua0 keeper buys with Circle Nanopayments, read here directly from RPC for free. Read-only. A book is healthy near 30 bps; above 150 bps the keeper rebalances it.
+Examples:
+- "is the book healthy?" / "what are the spreads now?" -> {}
+- "how tilted is the BRL book?" -> {"pair":"BRL"}`,
+      inputSchema: {
+        pair: z.string().optional().describe('"ARS", "BRL", "USDC/BRL"...; omit for both live forex strategies.'),
+        includeVault: z.boolean().optional().describe("Also read the strategist's vault principal and committed backing (slower).")
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true }
+    },
+    async ({ pair, includeVault }) => {
+      const wanted = pair?.trim()
+        ? LIVE_FOREX_STRATEGIES.filter((strategy) => strategy.pair.toLowerCase().endsWith(pair.trim().toLowerCase().replace(/^usdc\s*\/\s*/, "")))
+        : LIVE_FOREX_STRATEGIES;
+      const snapshot = await readSignalsSnapshot(config, {
+        strategies: wanted.length > 0 ? wanted : LIVE_FOREX_STRATEGIES,
+        include: includeVault ? ["oracle", "book", "vault"] : ["oracle", "book"]
+      });
+      return jsonText({ summary: snapshot.strategies.map(describeStrategySignal), keeperTiltThresholdBps: 150, ...snapshot });
+    }
+  );
+
+  server.registerTool(
+    "keeper_status",
+    {
+      description: `What the autonomous Aqua0 FX book keeper has been doing, read from its journal (AQUA0_KEEPER_JOURNAL, default ~/.aqua0/keeper/journal.jsonl), so it works while the keeper runs in another terminal. Returns a plain summary (running or not, the last rebalance with spreads before and after and its Arcscan link), the recent ticks (what woke it: a swap or a heartbeat; the books it saw; its decision, who decided it, rules or the model, and why; what it spent), the actions it took, and total spend on nanopayment signals and model calls. Read-only.
+Examples:
+- "did the keeper rebalance my book?" -> {}
+- "show the keeper's spend" / "what did it do in the last 20 ticks?" -> {"last":20}`,
+      inputSchema: {
+        last: z.number().int().min(1).max(50).optional().describe("How many recent ticks and actions to list (default 10).")
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false }
+    },
+    async ({ last }) => jsonText(summarizeKeeperStatus(readKeeperJournal({ last: 2000 }), { last: last ?? 10 }))
   );
 
   if (config.mcpWriteMode === "execute") {
