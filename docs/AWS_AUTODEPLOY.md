@@ -22,7 +22,7 @@ The public runtime is intentionally prepare-only:
 
 `GRAPH_GATEWAY_API_KEY` is supplied only from the GitHub Actions secret of the same name. It is never committed or copied into the repository. The workflow writes a mode-600 runtime env file on the EC2 host.
 
-The deploy job then checks both public health endpoints and lists the public MCP tools. `create_strategy` and `quote_swap` are required; `benchmark_fx_strategy` is reported as a warning until the commit containing that tool reaches `main`.
+The deploy job then checks both public health endpoints and lists the public MCP tools. `create_strategy`, `quote_swap` and `benchmark_fx_strategy` are required, and the job fails if `GRAPH_GATEWAY_API_KEY` is empty.
 
 ## Subgraph Studio
 
@@ -39,6 +39,6 @@ Required repository secrets:
 
 - `AWS_SSH_PRIVATE_KEY`
 - `GRAPH_STUDIO_DEPLOY_KEY`
-- `GRAPH_GATEWAY_API_KEY` (required by `benchmark_fx_strategy` once that tool lands)
+- `GRAPH_GATEWAY_API_KEY` (required by `benchmark_fx_strategy`; the deploy fails without it)
 
 The EC2 host and username are non-secret workflow configuration.

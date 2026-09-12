@@ -19,7 +19,7 @@ None of them fall back to RPC if a Graph query fails; the error is surfaced to t
 
 The SwapVM and FX tools add explicitly labelled on-chain reads. `quote_swap` is a router `eth_call` and `get_fx_prices` reads the feeds. `get_shared_backing` reads vault and adapter state directly, alongside the Aqua venue entities below that Studio serves.
 
-**Agent skill.** [`skills/aqua0/SKILL.md`](../skills/aqua0/SKILL.md) gives Claude Code, Codex and similar agents the tool map for The Graph reads alongside the strategy tools. It includes natural-language examples and a `graph_query` that works on the current Studio schema.
+**Agent skill.** [`skills/aqua0/SKILL.md`](../skills/aqua0/SKILL.md) gives Claude Code, Codex and similar agents the tool map for The Graph reads alongside the strategy tools. It includes natural-language examples and a `graph_query` that works on the current Studio schema. Install it together with the MCP server as a Claude Code plugin (`/plugin marketplace add Aqua0-fi/aqua0-ethglobal`, then `/plugin install aqua0@aqua0`), or run the server from npm with `claude mcp add aqua0 -- npx -y @aqua0/mcp`.
 
 ## Live provider: Subgraph Studio
 
@@ -29,7 +29,7 @@ The Arc Testnet subgraph is **Live** on Subgraph Studio, deployed by Rithik. The
 - Query endpoint (always the latest version): `https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/version/latest`
 - Network: `arc-testnet` (`5042002`)
 - `_meta.hasIndexingErrors = false`
-- The public MCP (`https://ethglobal-mcp.18-207-103-187.nip.io/mcp`, earlier prepare-only build) and the judge dashboard read from this endpoint.
+- The hosted MCP (`https://ethglobal-mcp.18-207-103-187.nip.io/mcp`, prepare-only) and the judge dashboard read from this endpoint.
 
 A smoke test through the public MCP used `health`, `protocol_snapshot`, `list_opportunities`, raw `graph_query` and `prepare_create_strategy`. The provider returned live Arc vault, strategy and strategy-vault state.
 
@@ -39,7 +39,7 @@ A smoke test through the public MCP used `health`, `protocol_snapshot`, `list_op
 | --- | --- | --- |
 | Arc Testnet Aqua0 vault core: VaultFactory, VaultRegistry, Composer, FillerRegistry, AssetVault template | `subgraph.arc.yaml`, generated from `subgraph.base.yaml` by `pnpm --filter @aqua0/subgraph generate:arc` | **Live** on Subgraph Studio |
 | Pegged AquaAdapter lifecycle events: `AquaStrategyShippedEvent`, `AquaStrategyDockedEvent`, `AquaStrategyReshippedEvent`, `AquaStrategyReconciledEvent` | Arc manifest | **Live** on Subgraph Studio, including both strategies shipped on Arc on 2026-09-12 |
-| Both Arc Aqua venues: the pegged AquaAdapter + AquaSwapVMRouter and the forex AquaAdapter + AquaForexSwapVMRouter, as `AquaVenueAdapter`, `AquaStrategy`, `AquaOrder`, `AquaFill` (each with a `venue` label, `pegged` or `fxswap`), `AquaLPFillStats`, `AquaLPVaultFillStats` (fees per LP) | Arc manifest; router data sources are Arc-only | **Live** on Subgraph Studio (version `ethglobal-arc-3d0b9ef`) |
+| Both Arc Aqua venues: the pegged AquaAdapter + AquaSwapVMRouter and the forex AquaAdapter + AquaForexSwapVMRouter, as `AquaVenueAdapter`, `AquaStrategy`, `AquaOrder`, `AquaFill` (each with a `venue` label: `pegged`, or `fxswap` for the forex venue), `AquaLPFillStats`, `AquaLPVaultFillStats` (fees per LP) | Arc manifest; router data sources are Arc-only | **Live** on Subgraph Studio (version `ethglobal-arc-3d0b9ef`) |
 | Base Aqua0 vault deployment, including AquaAdapter and V4Adapter (pre-existing Aqua0 deployment) | `subgraph.base.yaml` | Provider-ready manifest |
 
 [`packages/subgraph/schema.graphql`](../packages/subgraph/schema.graphql) covers:
@@ -59,6 +59,7 @@ A self-hosted Graph Node remains as a development fallback. It indexes through [
 - `NETWORK=arc` is the default and deploys `subgraph.arc.yaml`, regenerating it first when `PUBLIC_ARC_*` is set. `NETWORK=base` deploys the Base manifest.
 - `GRAPH_STUDIO_SLUG` and `GRAPH_STUDIO_DEPLOY_KEY` come from the environment or the gitignored `.secrets/graph-studio.env`.
 - `DRY_RUN=1` builds and prints the deploy command without a key.
+- CI redeploys to Studio when `packages/subgraph` changes on `main` ([`deploy.yml`](../.github/workflows/deploy.yml)).
 
 ```bash
 ./scripts/deploy-graph-studio.sh
@@ -68,11 +69,11 @@ Keep deploy keys and query API keys out of git. Pass a query key to the MCP as `
 
 ## Judge flow
 
-1. Connect an MCP client: `claude mcp add --transport http aqua0 https://ethglobal-mcp.18-207-103-187.nip.io/mcp`.
+1. Connect an MCP client: install the Claude Code plugin, or `claude mcp add --transport http aqua0 https://ethglobal-mcp.18-207-103-187.nip.io/mcp`.
 2. Ask: *"Check Aqua0 health, show the protocol snapshot, list strategy opportunities, and tell me which data came from The Graph."* Expected tools: `health`, `protocol_snapshot`, `list_opportunities`.
-3. Ask for a strategy: *"Prepare a USDC/BRAt strategy on Arc for strategist 0x… with the USDC and BRAt vaults. Do not broadcast."* The agent calls `prepare_create_strategy`, which derives the strategy key and reads `classForStrategy` so the class id is never guessed. With a local build, `create_strategy {"pair":"USDC/BRL","dryRun":true}` prepares the full SwapVM flow.
+3. Ask for a strategy: *"Prepare a USDC/BRAt strategy on Arc for strategist 0x… with the USDC and BRAt vaults. Do not broadcast."* The agent calls `prepare_create_strategy`, which derives the strategy key and reads `classForStrategy` so the class id is never guessed. `create_strategy {"pair":"USDC/BRL","dryRun":true}` prepares the full SwapVM flow.
 4. After any real transaction is mined and indexed, ask the agent what changed. It re-queries The Graph, using `graph_query` if needed.
-5. With a local server that has `GRAPH_GATEWAY_API_KEY`, ask: *"Is a 30 bps euro FX strategy competitive onchain? And how deep is BRL liquidity?"* Expected tool: `benchmark_fx_strategy` with `{"pair":"USDC/EUR"}`, then `{"pair":"BRL"}`. The CLI equivalent is `aqua0 benchmark-fx --pair EUR`.
+5. Ask: *"Is a 30 bps euro FX strategy competitive onchain? And how deep is BRL liquidity?"* Expected tool: `benchmark_fx_strategy` with `{"pair":"USDC/EUR"}`, then `{"pair":"BRL"}`. The CLI equivalent is `aqua0 benchmark-fx --pair EUR`.
 
 ## Composable and standardized Graph products
 
