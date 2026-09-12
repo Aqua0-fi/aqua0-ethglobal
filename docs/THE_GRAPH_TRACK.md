@@ -30,7 +30,7 @@ chmod 600 .secrets/graph-studio.env
 ```
 
 4. Copy the resulting Studio query endpoint into `GRAPH_ENDPOINT` for the MCP service. Keep the query/deploy API keys out of git.
-4. Run `health`, `protocol_snapshot`, and an agent query through the MCP to demonstrate that the provider endpoint is actually load-bearing.
+5. Run `health`, `protocol_snapshot`, and an agent query through the MCP to demonstrate that the provider endpoint is actually load-bearing.
 
 The deploy script intentionally deploys `packages/subgraph/subgraph.arc.yaml`. The self-hosted AWS Graph Node remains useful as a development/fallback indexer, but the hackathon provider deployment should use The Graph's native Arc Testnet support rather than the old Base-provider workaround.
 
