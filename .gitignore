@@ -14,3 +14,4 @@ packages/subgraph/generated/
 __pycache__/
 
 .secrets/
+.claude/
