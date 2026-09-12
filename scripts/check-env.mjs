@@ -49,7 +49,7 @@ if (
   process.env.FXSWAP_AQUA_ADAPTER_ADDRESS.toLowerCase() === process.env.AQUA_ADAPTER_ADDRESS.toLowerCase()
 ) {
   console.error(
-    "FXSWAP_AQUA_ADAPTER_ADDRESS must be the AquaAdapter bound to the FXSwap router, not the pegged AQUA_ADAPTER_ADDRESS"
+    "FXSWAP_AQUA_ADAPTER_ADDRESS must be the AquaAdapter bound to the forex router (AquaForexSwapVMRouter), not the pegged AQUA_ADAPTER_ADDRESS"
   );
   process.exit(1);
 }
