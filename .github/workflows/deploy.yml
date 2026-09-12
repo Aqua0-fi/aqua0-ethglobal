@@ -1,0 +1,203 @@
+name: Deploy after CI
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: aqua0-main-deploy
+  cancel-in-progress: false
+
+env:
+  AWS_HOST: "18.207.103.187"
+  AWS_USER: "ubuntu"
+  AWS_APP_DIR: "/home/ubuntu/aqua0-ethglobal-app"
+  GRAPH_ENDPOINT: "https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/version/latest"
+  GRAPH_NETWORK: "arc-testnet"
+  WRITE_RPC_URL: "https://rpc.testnet.arc.network"
+  WRITE_CHAIN_ID: "5042002"
+  VAULT_REGISTRY_ADDRESS: "0x9E094b21C4263e0BE5BEffa0f8296B3fd982fFFf"
+
+jobs:
+  context:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.meta.outputs.sha }}
+      subgraph_changed: ${{ steps.paths.outputs.subgraph_changed }}
+    steps:
+      - name: Resolve successful main SHA
+        id: meta
+        env:
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          echo "sha=$RUN_SHA" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.meta.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Detect subgraph changes since previous successful main CI
+        id: paths
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_RUN_ID: ${{ github.event.workflow_run.id }}
+          CURRENT_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          previous_sha=$(
+            gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&event=push&per_page=30" \
+              --jq "[.workflow_runs[] | select(.id != $CURRENT_RUN_ID and .conclusion == \"success\") | .head_sha][0] // \"\""
+          )
+          if [ -z "$previous_sha" ]; then
+            changed=true
+          elif git diff --quiet "$previous_sha" "$CURRENT_SHA" -- packages/subgraph; then
+            changed=false
+          else
+            changed=true
+          fi
+          echo "previous_success_sha=${previous_sha:-none}"
+          echo "subgraph_changed=$changed"
+          echo "subgraph_changed=$changed" >> "$GITHUB_OUTPUT"
+
+  deploy_apps:
+    needs: context
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.context.outputs.sha }}
+
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.AWS_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_KEY"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ethglobal
+          chmod 600 ~/.ssh/id_ethglobal
+          ssh-keyscan -H "$AWS_HOST" >> ~/.ssh/known_hosts
+
+      - name: Sync repository to AWS VM
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_ethglobal "$AWS_USER@$AWS_HOST" "mkdir -p '$AWS_APP_DIR'"
+          rsync -az --delete \
+            --exclude '.git/' \
+            --exclude '.secrets/' \
+            --exclude 'deploy/aws/.env*' \
+            --exclude 'deploy/aws/dashboard.env*' \
+            --exclude 'deploy/aws/autodeploy.env' \
+            -e 'ssh -i ~/.ssh/id_ethglobal' \
+            ./ "$AWS_USER@$AWS_HOST:$AWS_APP_DIR/"
+
+      - name: Install public runtime config
+        env:
+          GRAPH_GATEWAY_API_KEY: ${{ secrets.GRAPH_GATEWAY_API_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          cat > /tmp/aqua0-autodeploy.env <<EOF_ENV
+          GRAPH_ENDPOINT=$GRAPH_ENDPOINT
+          GRAPH_NETWORK=$GRAPH_NETWORK
+          GRAPH_AUTH_TOKEN=
+          WRITE_RPC_URL=$WRITE_RPC_URL
+          WRITE_CHAIN_ID=$WRITE_CHAIN_ID
+          VAULT_REGISTRY_ADDRESS=$VAULT_REGISTRY_ADDRESS
+          MCP_WRITE_MODE=prepare
+          WRITE_PRIVATE_KEY=
+          GRAPH_GATEWAY_API_KEY=$GRAPH_GATEWAY_API_KEY
+          EOF_ENV
+          scp -i ~/.ssh/id_ethglobal /tmp/aqua0-autodeploy.env "$AWS_USER@$AWS_HOST:$AWS_APP_DIR/deploy/aws/autodeploy.env"
+          rm -f /tmp/aqua0-autodeploy.env
+
+      - name: Build and restart public MCP + dashboard
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_ethglobal "$AWS_USER@$AWS_HOST" "set -e; cd '$AWS_APP_DIR'; chmod 600 deploy/aws/autodeploy.env; docker compose --env-file deploy/aws/autodeploy.env -f deploy/aws/mcp.compose.yml up -d --build mcp; docker compose --env-file deploy/aws/autodeploy.env -f deploy/aws/dashboard.compose.yml up -d --build dashboard"
+
+      - name: Smoke public services
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 24); do
+            if curl -fsS https://ethglobal-mcp.18-207-103-187.nip.io/health >/tmp/mcp-health.json && \
+               curl -fsS https://ethglobal-demo.18-207-103-187.nip.io/api/health >/tmp/dashboard-health.json; then
+              cat /tmp/mcp-health.json
+              cat /tmp/dashboard-health.json
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Public services did not become healthy in time" >&2
+          exit 1
+
+      - name: Verify public MCP tool surface
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST 'https://ethglobal-mcp.18-207-103-187.nip.io/mcp' \
+            -H 'content-type: application/json' \
+            -H 'accept: application/json, text/event-stream' \
+            --data '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
+            | sed -n 's/^data: //p' > /tmp/tools.json
+          jq -r '.result.tools[].name' /tmp/tools.json | tee /tmp/tool-names.txt
+          grep -qx create_strategy /tmp/tool-names.txt
+          grep -qx quote_swap /tmp/tool-names.txt
+          if ! grep -qx benchmark_fx_strategy /tmp/tool-names.txt; then
+            echo '::warning::benchmark_fx_strategy is not present in this main SHA yet.'
+          fi
+
+      - name: Inventory AWS runtime
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_ethglobal "$AWS_USER@$AWS_HOST" <<'EOSSH'
+          set -e
+          echo '=== Docker containers ==='
+          docker ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'
+          echo '=== Docker Compose projects ==='
+          docker compose ls
+          echo '=== Docker images ==='
+          docker images --format 'table {{.Repository}}:{{.Tag}}\t{{.ID}}\t{{.Size}}'
+          echo '=== Host services ==='
+          for service in docker caddy; do
+            printf '%s: ' "$service"
+            systemctl is-active "$service" 2>/dev/null || true
+          done
+          EOSSH
+
+  deploy_subgraph:
+    needs: context
+    if: needs.context.outputs.subgraph_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GRAPH_STUDIO_SLUG: "aqua-0-ethglobal-arc-testnet"
+      GRAPH_STUDIO_DEPLOY_KEY: ${{ secrets.GRAPH_STUDIO_DEPLOY_KEY }}
+      NETWORK: arc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.context.outputs.sha }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Deploy Arc Testnet subgraph to Studio
+        run: ./scripts/deploy-graph-studio.sh
