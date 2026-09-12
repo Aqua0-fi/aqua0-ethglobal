@@ -17,8 +17,28 @@ export const ARC_TESTNET_DEPLOYMENT = {
   contracts: {
     vaultRegistry: "0x9E094b21C4263e0BE5BEffa0f8296B3fd982fFFf",
     aqua: "0x490d2eceD9aCF99e1db6090f820775bFa70020D4",
+    /** Pegged venue: stock swap-vm v1.0.2 AquaSwapVMRouter and the AquaAdapter bound to it. */
     aquaSwapVMRouter: "0xb20bc70b485eC1352C190d26fCaB1959d219F763",
     aquaAdapter: "0xbF72D34b804636496c3308796908152b82624Ca5"
+  },
+  /**
+   * FXSwap venue (optional keys `contracts.fxswapRouter`, `contracts.fxAquaAdapter`,
+   * `contracts.fxOracles.*` in the deployment file): AquaFXSwapVMRouter on the same Aqua, a second
+   * AquaAdapter bound to it (an adapter binds one router immutably), and owner-set ManualFxOracle feeds
+   * quoting FX units per 1 USD. `null` means not deployed; env vars override each address.
+   */
+  fxVenue: {
+    fxswapRouter: "0xb54AE15d2372F27718f32e9f6990330cdD3edaEB",
+    fxAquaAdapter: "0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5",
+    fxOracles: {
+      arsUsd: "0xc05A3Fb016f973C82b0232EF50336d4C0466E70C",
+      brlUsd: "0x1AE6542b9da89Ed2AEf00600710Bba75DbFF5e71",
+      owner: "0xAFF7Da673820fAA38289de8B03984A9cf20fb02c"
+    }
+  } as {
+    fxswapRouter: string | null;
+    fxAquaAdapter: string | null;
+    fxOracles: { arsUsd: string | null; brlUsd: string | null; owner: string | null };
   },
   /** First block to scan for Aqua `Shipped` events (Aqua deployment block). */
   startBlocks: {

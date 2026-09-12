@@ -29,6 +29,11 @@ export function readMcpConfig(
       ? { aquaSwapVMRouterAddress: env.AQUA_SWAPVM_ROUTER_ADDRESS }
       : {}),
     ...(env.FXSWAP_ROUTER_ADDRESS ? { fxswapRouterAddress: env.FXSWAP_ROUTER_ADDRESS } : {}),
+    ...(env.FXSWAP_AQUA_ADAPTER_ADDRESS
+      ? { fxswapAquaAdapterAddress: env.FXSWAP_AQUA_ADAPTER_ADDRESS }
+      : {}),
+    ...(env.FX_ORACLE_ARS_USD ? { fxOracleArsUsdAddress: env.FX_ORACLE_ARS_USD } : {}),
+    ...(env.FX_ORACLE_BRL_USD ? { fxOracleBrlUsdAddress: env.FX_ORACLE_BRL_USD } : {}),
     mcpWriteMode: readWriteMode(env.MCP_WRITE_MODE),
     transport,
     host: env.HOST ?? "0.0.0.0",

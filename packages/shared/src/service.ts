@@ -7,15 +7,20 @@ import {
   executeCreateFxStrategy,
   executeFxDeposit,
   executeFxSwap,
+  executeSetFxPrice,
   prepareCreateFxStrategy,
   prepareFxDeposit,
   prepareFxSwap,
+  prepareSetFxPrice,
   quoteFxSwap,
+  readFxPrices,
   readSharedBacking,
   resolveToolWriteMode,
   type CreateFxStrategyInput,
   type FxDepositInput,
+  type FxPricesInput,
   type FxSwapInput,
+  type SetFxPriceInput,
   type SharedBackingInput
 } from "./fx.js";
 import {
@@ -671,6 +676,21 @@ export class Aqua0Service {
 
   getSharedBacking(input: SharedBackingInput = {}) {
     return readSharedBacking(this.#config, input);
+  }
+
+  /** Price, freshness and owner of each FXSwap feed (ARS/USD, BRL/USD). Read-only. */
+  getFxPrices(input: FxPricesInput = {}) {
+    return readFxPrices(this.#config, input);
+  }
+
+  /**
+   * Move an owner-set ManualFxOracle feed. Sends only in execute mode (and not dryRun), and only when the signer is
+   * the feed owner; otherwise returns the prepared setAnswer call.
+   */
+  setFxPrice(input: SetFxPriceInput & { dryRun?: boolean | undefined }) {
+    return resolveToolWriteMode(this.#config, input.dryRun) === "execute"
+      ? executeSetFxPrice(this.#config, input)
+      : prepareSetFxPrice(this.#config, input);
   }
 
   assertExecutionAllowed(): void {

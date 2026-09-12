@@ -20,25 +20,41 @@ Usage:
   aqua0 fees <address> [seconds]
   aqua0 opportunities
   aqua0 snapshot
-  aqua0 create-strategy --pair USDC/ARS [--price 1400] [--fee-bps 30] [--usdc-amount 1] [--label <text>] [--opcode pegged] [--dry-run true]
+  aqua0 create-strategy --pair USDC/ARS [--opcode fxswap|pegged] [strategy params] [--label <text>] [--dry-run true]
   aqua0 create-strategy --strategist <addr> --token0 <addr> --token1 <addr> --label <text> --vault <addr>...
   aqua0 authorize --vault <addr> --strategy-id <id> --backing true|false
   aqua0 deposit --token USDC --amount 2 [--unit human|raw] [--receiver <addr>] [--dry-run true]
-  aqua0 quote --pair USDC/ARS --amount 0.1 [--token-in USDC] [--strategy-id <bytes32>]
-  aqua0 swap --pair USDC/ARS --amount 0.1 [--token-in USDC] [--slippage-bps 50] [--dry-run true]
+  aqua0 quote --pair USDC/ARS --amount 0.1 [--opcode fxswap|pegged] [--token-in USDC] [--strategy-id <bytes32>]
+  aqua0 swap --pair USDC/ARS --amount 0.1 [--opcode fxswap|pegged] [--token-in USDC] [--slippage-bps 50] [--dry-run true]
   aqua0 shared-backing [address]
+  aqua0 fx-prices [--pair ARS]
+  aqua0 set-fx-price --pair ARS (--price 1470 | --change-percent 5) [--feed <addr>] [--dry-run true]
+
+Opcodes:
+  fxswap   FXSwap oracle-anchored curve on AquaFXSwapVMRouter (default when the FXSwap venue is configured)
+  pegged   fixed-price PeggedSwap on the stock AquaSwapVMRouter
+
+Strategy params (shared):  --fee-bps --fee-percent --fee-ppb --usdc-amount --fx-amount --amount-unit human|raw --label
+  FXSwap:  --a 100 --gamma 0.1 --out-fee-bps 100 --out-fee-percent --fee-gamma 0.03 --flat-fee-bps
+           --band-percent 20 | --min-price 700 --max-price 2800   --max-staleness 7d   --oracle-decimals 0
+  Pegged:  --price 1400 --price-e2 140000 --linear-width 1e28
+
+set-fx-price moves an owner-set ManualFxOracle feed: only the feed owner can send it (checked before sending).
 
 Environment:
-  GRAPH_ENDPOINT             Required Graph endpoint
-  GRAPH_AUTH_TOKEN           Optional Graph bearer token
-  WRITE_RPC_URL              RPC used for write preparation/execution reads
-  WRITE_CHAIN_ID             Chain id for Aqua0 vault write preparation
-  VAULT_REGISTRY_ADDRESS     Aqua0 vault registry address (Arc default for pair commands)
-  AQUA_ADAPTER_ADDRESS       Aqua0 AquaAdapter (Arc default)
-  AQUA_SWAPVM_ROUTER_ADDRESS AquaSwapVMRouter (Arc default)
-  FXSWAP_ROUTER_ADDRESS      FXSwap router; opcode fxswap is refused until set
-  MCP_WRITE_MODE             prepare|execute, defaults to prepare
-  WRITE_PRIVATE_KEY          Required only for guarded execute mode`);
+  GRAPH_ENDPOINT               Required Graph endpoint
+  GRAPH_AUTH_TOKEN             Optional Graph bearer token
+  WRITE_RPC_URL                RPC used for write preparation/execution reads
+  WRITE_CHAIN_ID               Chain id for Aqua0 vault write preparation
+  VAULT_REGISTRY_ADDRESS       Aqua0 vault registry address (Arc default for pair commands)
+  AQUA_ADAPTER_ADDRESS         Pegged-venue AquaAdapter (Arc default)
+  AQUA_SWAPVM_ROUTER_ADDRESS   Pegged-venue AquaSwapVMRouter (Arc default)
+  FXSWAP_ROUTER_ADDRESS        AquaFXSwapVMRouter (Arc default)
+  FXSWAP_AQUA_ADAPTER_ADDRESS  AquaAdapter bound to the FXSwap router (Arc default)
+  FX_ORACLE_ARS_USD            ARS per USD feed (Arc default)
+  FX_ORACLE_BRL_USD            BRL per USD feed (Arc default)
+  MCP_WRITE_MODE               prepare|execute, defaults to prepare
+  WRITE_PRIVATE_KEY            Required only for guarded execute mode`);
 }
 
 try {
@@ -87,6 +103,7 @@ try {
             opcode: optionalFlag(parsed, "opcode"),
             strategist: optionalFlag(parsed, "strategist"),
             params: readStrategyParams(parsed),
+            fundFxLeg: optionalBoolean(parsed, "fund-fx-leg"),
             dryRun: optionalBoolean(parsed, "dry-run")
           })
         );
@@ -142,6 +159,7 @@ try {
       const input = {
         pair: optionalFlag(parsed, "pair"),
         strategyId: optionalFlag(parsed, "strategy-id"),
+        opcode: optionalFlag(parsed, "opcode"),
         tokenIn: optionalFlag(parsed, "token-in"),
         amount: requireFlag(parsed, "amount"),
         unit: optionalUnit(parsed, "unit"),
@@ -166,6 +184,24 @@ try {
     case "shared-backing":
       printJson(await aqua0.getSharedBacking({ address: args[0] }));
       break;
+    case "fx-prices": {
+      const parsed = parseFlags(args);
+      printJson(await aqua0.getFxPrices({ pair: optionalFlag(parsed, "pair") }));
+      break;
+    }
+    case "set-fx-price": {
+      const parsed = parseFlags(args);
+      printJson(
+        await aqua0.setFxPrice({
+          pair: optionalFlag(parsed, "pair"),
+          feed: optionalFlag(parsed, "feed"),
+          price: optionalFlag(parsed, "price"),
+          changePercent: optionalFlag(parsed, "change-percent"),
+          dryRun: optionalBoolean(parsed, "dry-run")
+        })
+      );
+      break;
+    }
     default:
       console.error(`Unknown command: ${command}`);
       printHelp();
@@ -230,11 +266,28 @@ function optionalUnit(flags: Map<string, string[]>, name: string): AmountUnit | 
 function readStrategyParams(flags: Map<string, string[]>): StrategyParamsInput {
   return {
     price: optionalFlag(flags, "price"),
+    priceE2: optionalFlag(flags, "price-e2"),
     feeBps: optionalFlag(flags, "fee-bps"),
+    feePercent: optionalFlag(flags, "fee-percent"),
     feePpb: optionalFlag(flags, "fee-ppb"),
     usdcAmount: optionalFlag(flags, "usdc-amount"),
     fxAmount: optionalFlag(flags, "fx-amount"),
+    amountUnit: optionalUnit(flags, "amount-unit"),
     linearWidth: optionalFlag(flags, "linear-width"),
+    a: optionalFlag(flags, "a"),
+    gamma: optionalFlag(flags, "gamma"),
+    outFeeBps: optionalFlag(flags, "out-fee-bps"),
+    outFeePercent: optionalFlag(flags, "out-fee-percent"),
+    outFeePpb: optionalFlag(flags, "out-fee-ppb"),
+    feeGamma: optionalFlag(flags, "fee-gamma"),
+    flatFeeBps: optionalFlag(flags, "flat-fee-bps"),
+    flatFeePercent: optionalFlag(flags, "flat-fee-percent"),
+    flatFeePpb: optionalFlag(flags, "flat-fee-ppb"),
+    bandPercent: optionalFlag(flags, "band-percent"),
+    minPrice: optionalFlag(flags, "min-price"),
+    maxPrice: optionalFlag(flags, "max-price"),
+    maxStaleness: optionalFlag(flags, "max-staleness"),
+    oracleDecimals: optionalFlag(flags, "oracle-decimals"),
     label: optionalFlag(flags, "label")
   };
 }

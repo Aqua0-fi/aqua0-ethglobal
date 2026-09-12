@@ -341,6 +341,13 @@ export const aquaAdapterAbi = [
   },
   {
     type: "function",
+    name: "aquaSwapVMRouter",
+    inputs: [],
+    outputs: [address("")],
+    stateMutability: "view"
+  },
+  {
+    type: "function",
     name: "DOMAIN_VERSION_HASH",
     inputs: [],
     outputs: [bytes32("")],
@@ -441,8 +448,105 @@ export const aquaSwapVMRouterAbi = [
     inputs: [uint256("takerAmount"), uint256("computedAmount")]
   },
   { type: "error", name: "UnexpectedLock", inputs: [] },
+  ...fxSwapErrors(),
   ...aquaAdapterErrors,
   ...erc20Errors
+] as const;
+
+/** FXSwap instruction, FXSwapArgsBuilder and FXSwapMath custom errors (AquaFXSwapVMRouter opcode 34). */
+function fxSwapErrors() {
+  return [
+    { type: "error", name: "FXSwapRecomputeDetected", inputs: [] },
+    { type: "error", name: "FXSwapOracleInvalidAnswer", inputs: [{ name: "answer", type: "int256" }] },
+    {
+      type: "error",
+      name: "FXSwapOracleStale",
+      inputs: [uint256("updatedAt"), uint256("maxStaleness"), uint256("nowTs")]
+    },
+    {
+      type: "error",
+      name: "FXSwapOraclePriceOutOfBand",
+      inputs: [uint256("price"), uint256("minPrice"), uint256("maxPrice")]
+    },
+    { type: "error", name: "FXSwapInvalidArgsLength", inputs: [uint256("length")] },
+    { type: "error", name: "FXSwapUnsupportedOracleKind", inputs: [{ name: "oracleKind", type: "uint8" }] },
+    { type: "error", name: "FXSwapInvalidFlags", inputs: [{ name: "flags", type: "uint8" }] },
+    { type: "error", name: "FXSwapInvalidOracle", inputs: [] },
+    { type: "error", name: "FXSwapInvalidMaxStaleness", inputs: [] },
+    { type: "error", name: "FXSwapInvalidPriceBand", inputs: [uint256("minPrice"), uint256("maxPrice")] },
+    { type: "error", name: "FXSwapInvalidCurve", inputs: [uint256("a"), uint256("gamma")] },
+    {
+      type: "error",
+      name: "FXSwapInvalidFees",
+      inputs: [uint256("midFee"), uint256("outFee"), uint256("feeGamma")]
+    },
+    { type: "error", name: "FXSwapInvalidRates", inputs: [uint256("rateLt"), uint256("rateGt")] },
+    { type: "error", name: "FXSwapMathZeroBalance", inputs: [] },
+    { type: "error", name: "FXSwapMathBalanceTooLarge", inputs: [] },
+    { type: "error", name: "FXSwapMathUnsafeBalance", inputs: [] },
+    {
+      type: "error",
+      name: "FXSwapMathInsufficientBalance",
+      inputs: [uint256("balance"), uint256("amount")]
+    },
+    { type: "error", name: "FXSwapMathDidNotConverge", inputs: [] }
+  ] as const;
+}
+
+/** ManualFxOracle (Chainlink AggregatorV3-compatible, owner-set) plus Ownable. */
+export const manualFxOracleAbi = [
+  {
+    type: "function",
+    name: "latestRoundData",
+    inputs: [],
+    outputs: [
+      { name: "roundId", type: "uint80" },
+      { name: "answer", type: "int256" },
+      uint256("startedAt"),
+      uint256("updatedAt"),
+      { name: "answeredInRound", type: "uint80" }
+    ],
+    stateMutability: "view"
+  },
+  {
+    type: "function",
+    name: "decimals",
+    inputs: [],
+    outputs: [{ name: "", type: "uint8" }],
+    stateMutability: "view"
+  },
+  {
+    type: "function",
+    name: "description",
+    inputs: [],
+    outputs: [{ name: "", type: "string" }],
+    stateMutability: "view"
+  },
+  {
+    type: "function",
+    name: "owner",
+    inputs: [],
+    outputs: [address("")],
+    stateMutability: "view"
+  },
+  {
+    type: "function",
+    name: "setAnswer",
+    inputs: [{ name: "answer", type: "int256" }],
+    outputs: [],
+    stateMutability: "nonpayable"
+  },
+  { type: "error", name: "OwnableUnauthorizedAccount", inputs: [address("account")] },
+  {
+    type: "error",
+    name: "ManualFxOracleNonPositiveAnswer",
+    inputs: [{ name: "answer", type: "int256" }]
+  },
+  {
+    type: "error",
+    name: "ManualFxOracleFutureTimestamp",
+    inputs: [uint256("updatedAt"), uint256("nowTs")]
+  }
 ] as const;
 
 /** 1inch Aqua `Shipped` event; carries the full strategy bytes, used to recover an order by strategyId. */
