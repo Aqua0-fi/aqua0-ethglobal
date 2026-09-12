@@ -91,21 +91,19 @@ jobs:
       - name: Sync repository to AWS VM
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/id_ethglobal "$AWS_USER@$AWS_HOST" "mkdir -p '$AWS_APP_DIR'"
-          rsync -az --delete \
-            --exclude '.git/' \
-            --exclude '.secrets/' \
-            --exclude 'deploy/aws/.env*' \
-            --exclude 'deploy/aws/dashboard.env*' \
-            --exclude 'deploy/aws/autodeploy.env' \
-            -e 'ssh -i ~/.ssh/id_ethglobal' \
-            ./ "$AWS_USER@$AWS_HOST:$AWS_APP_DIR/"
+          tar --exclude='.git' --exclude='.secrets' -czf /tmp/aqua0-app.tar.gz .
+          scp -i ~/.ssh/id_ethglobal /tmp/aqua0-app.tar.gz "$AWS_USER@$AWS_HOST:/tmp/aqua0-app.tar.gz"
+          ssh -i ~/.ssh/id_ethglobal "$AWS_USER@$AWS_HOST" "set -e; next='${AWS_APP_DIR}.next'; prev='${AWS_APP_DIR}.previous'; rm -rf "\$next"; mkdir -p "\$next"; tar -xzf /tmp/aqua0-app.tar.gz -C "\$next"; rm -f /tmp/aqua0-app.tar.gz; rm -rf "\$prev"; if [ -d '$AWS_APP_DIR' ]; then mv '$AWS_APP_DIR' "\$prev"; fi; mv "\$next" '$AWS_APP_DIR'"
+          rm -f /tmp/aqua0-app.tar.gz
 
       - name: Install public runtime config
         env:
           GRAPH_GATEWAY_API_KEY: ${{ secrets.GRAPH_GATEWAY_API_KEY }}
         run: |
           set -euo pipefail
+          if [ -z "$GRAPH_GATEWAY_API_KEY" ]; then
+            echo '::warning::GRAPH_GATEWAY_API_KEY is not configured yet; benchmark_fx_strategy may be unavailable.'
+          fi
           umask 077
           cat > /tmp/aqua0-autodeploy.env <<EOF_ENV
           GRAPH_ENDPOINT=$GRAPH_ENDPOINT
