@@ -18,9 +18,9 @@ services:
       MIN_REQUEST_INTERVAL_MS: "300"
       PORT: "8545"
     networks:
-      - graph-node
+      - ethglobal-graph
 
 networks:
-  graph-node:
+  ethglobal-graph:
     external: true
-    name: graph-node_default
+    name: ethglobal-graph

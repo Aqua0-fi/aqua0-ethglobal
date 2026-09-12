@@ -11,7 +11,7 @@ Expected images/containers:
 - `ethglobal-graph-ipfs:v0.37.0` / `ethglobal-graph-ipfs`
 - `ethglobal-graph-postgres:16` / `ethglobal-graph-postgres`
 
-All containers we control also carry `com.aqua0.scope=ethglobal`.
+All containers we control also carry `com.aqua0.scope=ethglobal`. The self-hosted Graph fallback and Arc RPC proxy share the Docker network `ethglobal-graph`.
 
 Inventory commands:
 
