@@ -1,19 +1,92 @@
-# Arc Testnet Deployment
+# Arc Testnet deployment
 
-The Shape-C core is live on Arc Testnet (chain `5042002`). Public addresses are committed in `deployments/arc-testnet.json`.
+Arc Testnet, chain id `5042002`, RPC `https://rpc.testnet.arc.network`, explorer `https://testnet.arcscan.app`. Public addresses are committed in [`deployments/arc-testnet.json`](../deployments/arc-testnet.json).
 
-The deployment used the existing Aqua0 Shape-C contracts at source commit `8a9f1c2`. It deployed the registry, factory, composer, filler registry, shared AssetVault beacon/implementation, the Arc USDC vault, and two demo FX asset vaults (ARGt and BRAt). The venue/FXSwap adapter is intentionally separate and can be added to the Graph manifest later without inventing an address.
+## 1. Shape-C core: Live
 
-On-chain verification after deployment confirmed:
+The team deployed the pre-existing Aqua0 Shape-C contracts (source commit `8a9f1c2`) at start block `60613306`.
+
+| Contract | Address |
+| --- | --- |
+| VaultRegistry | [`0x9E094b21C4263e0BE5BEffa0f8296B3fd982fFFf`](https://testnet.arcscan.app/address/0x9E094b21C4263e0BE5BEffa0f8296B3fd982fFFf) |
+| VaultFactory | [`0x879C0c90205172a8DD66afB8124994D866372FBa`](https://testnet.arcscan.app/address/0x879C0c90205172a8DD66afB8124994D866372FBa) |
+| Composer | [`0x656F28021a624aDfA0d92dDFdBb20577674aFEC7`](https://testnet.arcscan.app/address/0x656F28021a624aDfA0d92dDFdBb20577674aFEC7) |
+| FillerRegistry | [`0xa8e08346DD7b6809C47A920c365bCC987Ea91297`](https://testnet.arcscan.app/address/0xa8e08346DD7b6809C47A920c365bCC987Ea91297) |
+| USDC AssetVault | [`0x99c2ab427b29dB1Cc14D228d970596015d1C4429`](https://testnet.arcscan.app/address/0x99c2ab427b29dB1Cc14D228d970596015d1C4429) |
+| ARGt AssetVault | [`0x8a3d6188C58d7877499592E179DfE3bd80c4F460`](https://testnet.arcscan.app/address/0x8a3d6188C58d7877499592E179DfE3bd80c4F460) |
+| BRAt AssetVault | [`0xEcB132648B781ec5742b582c526243Eeef900785`](https://testnet.arcscan.app/address/0xEcB132648B781ec5742b582c526243Eeef900785) |
+| UpgradeableBeacon | [`0x77C04851838cb7f675e0366CEA253fEf08001C21`](https://testnet.arcscan.app/address/0x77C04851838cb7f675e0366CEA253fEf08001C21) |
+| AssetVault implementation | [`0xc2F0D96Ba81C67baFaD6530A6A2C5236c7b66EEd`](https://testnet.arcscan.app/address/0xc2F0D96Ba81C67baFaD6530A6A2C5236c7b66EEd) |
+
+Post-deployment verification confirmed:
 
 - all 28 deployment transactions succeeded;
-- the registry reports three vaults and maps USDC/ARGt/BRAt to the expected vaults;
-- the factory points to the deployed registry and beacon;
-- the factory holds `REGISTRAR_ROLE` on the registry;
+- the registry reports three vaults and maps USDC, ARGt and BRAt to the expected vaults;
+- the factory points to the deployed registry and beacon and holds `REGISTRAR_ROLE` on the registry;
 - the composer points to the deployed registry and filler registry;
-- all three vaults grant `COMPOSER_ROLE` to the deployed composer.
+- all three vaults grant `COMPOSER_ROLE` to the composer.
 
-Generate the Arc subgraph directly from the canonical Base manifest so event coverage cannot drift:
+Tokens:
+
+| Token | Address | Decimals | Notes |
+| --- | --- | --- | --- |
+| USDC | [`0x3600000000000000000000000000000000000000`](https://testnet.arcscan.app/address/0x3600000000000000000000000000000000000000) | 6 | Arc's native USDC, exposed through its ERC-20 interface |
+| ARGt | [`0xd8dE250970842A581f89E885dA0F5165037714Ef`](https://testnet.arcscan.app/address/0xd8dE250970842A581f89E885dA0F5165037714Ef) | 18 | Open-mint testnet demo token standing in for an ARS stablecoin |
+| BRAt | [`0xa9482a878A3784663512f0Bf8d0be17aD6DEA38E`](https://testnet.arcscan.app/address/0xa9482a878A3784663512f0Bf8d0be17aD6DEA38E) | 18 | Open-mint testnet demo token standing in for a BRL stablecoin |
+
+ARGt and BRAt are demo tokens, not issued stablecoins. No stablecoin issuer is a partner.
+
+## 2. 1inch Aqua + SwapVM venue and Aqua0 AquaAdapter: Deployed, awaiting admin wiring
+
+Deployed from [`packages/contracts`](../packages/contracts) with [`script/deploy-arc-aqua-venue.sh`](../packages/contracts/script/deploy-arc-aqua-venue.sh).
+
+| Contract | Source | Address | Deploy tx |
+| --- | --- | --- | --- |
+| Aqua (`AquaRouter`) | 1inch aqua 0.1.0 | [`0x490d2eceD9aCF99e1db6090f820775bFa70020D4`](https://testnet.arcscan.app/address/0x490d2eceD9aCF99e1db6090f820775bFa70020D4) | [`0x4368a8bf…7280`](https://testnet.arcscan.app/tx/0x4368a8bfc17f05fc87466b555c2d7b3b8786643ab64aea0bb6ee25f4deb67280) (block 61679218) |
+| `AquaSwapVMRouter` | 1inch swap-vm v1.0.2, unmodified | [`0xb20bc70b485eC1352C190d26fCaB1959d219F763`](https://testnet.arcscan.app/address/0xb20bc70b485eC1352C190d26fCaB1959d219F763) | [`0x95032e02…cf10`](https://testnet.arcscan.app/tx/0x95032e025ec80cf64d0fdebc527b911ee939644471718058f0f4ecaf892ccf10) (block 61679223) |
+| Aqua0 `AquaAdapter` | Pre-existing Aqua0 contract | [`0xbF72D34b804636496c3308796908152b82624Ca5`](https://testnet.arcscan.app/address/0xbF72D34b804636496c3308796908152b82624Ca5) | Deployed with `forge create`, tx not recorded in the repo |
+
+The venue broadcast is committed at [`packages/contracts/broadcast/DeployAquaVenue.s.sol/5042002/run-latest.json`](../packages/contracts/broadcast/DeployAquaVenue.s.sol/5042002/run-latest.json). The deploy script's post-deploy checks cover `router.AQUA() == aqua`, `adapter.aqua()`, `adapter.aquaSwapVMRouter()`, `adapter.registry()`, and `adapter.oneStrategyPerToken() == false`. The adapter ships with `oneStrategyPerToken` on, which would stop one token from backing a second live strategy, so the adapter admin turns it off. The vault's settle-time debit and outflow limit remain the capital bound.
+
+<!-- TODO(coordinator): confirm whether "verified" also means explorer source verification on arcscan for the three venue contracts, and record the AquaAdapter deploy tx hash. -->
+
+### Pending admin wiring
+
+These calls need `DEFAULT_ADMIN_ROLE` on the registry and `CAPITAL_ADMIN_ROLE` on the vaults, which only the core admin holds. The adapter is inert until they land:
+
+1. `VaultRegistry.setAdapterAllowed(0xbF72D34b804636496c3308796908152b82624Ca5, true)`
+2. `grantRole(keccak256("VENUE_SETTLER_ROLE"), 0xbF72D34b804636496c3308796908152b82624Ca5)` on the USDC, ARGt and BRAt AssetVaults
+
+Running `deploy-arc-aqua-venue.sh` with `MODE=arc` prints the exact calldata. With `MODE=fork` it impersonates the admin and sends the calls on a local fork.
+
+<!-- TODO(coordinator): update this section to "Wired" with tx links once the admin wiring lands. -->
+
+## 3. Strategy classes on Arc
+
+| Class | Pair | Status |
+| --- | --- | --- |
+| 1 | USDC / ARGt ("FXSwap ARS", key `0x9b16e2b3…802b`) | Legacy. The core deployer registered it earlier on Arc with both vault legs. Not funded. See [`deployments/arc-testnet-strategies.json`](../deployments/arc-testnet-strategies.json). |
+| n/a | USDC / BRAt ("FXSwap BRL", key `0x104b36f3…dad8`) | An MCP-prepared `registerStrategyClass` transaction recorded as `prepared-not-broadcast`. It was never sent. |
+
+Strategy class ids are assigned at registration. The key is `keccak256(abi.encode(strategist, chainId, sorted tokens, keccak256(label)))`, so the class ids a run gets depend on the signing strategist.
+
+## 4. Two FX strategies on one USDC deposit: Fork-proven, pending on Arc
+
+[`packages/contracts/script/run-arc-fx-strategies.sh`](../packages/contracts/script/run-arc-fx-strategies.sh) runs [`ArcFxStrategies.s.sol`](../packages/contracts/script/ArcFxStrategies.s.sol) against a local fork of Arc. The fork uses real Arc bytecode and state. Only USDC is stubbed, because Arc's USDC calls native precompiles that anvil lacks. The run:
+
+1. deposits 2 USDC once into the USDC AssetVault and commits it to two classes, class 2 (USDC/ARGt "FXSwap ARS") and class 3 (USDC/BRAt "FXSwap BRL");
+2. deposits and commits each FX leg;
+3. ships a `[FlatFeeAmountIn][PeggedSwap]` SwapVM program per class through `AquaAdapter.shipStrategyWithFee` (EIP-712 strategist signature), which ships into Aqua;
+4. swaps through `AquaSwapVMRouter`: 0.1 USDC → 139.25 ARGt and 0.1 USDC → 0.547 BRAt, both settled through the vault hooks;
+5. reads back 2 USDC `committedBacking` on both classes.
+
+On Arc Testnet the same script runs with `MODE=arc` once the admin wiring above lands.
+
+<!-- TODO(coordinator): record the Arc Testnet class ids and swap tx hashes after the MODE=arc run. -->
+
+## 5. Arc subgraph manifest
+
+Generate `subgraph.arc.yaml` from the canonical Base manifest so event coverage cannot drift:
 
 ```bash
 PUBLIC_ARC_VAULT_FACTORY=0x879C0c90205172a8DD66afB8124994D866372FBa \
@@ -24,4 +97,4 @@ PUBLIC_ARC_START_BLOCK=60613306 \
 pnpm --filter @aqua0/subgraph generate:arc
 ```
 
-`PUBLIC_ARC_AQUA_ADAPTER` and `PUBLIC_ARC_V4_ADAPTER` are optional. Set them only after real adapter deployments exist; otherwise those data sources are omitted while the Shape-C core remains fully indexed.
+The live self-hosted Arc subgraph indexes the Shape-C core: VaultFactory, VaultRegistry, Composer, FillerRegistry, plus the AssetVault template. **In progress:** venue data sources set through `PUBLIC_ARC_AQUA_ADAPTER` (`0xbF72D34b804636496c3308796908152b82624Ca5`, start block `61679229`) and `PUBLIC_ARC_AQUA_SWAPVM_ROUTER` (`0xb20bc70b485eC1352C190d26fCaB1959d219F763`, start block `61679223`, router `Swapped` fills), and publishing the Arc subgraph to Subgraph Studio. See [`packages/subgraph/README.md`](../packages/subgraph/README.md) for the venue entities. See [`THE_GRAPH_TRACK.md`](THE_GRAPH_TRACK.md).

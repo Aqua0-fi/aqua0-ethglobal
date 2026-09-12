@@ -1,95 +1,73 @@
 # ETHGlobal demo runbook
 
-This runbook keeps the live claims separate from fallback/local proof so the demo never relies on fake state.
+The demo is a conversation in an agentic terminal: Claude Code, Codex, or any MCP client. It needs no web UI. This runbook keeps what is live separate from what is fork-proven or in progress, so the demo never shows fake state.
 
-## Public MCP
+## Setup
 
-Live judge dashboard: `https://ethglobal-demo.18-207-103-187.nip.io/`
-
-The AWS MCP is exposed over Streamable HTTP at:
-
-```text
-https://ethglobal-mcp.18-207-103-187.nip.io/mcp
-```
-
-Health:
-
-```text
-https://ethglobal-mcp.18-207-103-187.nip.io/health
-```
-
-The public endpoint is **prepare-only**: it has no signing key and cannot broadcast transactions. Agent analytics are backed by `GRAPH_ENDPOINT` only.
-
-The current public endpoint has been SDK-smoke-tested over HTTPS with `health`, `protocol_snapshot`, `list_opportunities`, `graph_query`, and `prepare_create_strategy`. The reverse-proxy pattern is committed as `deploy/aws/Caddyfile.mcp.example`.
-
-## 1. Show The Graph as the read layer
-
-Ask a Claude/Codex-style MCP client:
-
-```text
-Check Aqua0 health, show the protocol snapshot, then list current strategy opportunities. Tell me which data came from The Graph.
-```
-
-Expected tools:
-
-1. `health`
-2. `protocol_snapshot`
-3. `list_opportunities`
-4. optionally `graph_query` for an ad-hoc follow-up
-
-For The Graph bounty submission, point `GRAPH_ENDPOINT` at the Subgraph Studio / Graph Network deployment described in `THE_GRAPH_TRACK.md`. The self-hosted AWS node is the development and Arc-Testnet indexing path, not a substitute for the bounty's provider requirement.
-
-## 2. Show live Arc Shape-C deployment
-
-Public addresses are in `../deployments/arc-testnet.json`.
-
-The three live AssetVaults are:
-
-- USDC: `0x99c2ab427b29dB1Cc14D228d970596015d1C4429`
-- ARGt: `0x8a3d6188C58d7877499592E179DfE3bd80c4F460`
-- BRAt: `0xEcB132648B781ec5742b582c526243Eeef900785`
-
-The live ARS strategy class is recorded in `../deployments/arc-testnet-strategies.json`: class `1` spans the USDC and ARGt vaults. The BRL strategy is deliberately recorded as `prepared-not-broadcast` until its transaction is actually sent.
-
-## 3. Show agent-native strategy preparation
-
-Ask the agent:
-
-```text
-Prepare an Aqua0 FXSwap BRL strategy on Arc Testnet for strategist 0xBaA361817C8676b4A8a8C5e6fd050253f81f407C, using Arc USDC and BRAt, with the USDC and BRAt Shape-C vaults. Do not broadcast anything.
-```
-
-The MCP should call `prepare_create_strategy`, derive the exact current Aqua0 strategy key, read `classForStrategy` from Arc, and return the next transaction rather than guessing a class id.
-
-## 4. Shared-backing proof
-
-The deterministic fork test is:
+Connect the public MCP. It is prepare-only: it holds no signing key and cannot broadcast transactions.
 
 ```bash
-./scripts/start-base-fork.sh
-./scripts/test-shared-backing-fork.sh
+claude mcp add --transport http aqua0 https://ethglobal-mcp.18-207-103-187.nip.io/mcp
 ```
 
-It proves the key invariant with real Shape-C bytecode/state: one 100 USDC principal position can commit to both the ARS and BRL strategy classes at 100 USDC backing each. The principal is not split into two isolated 50 USDC pools.
+- MCP health: `https://ethglobal-mcp.18-207-103-187.nip.io/health`
+- Judge dashboard: `https://ethglobal-demo.18-207-103-187.nip.io/`
+- Reverse-proxy pattern: [`deploy/aws/Caddyfile.mcp.example`](../deploy/aws/Caddyfile.mcp.example)
 
-This is the fallback proof if the venue/FXSwap opcode workstream is not ready for a complete live fill. It is not presented as an Arc transaction.
+The public endpoint has been smoke-tested over HTTPS with `health`, `protocol_snapshot`, `list_opportunities`, `graph_query` and `prepare_create_strategy`. Today it reads the Arc subgraph from the team's self-hosted Graph Node. Moving it to a Subgraph Studio endpoint is in progress (see [`THE_GRAPH_TRACK.md`](THE_GRAPH_TRACK.md)).
 
-## Optional live 1 USDC Arc flow
+## Step 1: Query Aqua0 state
 
-To make the Arc demo show non-zero USDC state, `scripts/prepare-arc-usdc-demo.sh` prints (but never sends) an approval, a 1 USDC Shape-C deposit, and commitment to the already-live ARS class. Sign those three prepared transactions with the demo wallet during the presentation if desired, then wait for The Graph and refresh the dashboard/MCP.
+> "What capital does Aqua0 have on Arc, and which strategies are running? Tell me which data came from The Graph."
 
-```bash
-./scripts/prepare-arc-usdc-demo.sh
-```
+Expected tools: `health`, `protocol_snapshot`, `list_opportunities`, and `get_balance` / `get_strategies` for an LP address. Optionally `graph_query` for a follow-up. **Status: Live.**
 
-The script is deliberately preparation-only; no private key is read and no transaction is broadcast.
+## Step 2: Create a USDC / Argentine peso strategy with FXSwap
 
-## 5. End with indexed state
+> "Create a strategy on Arc pairing my USDC with ARGt using FXSwap."
 
-After any real state-changing demo transaction is mined, ask:
+| Part | Tooling | Status |
+| --- | --- | --- |
+| Derive the strategy key, check `classForStrategy`, prepare `registerStrategyClass` or per-vault `registerStrategy` calldata | `prepare_create_strategy` | Live (prepare-only) |
+| Prepare USDC deposit and commitment calldata | `prepare_deposit`, `prepare_authorize_strategy` | Live (prepare-only) |
+| Build the SwapVM program, sign the EIP-712 ship request, call `AquaAdapter.shipStrategyWithFee`, quote and swap | MCP SwapVM strategy tools | In progress |
+| The same on-chain sequence end to end | `packages/contracts/script/run-arc-fx-strategies.sh` | Fork-proven; runs on Arc after admin wiring |
+| FXSwap instruction in the program | `packages/contracts` | In progress. The fallback is `[FlatFeeAmountIn][PeggedSwap]` pinned at a configured FX price. |
 
-```text
-Query The Graph again and explain what changed in Aqua0's vault/strategy state. Use graph_query if the typed tool does not expose the exact field you need.
-```
+<!-- TODO(coordinator): replace "MCP SwapVM strategy tools" with the exact tool names once they land in apps/mcp. -->
 
-That closes the loop: natural-language agent -> typed Shape-C action -> chain -> The Graph -> natural-language explanation.
+With the public endpoint the agent returns calldata, which the demo wallet signs. A local MCP started with `MCP_WRITE_MODE=execute` can send the guarded writes itself, on Arc Testnet or a local Anvil only.
+
+## Step 3: Create a USDC / Brazilian real strategy with the same USDC
+
+> "Now create a second strategy with the same USDC, paired with BRAt."
+
+Same tooling and statuses as step 2. The USDC is **not** withdrawn or split. The same deposit is committed to a second class.
+
+## Step 4: Query the balance again
+
+> "Query my Aqua0 balance again. How much USDC backs each strategy?"
+
+Expected answer: the same USDC principal backs both FX strategy classes in full.
+
+| Evidence | Status |
+| --- | --- |
+| Arc fork: 2 USDC deposit committed to class 2 (USDC/ARGt) and class 3 (USDC/BRAt); 0.1 USDC → 139.25 ARGt and 0.1 USDC → 0.547 BRAt settled through the router and vault hooks; afterwards both classes still show 2 USDC committed backing | Fork-proven |
+| Base fork: `./scripts/start-base-fork.sh` then `./scripts/test-shared-backing-fork.sh`. One 100 USDC principal shows 100 USDC `committedBacking` and `availableFor` on both classes | Fork-proven |
+| The same read from The Graph on Arc, including AquaAdapter ship and fill events | In progress |
+
+Closing line: *"One capital, Argentine pesos and Brazilian reais, both live, all from a terminal."* Use it live only once steps 2 to 4 have run on Arc Testnet. Until then, present the Arc-fork run as the proof.
+
+## Fallbacks
+
+- **FXSwap not ready:** run the same flow with the pegged/stable program (`FlatFeeAmountIn` opcode 21, `PeggedSwap` opcode 31). Say explicitly that this curve sits at a fixed price and does not track a moving FX rate.
+- **Venue wiring not landed:** run `run-arc-fx-strategies.sh` with `MODE=fork` against a local fork of Arc and present it as fork-proven, not as an Arc transaction.
+- **Show non-zero USDC on Arc through the existing core only:** `./scripts/prepare-arc-usdc-demo.sh` prints, but never sends, a USDC approval, a 1 USDC Shape-C deposit, and a commitment to class 1. Sign them with the demo wallet, wait for indexing, then re-query.
+
+## Close the loop
+
+After any real transaction is mined:
+
+> "Query The Graph again and explain what changed in Aqua0's vault and strategy state."
+
+Natural-language request → typed tool → Arc → The Graph → natural-language explanation.
