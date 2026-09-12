@@ -7,7 +7,7 @@ services:
     ports:
       - "127.0.0.1:8400:3000"
     environment:
-      GRAPH_ENDPOINT: ${GRAPH_ENDPOINT}
+      GRAPH_ENDPOINT: ${GRAPH_ENDPOINT:-https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/version/latest}
       GRAPH_NETWORK: ${GRAPH_NETWORK:-arc-testnet}
       GRAPH_AUTH_TOKEN: ${GRAPH_AUTH_TOKEN:-}
       WRITE_RPC_URL: ${WRITE_RPC_URL:-https://rpc.testnet.arc.network}
@@ -16,10 +16,3 @@ services:
       MCP_WRITE_MODE: prepare
       HOST: 0.0.0.0
       PORT: 3000
-    networks:
-      - graph-node
-
-networks:
-  graph-node:
-    external: true
-    name: graph-node_default
