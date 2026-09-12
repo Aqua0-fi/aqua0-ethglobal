@@ -122,7 +122,7 @@ jobs:
       - name: Build and restart public MCP + dashboard
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/id_ethglobal "$AWS_USER@$AWS_HOST" "set -e; cd '$AWS_APP_DIR'; chmod 600 deploy/aws/autodeploy.env; docker compose --env-file deploy/aws/autodeploy.env -f deploy/aws/mcp.compose.yml up -d --build mcp; docker compose --env-file deploy/aws/autodeploy.env -f deploy/aws/dashboard.compose.yml up -d --build dashboard"
+          ssh -i ~/.ssh/id_ethglobal "$AWS_USER@$AWS_HOST" "set -e; cd '$AWS_APP_DIR'; chmod 600 deploy/aws/autodeploy.env; docker rm -f aws-mcp-1 aws-dashboard-1 >/dev/null 2>&1 || true; docker compose --env-file deploy/aws/autodeploy.env -f deploy/aws/mcp.compose.yml up -d --build mcp; docker compose --env-file deploy/aws/autodeploy.env -f deploy/aws/dashboard.compose.yml up -d --build dashboard"
 
       - name: Smoke public services
         run: |
@@ -153,6 +153,10 @@ jobs:
           if ! grep -qx benchmark_fx_strategy /tmp/tool-names.txt; then
             echo '::warning::benchmark_fx_strategy is not present in this main SHA yet.'
           fi
+
+      - name: Remove legacy ETHGlobal image tags
+        run: |
+          ssh -i ~/.ssh/id_ethglobal "$AWS_USER@$AWS_HOST" "docker image rm aws-mcp:latest aws-dashboard:latest >/dev/null 2>&1 || true"
 
       - name: Inventory AWS runtime
         run: |

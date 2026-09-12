@@ -1,5 +1,12 @@
+name: ethglobal-public
+
 services:
   dashboard:
+    image: ethglobal-dashboard:latest
+    container_name: ethglobal-dashboard
+    labels:
+      com.aqua0.scope: ethglobal
+      com.aqua0.component: dashboard
     build:
       context: ../..
       dockerfile: Dockerfile.dashboard

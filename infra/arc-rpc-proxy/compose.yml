@@ -1,5 +1,12 @@
+name: ethglobal-arc-rpc-proxy
+
 services:
   arc-rpc-proxy:
+    image: ethglobal-arc-rpc-proxy:latest
+    container_name: ethglobal-arc-rpc-proxy
+    labels:
+      com.aqua0.scope: ethglobal
+      com.aqua0.component: arc-rpc-proxy
     build: .
     restart: unless-stopped
     environment:
