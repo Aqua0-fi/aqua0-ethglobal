@@ -3,7 +3,8 @@
 [![Arc Testnet](https://img.shields.io/badge/Arc-Testnet%205042002-1f6feb)](https://testnet.arcscan.app/address/0x9E094b21C4263e0BE5BEffa0f8296B3fd982fFFf)
 [![1inch Aqua + SwapVM](https://img.shields.io/badge/1inch-Aqua%20%2B%20SwapVM-1b314f)](#1inch-build-an-aqua-app-and-continuity)
 [![The Graph](https://img.shields.io/badge/The%20Graph-Subgraph%20Studio-6747ed)](#the-graph-best-ai-tooling-or-ai-use-case)
-[![MCP](https://img.shields.io/badge/MCP-19%20tools-111111)](#mcp-tool-reference)
+[![npm @aqua0/mcp](https://img.shields.io/npm/v/@aqua0/mcp?label=npm%20%40aqua0%2Fmcp&color=cb3837)](https://www.npmjs.com/package/@aqua0/mcp)
+[![MCP](https://img.shields.io/badge/MCP-23%20tools-111111)](#mcp-tool-reference)
 [![Agent Skill](https://img.shields.io/badge/Agent%20Skill-aqua0-444444)](skills/aqua0/SKILL.md)
 [![ETHGlobal](https://img.shields.io/badge/ETHGlobal-Continuity%20track-555555)](#continuity-pre-existing-vs-built-at-ethglobal)
 
