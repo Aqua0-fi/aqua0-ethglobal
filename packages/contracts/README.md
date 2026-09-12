@@ -85,8 +85,8 @@ KEYSTORE_ACCOUNT=<keystore-name> KEYSTORE_PASSWORD_FILE=<path-to-password-file> 
 
 No feeds are deployed: forex strategies read the RedStone BRL feed below and the ARS/USD `ManualFxOracle`. On Arc
 Testnet the router is `0x0661435C2684Dcf62c547bA75a3300f928701E3d` and the adapter
-`0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80`, both verified on Arcscan; the adapter is inert until the core admin's
-wiring lands.
+`0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80`, both verified on Arcscan. The adapter is wired: allowlisted in the `VaultRegistry` and holding `VENUE_SETTLER_ROLE`
+on the USDC, ARGt and BRAt vaults, so forex strategies trade live on Arc.
 
 Tests: `test/ForexCurve.t.sol`, `test/ForexCurveInvariants.t.sol`, `test/ForexCurveVectors.t.sol` (all 979 reference
 vectors in `test/fixtures/fxforex-vectors-wad.json`, matched within a few wei of a 100-digit re-solve) and

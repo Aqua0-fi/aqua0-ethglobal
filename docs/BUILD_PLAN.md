@@ -7,14 +7,14 @@ The pitch, demo, architecture and prize mapping are in the [README](../README.md
 | Workstream | Owner | Status |
 | --- | --- | --- |
 | Aqua0 vault subgraph, Arc manifest, Arc RPC proxy | Rithik | **Live** |
-| Subgraph Studio deployment for Arc | Rithik | **Live** (earlier schema); redeploy with both Aqua venues **Built, not yet deployed** |
+| Subgraph Studio deployment for Arc | Rithik | **Live**, indexing both Aqua venues (version `ethglobal-arc-d179c59`) |
 | MCP server, dashboard, public deployment | Rithik | **Live** (public endpoint on the earlier prepare-only build); hosted redeploy with 19 tools **Planned** |
 | Arc deployment of the Aqua0 vault core | Tomás | **Live** |
 | Pegged venue on Arc: Aqua + AquaSwapVMRouter + AquaAdapter | Yudhishthra | **Live** (wired; two strategies shipped and filled) |
-| Arc SwapVM integration: strategy scripts, MCP strategy tools, Aqua venue indexing | Yudhishthra | Tools **Live** on Arc (pegged); indexing **Built, not yet deployed** |
-| ForexCurve instruction (port of Tomás's forex curve), `AquaForexSwapVMRouter` and forex adapter on Arc | Yudhishthra | **Deployed, awaiting wiring** |
+| Arc SwapVM integration: strategy scripts, MCP strategy tools, Aqua venue indexing | Yudhishthra | Tools **Live** on Arc (pegged and forex); indexing **Live** |
+| ForexCurve instruction (port of Tomás's forex curve), `AquaForexSwapVMRouter` and forex adapter on Arc | Yudhishthra | **Live** (wired; forex strategies shipped and filled) |
 | RedStone BRL and MXNe price feeds on Arc | Yudhishthra | **Live** (deployed, updated on-chain, readable with `get_fx_prices`) |
-| Forex curve in the MCP and CLI: `opcode:"forex"` (the default), `get_fx_prices`, `set_fx_price`, RedStone BRL pricing | Yudhishthra | **Fork-proven** |
+| Forex curve in the MCP and CLI: `opcode:"forex"` (the default), `get_fx_prices`, `set_fx_price`, RedStone BRL pricing | Yudhishthra | **Live** on Arc |
 | Forex curve reference, vectors and parameter simulations | Tomás | Done: the ForexCurve port matches all 979 reference vectors |
 | Agent skill | Yudhishthra | **Live** ([`skills/aqua0/SKILL.md`](../skills/aqua0/SKILL.md)) |
 

@@ -15,36 +15,36 @@ For ETHGlobal we put Aqua0 on **Arc** and made it agent-native. From Claude Code
 
 > [!IMPORTANT]
 > **What's live right now (2026-09-12)**
-> - **Live:** the two-strategy shared-backing flow on Arc Testnet (pegged venue). One 2 USDC deposit backs a USDC/ARS and a USDC/BRL SwapVM strategy shipped into 1inch Aqua, and both filled on-chain ([see it on-chain](#see-it-on-chain)). Also live: the Aqua0 vault core, RedStone BRL and MXNe price feeds updated on-chain from signed market data, the Arc subgraph on Subgraph Studio, the public MCP endpoint (earlier 12-tool prepare-only build) and the judge dashboard.
-> - **Deployed, awaiting wiring:** the forex venue on Arc (`AquaForexSwapVMRouter`, which runs Tomás's forex curve, and its AquaAdapter), both verified on Arcscan. The core admin still has to allowlist the forex adapter and grant it `VENUE_SETTLER_ROLE` on the three vaults.
-> - **Fork-proven:** the forex-curve flow through the MCP service path on an Arc fork. One 2 USDC deposit backs forex USDC/ARS and USDC/BRL strategies. USDC/BRL prices from signed RedStone data, which `swap` pushes on-chain first. Inside the flat band a swap costs the 30 bps fee, a trade past it pays the inventory fee, a trade past the halt band reverts, and a +5% ARS feed move moves the quote by 5%.
-> - **Built, not yet deployed:** subgraph indexing of both Aqua venues (the Studio redeploy is pending). The 19-tool MCP runs locally over stdio; the hosted redeploy is **Planned**.
+> - **Live:** both Aqua0 venues on Arc Testnet, drawing on the same vaults ([see it on-chain](#see-it-on-chain)). On the forex venue, which runs Tomás's forex curve, `create_strategy` picked the forex curve by default for USDC/ARS and USDC/BRL, and both filled on-chain at the oracle price less the 30 bps fee. One 1 USDC principal backs those two forex strategies and a pegged USDC/BRL strategy at once. On the pegged venue, one 2 USDC deposit backs a USDC/ARS and a USDC/BRL strategy, both filled. Also live: the Aqua0 vault core, RedStone BRL and MXNe price feeds updated on-chain from signed market data, the Arc subgraph on Subgraph Studio indexing both Aqua venues, the public MCP endpoint (earlier 12-tool prepare-only build) and the judge dashboard.
+> - **Fork-proven:** the forex curve's regimes, which the small live run does not reach ([`test-arc-fork-forex.sh`](scripts/test-arc-fork-forex.sh)). Inside the flat band a swap costs the 30 bps fee, a trade past it pays the inventory fee, a trade past the halt band reverts, and a +5% ARS feed move moves the quote by 5%.
+> - **Planned:** the hosted redeploy of the 19-tool MCP, which runs locally over stdio today.
 
 <kbd>[Demo](#the-demo-in-four-steps)</kbd> <kbd>[On-chain](#see-it-on-chain)</kbd> <kbd>[How it works](#how-it-works)</kbd> <kbd>[Forex curve](#forex-curve-in-brief)</kbd> <kbd>[Prize tracks](#prize-tracks)</kbd> <kbd>[Try it](#try-it)</kbd> <kbd>[Deployments](#deployments)</kbd> <kbd>[Reference](#reference)</kbd>
 
 ## The demo in four steps
 
-Everything happens in an agentic terminal. The figures below come from the live Arc Testnet run on 2026-09-12. The demo wallet `0xAFF7…b02c` drove it through the `aqua0` CLI in execute mode, which calls the same service functions as the MCP tools.
+Everything happens in an agentic terminal. The figures below come from the live forex run on Arc Testnet on 2026-09-12. The `aqua0` CLI drove it in execute mode with `SIGNER=circle`, signing with the demo Circle wallet `0xb0c0…d952`, and the shared Circle operator sent the strategy ships. The CLI calls the same service functions as the MCP tools.
 
 ```text
 you   › What does Aqua0 hold on Arc, and what is my USDC backing?
 agent › health · protocol_snapshot · get_balance · get_shared_backing
-        Three vaults: USDC, ARGt, BRAt. Your USDC principal is 2 USDC, not committed to any strategy yet.
+        Three vaults: USDC, ARGt, BRAt. Your USDC principal is 1 USDC.
 
-you   › Create a USDC to Argentine peso strategy, half a USDC.
-agent › create_strategy {"pair":"USDC/ARS","params":{"usdcAmount":"0.5"}}
-        opcodeNote: the forex adapter is not wired yet, so this uses the pegged venue.
+you   › Create a USDC to Argentine peso strategy that follows the oracle.
+agent › create_strategy {"pair":"USDC/ARS"}
+        opcode: forex (the default), a ForexCurve program on AquaForexSwapVMRouter
         class → vault legs → fund ARGt leg → commit → EIP-712 sign → AquaAdapter.shipStrategyWithFee
-        USDC/ARS is live in Aqua (class 2), backed by your 2 USDC.
+        USDC/ARS is live in Aqua (class 6), backed by your 1 USDC.
 
 you   › Now the same USDC with Brazilian reais.
-agent › create_strategy {"pair":"usdc to brl","params":{"usdcAmount":"0.5"}}
-        USDC/BRL is live in Aqua (class 3), backed by the same 2 USDC.
+agent › create_strategy {"pair":"usdc to brl"}
+        USDC/BRL is live in Aqua (class 7), priced from RedStone, backed by the same 1 USDC.
 
 you   › Swap 0.1 USDC on each, then query my backing again.
 agent › quote_swap · swap · get_shared_backing
-        0.1 USDC → 138.912644 ARGt   ·   0.1 USDC → 0.545728 BRAt
-        Principal 2 USDC, counted once. USDC/ARS: 2 USDC committed. USDC/BRL: 2 USDC committed. Nothing was split.
+        0.1 USDC → 139.58 ARGt (oracle 1400)   ·   0.1 USDC → 0.513733 BRAt (RedStone 5.152785)
+        About 30 bps on each: the curve's fee, inside the flat band.
+        Principal 1 USDC, counted once, committed to class 4 (pegged USDC/BRL), 6 and 7. Nothing was split.
 ```
 
 *"One capital, Argentine pesos and Brazilian reais, both live, all from a terminal."*
@@ -52,17 +52,29 @@ agent › quote_swap · swap · get_shared_backing
 | # | Step | MCP tools | Status |
 | --- | --- | --- | --- |
 | 1 | Query state | `health`, `protocol_snapshot`, `get_balance`, `get_strategies` (The Graph); `get_shared_backing` (on-chain reads) | **Live** |
-| 2 | Create USDC ↔ ARS strategy | `deposit`, `create_strategy` | **Live** on Arc (pegged venue) |
-| 3 | Create USDC ↔ BRL on the same USDC | `create_strategy` | **Live** on Arc (pegged venue) |
-| 4 | Query again, one swap each | `quote_swap`, `swap`, `get_shared_backing` | **Live** on Arc (pegged venue) |
+| 2 | Create USDC ↔ ARS strategy | `deposit`, `create_strategy` | **Live** on Arc (forex venue) |
+| 3 | Create USDC ↔ BRL on the same USDC | `create_strategy` | **Live** on Arc (forex venue) |
+| 4 | Query again, one swap each | `quote_swap`, `swap`, `get_shared_backing` | **Live** on Arc (forex venue) |
+| + | The same flow at a fixed price with `opcode:"pegged"` | `deposit`, `create_strategy`, `quote_swap`, `swap` | **Live** on Arc (pegged venue) |
 | + | Read the real BRL rate from signed RedStone prices | `get_fx_prices` | **Live** on Arc |
-| + | Forex curve: quote BRL at the RedStone price; move the ARS feed and re-quote | `quote_swap`, `swap`, `set_fx_price` | **Fork-proven**; the Arc forex venue is **Deployed, awaiting wiring** |
+| + | Forex curve regimes: inventory fee past the flat band, halt band, an ARS feed move and re-quote | `quote_swap`, `set_fx_price` | **Fork-proven** |
 
 Repeatable proofs: [`scripts/test-arc-fork-strategies.sh`](scripts/test-arc-fork-strategies.sh) (pegged) and [`scripts/test-arc-fork-forex.sh`](scripts/test-arc-fork-forex.sh) (forex curve) fork Arc, run these steps through the CLI and assert the fills, idempotency and shared backing.
 
 ### See it on-chain
 
-Arc Testnet transactions from the live run. Every hash is in [`deployments/arc-testnet-strategies.json`](deployments/arc-testnet-strategies.json) under `liveVenueRun`.
+Arc Testnet transactions from the live runs. Every hash is in [`deployments/arc-testnet-strategies.json`](deployments/arc-testnet-strategies.json) under `forexLiveRun` and `liveVenueRun`.
+
+**Forex venue** (demo Circle wallet `0xb0c0…d952`, default opcode):
+
+- Wire the forex AquaAdapter: [allowlist it in the VaultRegistry](https://testnet.arcscan.app/tx/0x6991957627a2440fbe17d2854af4344727124f02b5b97184e60b14eea39461a9), then `VENUE_SETTLER_ROLE` on the [USDC](https://testnet.arcscan.app/tx/0xabb80a89b83301e9b5d23542c9d18306bd10a6aeb494645ae7e6479c8210dc42), [ARGt](https://testnet.arcscan.app/tx/0xdb32e2892676637708a634a06ad53afcbab755edcc6a7d58e81d4a48a07e1431) and [BRAt](https://testnet.arcscan.app/tx/0x6994050e5bdf09fbc79512a9aee8419e9a965214daaf41c7bae64cd8ad9b6754) vaults
+- [Ship the forex USDC/ARS strategy (class 6), sent by the Circle operator](https://testnet.arcscan.app/tx/0x1e43315d45de2dd895c22a3ab2fc1cfe24944e3bc24490042ea494eae78f65c8)
+- [Ship the forex USDC/BRL strategy (class 7) on the same USDC](https://testnet.arcscan.app/tx/0x457e8e89298ba9fe4a805311928f38dd73fa6d7eccaea85d565537d804637292)
+- [Swap 0.1 USDC → 139.58 ARGt at oracle 1400, spread 29.99 bps](https://testnet.arcscan.app/tx/0x9c7e64ca0750e8f51ecd79b8e72f21e8422729401dc101edd640e6a39c6bcd0e)
+- [Push the signed RedStone BRL price](https://testnet.arcscan.app/tx/0xf0d548c5393af0e6f5441f5fbff92b04dcbdce0912bd478822dd725611bdc8cb)
+- [Swap 0.1 USDC → 0.513733 BRAt at 5.152785 BRAt per USDC, spread 30.00 bps](https://testnet.arcscan.app/tx/0x20f50a2aa481496af1818392f5da094fa02213e0f0400ebec1335d198ccabd97)
+
+**Pegged venue** (demo wallet `0xAFF7…b02c`):
 
 - [Deposit 2 USDC into the USDC AssetVault](https://testnet.arcscan.app/tx/0x088fb34b8147f936b7c10ac8066de4a59773f7d393f33eda64a4defeb8f6c6bd)
 - [Ship the USDC/ARS strategy (class 2) through the AquaAdapter](https://testnet.arcscan.app/tx/0x97d5fea443f9090f6b9dd2432036bdfbc2ed58d636e8ac802742d2e499968471)
@@ -71,10 +83,10 @@ Arc Testnet transactions from the live run. Every hash is in [`deployments/arc-t
 - [Swap 0.1 USDC → 0.545728 BRAt](https://testnet.arcscan.app/tx/0x811e5fd474e554e7a3330f09f34edb09f40ca50475028be89c4de3e6cfd32539)
 
 > [!NOTE]
-> **Seeing 2 USDC twice is correct.** Aqua0 commitments are *non-subtractive*: each committed class counts the LP's full principal as backing. Each strategy shipped 0.5 USDC of virtual balance into Aqua, and the same 2 USDC stands behind both. Real outflow is still bounded when a swap settles, by the class's own idle debit and the vault's outflow limit. A vault can never pay out more than it holds.
+> **Seeing the same USDC on every class is correct.** Aqua0 commitments are *non-subtractive*: each committed class counts the LP's full principal as backing. In the forex run the same 1 USDC is committed to classes 4, 6 and 7; in the pegged run the same 2 USDC stands behind classes 2 and 3. Each strategy ships only virtual balance into Aqua. Real outflow is still bounded when a swap settles, by the class's own idle debit and the vault's outflow limit. A vault can never pay out more than it holds.
 
 > [!TIP]
-> **Pegged live today, forex once wired.** `create_strategy` defaults to `opcode:"forex"`, the oracle-priced forex curve. While the forex adapter is not wired into the vault core, it falls back to `opcode:"pegged"`, a `[FlatFeeAmountIn 30 bps][PeggedSwap]` program pinned at a fixed FX price, and says why in `opcodeNote`. The live Arc run used pegged. Apart from the program and router, the flow is identical.
+> **Forex by default, pegged on request.** `create_strategy` ships `opcode:"forex"`, the oracle-priced forex curve. Pass `opcode:"pegged"` for a `[FlatFeeAmountIn 30 bps][PeggedSwap]` program pinned at a fixed FX price. If the forex venue cannot ship for a signer (for example it lacks `OPERATOR_ROLE`), `create_strategy` uses pegged and says why in `opcodeNote`. Apart from the program and router, the flow is identical.
 
 ## How it works
 
@@ -113,7 +125,7 @@ flowchart TB
       AQ["1inch Aqua 0.1.0"]
       RT["AquaSwapVMRouter - swap-vm v1.0.2"]
     end
-    subgraph FXVENUE["Forex venue - deployed, awaiting wiring"]
+    subgraph FXVENUE["Forex venue - live"]
       FXAD["Forex AquaAdapter"]
       FXR["AquaForexSwapVMRouter - ForexCurve opcode 34"]
       MFX["ManualFxOracle ARS/USD - set by hand"]
@@ -139,32 +151,33 @@ flowchart TB
   SG --> STU
   SG -.-> GN
   STU -->|"core events - live"| CORE
-  STU -.->|"venue entities - built, not yet deployed"| VENUE
+  STU -->|"venue entities - live"| VENUE
+  STU -->|"venue entities - live"| FXVENUE
   GN -.->|"eth_getLogs"| PX
   PX -.-> CORE
   SVC -->|"create_strategy, deposit, swap - live"| VENUE
-  SVC -.->|"forex strategies, set_fx_price - fork-proven"| FXVENUE
+  SVC -->|"create_strategy, swap on the forex curve - live"| FXVENUE
   SVC -->|"fetch signed payloads"| RSG
   SVC -->|"get_fx_prices - live"| RSA
-  SVC -.->|"swap pushes the signed price first - fork-proven"| RSA
+  SVC -->|"swap pushes the signed price first - live"| RSA
 
   REG --- VU
   REG --- VA
   REG --- VB
   AD -->|"ship and dock: virtual balances only"| AQ
   TAKER -->|"swap"| RT
-  TAKER -.->|"swap on the forex curve"| FXR
+  TAKER -->|"swap on the forex curve"| FXR
   RT -->|"maker hooks"| AD
   RT -->|"fill accounting: tokens pass through, none held"| AQ
-  FXR -.->|"reads BRL price"| RSA
-  FXR -.->|"reads ARS price"| MFX
-  FXR -.-> AQ
-  FXR -.->|"maker hooks"| FXAD
-  FXAD -.->|"ship and dock"| AQ
+  FXR -->|"reads BRL price"| RSA
+  FXR -->|"reads ARS price"| MFX
+  FXR --> AQ
+  FXR -->|"maker hooks"| FXAD
+  FXAD -->|"ship and dock"| AQ
   AD -->|"just in time: settleVenueOut and settleVenueCredit"| VU
   AD --> VA
   AD --> VB
-  FXAD -.->|"same vaults once wired"| CORE
+  FXAD -->|"same vaults, just in time"| CORE
 ```
 
 `packages/shared` is the one typed service behind the MCP, CLI and dashboard. The Graph is the read model for analytics. The Aqua0 vaults hold capital, and each AquaAdapter is the Aqua *maker* for the strategies on its router.
@@ -192,7 +205,7 @@ flowchart LR
   BOUND["Bound at settle time: own idle debit and the vault outflow limit"] -.-> UV
 ```
 
-Figures from the **live** Arc Testnet run. Class ids are assigned at registration, so they vary per strategist and chain.
+Figures from the **live** pegged run on Arc Testnet; the live forex run shows the same pattern, with one 1 USDC principal behind three classes. Class ids are assigned at registration, so they vary per strategist and chain.
 
 ### Creating a strategy
 
@@ -213,7 +226,7 @@ sequenceDiagram
   participant Aqua as 1inch Aqua
 
   User->>MCP: create a USDC/ARS strategy
-  Note over MCP: Pick the venue. Forex if its adapter is wired, otherwise pegged with an opcodeNote
+  Note over MCP: Pick the venue. Forex by default, pegged with an opcodeNote if forex cannot ship for this signer
   MCP->>Registry: classForStrategy(strategyKey)
   opt class not registered yet
     MCP->>Registry: registerStrategyClass(strategyKey)
@@ -291,10 +304,11 @@ The adapter handles either transfer order; whichever hook runs second performs t
 
 | | Status |
 | --- | --- |
-| Instruction index **34** in [`AquaForexSwapVMRouter`](packages/contracts/src/routers/AquaForexSwapVMRouter.sol), a modified swap-vm v1.0.2 router (EIP-712 name `AquaSwapVMRouter`, version `1.0.2-forex`, 24,553 bytes, under EIP-170). On Arc at [`0x0661…1E3d`](https://testnet.arcscan.app/address/0x0661435C2684Dcf62c547bA75a3300f928701E3d) with its AquaAdapter [`0x7b42…fE80`](https://testnet.arcscan.app/address/0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80), both verified on Arcscan, via [`deploy-arc-forex-venue.sh`](packages/contracts/script/deploy-arc-forex-venue.sh). The shared Circle operator holds `OPERATOR_ROLE` on the adapter; the core admin still has to wire it. | **Deployed, awaiting wiring** |
+| Instruction index **34** in [`AquaForexSwapVMRouter`](packages/contracts/src/routers/AquaForexSwapVMRouter.sol), a modified swap-vm v1.0.2 router (EIP-712 name `AquaSwapVMRouter`, version `1.0.2-forex`, 24,553 bytes, under EIP-170). On Arc at [`0x0661…1E3d`](https://testnet.arcscan.app/address/0x0661435C2684Dcf62c547bA75a3300f928701E3d) with its AquaAdapter [`0x7b42…fE80`](https://testnet.arcscan.app/address/0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80), both verified on Arcscan, via [`deploy-arc-forex-venue.sh`](packages/contracts/script/deploy-arc-forex-venue.sh). The adapter is allowlisted and holds `VENUE_SETTLER_ROLE` on the three vaults; the shared Circle operator holds `OPERATOR_ROLE` on it. | **Live** |
 | RedStone price feeds on Arc: [`AquaRedStoneMultiFeedAdapter`](https://testnet.arcscan.app/address/0x1a3fff65628048e4188C40dd5cf55A27Fb513ea0) with a BRL feed (USD per 1 BRL) and an MXNe feed (MXN per 1 USD), 8 decimals, no owner, [first update](https://testnet.arcscan.app/tx/0x3ec11cc0830567cb25a5d9b9b1f36c8caa5d966216c552b8a3098fee75d44ecf) sent. 5 Foundry tests replay the real Arc update calldata, so signature, 3-of-5 threshold and median checks run in CI without a fork. [`AquaRedStoneFeeds.sol`](packages/contracts/src/oracles/AquaRedStoneFeeds.sol) | **Live** on Arc |
 | Matches all 979 reference vectors (Tomás's 968 plus the live DFX EURC/USDC pool) within a few wei of a 100-digit re-solve ([`ForexCurveVectors.t.sol`](packages/contracts/test/ForexCurveVectors.t.sol)), alongside unit, invariant and Arc-fork tests; 83 Foundry tests pass. Gas for `router.swap`, including the oracle read and Aqua: about 108k exact-in inside the flat band, 133k for a trade leaving it. | **Fork-proven** |
-| MCP and CLI: `create_strategy`, `quote_swap` and `swap` default to `opcode:"forex"`; `get_fx_prices`, `set_fx_price`. [`test-arc-fork-forex.sh`](scripts/test-arc-fork-forex.sh) deploys the forex router and an adapter on an Arc fork, wires them as the impersonated admins, and prices from the deployed RedStone BRL and ARS/USD feeds: one 2 USDC deposit backs forex USDC/ARS and USDC/BRL; inside the flat band a swap costs 30 bps, a trade past it paid 666 bps, and a trade past the halt band reverts with `ForexCurveUpperHalt()`; `swap` pushes a signed RedStone BRL price before swapping; the feed owner moves ARS/USD +5% and the quote moves by exactly 5%. Quotes agree with the reference [`fxforex_math.py`](scripts/fxforex_math.py) to about 1e-16. The TypeScript args encoder matches the Solidity args builder byte for byte (vector test). | **Fork-proven** |
+| Live on Arc Testnet: `create_strategy` picked the forex curve by default for USDC/ARS (class 6) and USDC/BRL (class 7). 0.1 USDC → 139.58 ARGt at oracle 1400, spread 29.99 bps; `swap` pushed a signed RedStone price, then 0.1 USDC → 0.513733 BRAt at 5.152785 BRAt per USDC, spread 30.00 bps. Hashes: `forexLiveRun` in [`arc-testnet-strategies.json`](deployments/arc-testnet-strategies.json). | **Live** |
+| Curve regimes on a fork, which the small live run does not reach: [`test-arc-fork-forex.sh`](scripts/test-arc-fork-forex.sh) deploys the forex router and an adapter on an Arc fork, wires them as the impersonated admins, and prices from the deployed RedStone BRL and ARS/USD feeds: one 2 USDC deposit backs forex USDC/ARS and USDC/BRL; inside the flat band a swap costs 30 bps, a trade past it paid 666 bps, and a trade past the halt band reverts with `ForexCurveUpperHalt()`; `swap` pushes a signed RedStone BRL price before swapping; the feed owner moves ARS/USD +5% and the quote moves by exactly 5%. Quotes agree with the reference [`fxforex_math.py`](scripts/fxforex_math.py) to about 1e-16. The TypeScript args encoder matches the Solidity args builder byte for byte (vector test). | **Fork-proven** |
 
 **MCP defaults:** `α` 0.5, `β` 0.15, `δ` 0.5, `maxFee` 0.25, `λ` 0.3, `ε` 30 bps. A strategy ships 1 USDC plus its value in FX at the live oracle price, so the book starts balanced. USDC/ARS: price band half to double 1400 ARS per USD and a max feed age of 7 days, because that feed is set by hand. USDC/BRL: band 0.0909–0.3636 USD per BRL (half to double 5.5 BRL per USD) and a max feed age of 1 hour, because `swap` refreshes the RedStone price first. CLI flags: `--alpha`, `--beta`, `--delta`, `--max-fee` (or `--max-fee-percent`), `--lambda`, and `--fee-bps` for `ε`.
 
@@ -396,12 +410,12 @@ Aqua0 is registered in the **Continuity** track. We target Arc, 1inch and The Gr
 
 | Prize | Pool | Fit today | Main gap |
 | --- | --- | --- | --- |
-| [The Graph: Best AI Tooling or AI Use Case](#the-graph-best-ai-tooling-or-ai-use-case) (Continuity pool) | $2,500 / $1,500 / $1,000 | Reusable Graph-backed MCP server and agent skill; the agent reads live Subgraph Studio data and acts on it | Aqua venue entities not yet on Studio; public MCP on the earlier build |
+| [The Graph: Best AI Tooling or AI Use Case](#the-graph-best-ai-tooling-or-ai-use-case) (Continuity pool) | $2,500 / $1,500 / $1,000 | Reusable Graph-backed MCP server and agent skill; the agent reads live Subgraph Studio data and acts on it | Public MCP on the earlier build |
 | [The Graph: Composable or Standardized Graph Products](#the-graph-composable-or-standardized-graph-products) | $2,500 / $1,500 / $1,000 | Stretch; not met | One subgraph, no composition: **Planned** |
 | [Arc: Best DeFi / Onchain Finance Application](#arc-best-defi--onchain-finance-application) | $3,500 ($2,500 mainnet-conditional) | USDC-quoted shared FX liquidity, live on Arc Testnet | Testnet only; no Circle products beyond Arc and USDC yet |
 | [Arc: Best Agentic Economy Application with Circle Agent Stack](#arc-best-agentic-economy-application-with-circle-agent-stack) | $3,500 ($2,500 mainnet-conditional) | Partial: the agent transacts in execute mode | No Agent Stack or Circle Wallets |
 | [Arc: Best DeFi or Agentic Application (Continuity)](#arc-best-defi-or-agentic-application-continuity) | $3,000 ($2,000 mainnet-conditional) | Entered as the DeFi application | Same as the DeFi prize |
-| [1inch: Build an Aqua App (and Continuity)](#1inch-build-an-aqua-app-and-continuity) | $2,500 / $1,500 / $1,000; Continuity $1,500 / $500 | Official Aqua and SwapVM, live fills on Arc Testnet, a new SwapVM instruction | Forex venue awaiting wiring |
+| [1inch: Build an Aqua App (and Continuity)](#1inch-build-an-aqua-app-and-continuity) | $2,500 / $1,500 / $1,000; Continuity $1,500 / $500 | Official Aqua and SwapVM, live fills on Arc Testnet, a new SwapVM instruction | Inventory fee and halt band shown on a fork only |
 
 ### The Graph: Best AI Tooling or AI Use Case
 
@@ -418,17 +432,16 @@ Aqua0 is registered in the **Continuity** track. We target Arc, 1inch and The Gr
 - [x] **Agent skill.** [`skills/aqua0/SKILL.md`](skills/aqua0/SKILL.md) tells Claude Code, Codex and similar agents when to use Aqua0, how to connect, which tool answers which job, and how to stay safe. · **Live**
 - [x] **Live provider data.** The Arc subgraph is on [Subgraph Studio](https://thegraph.com/studio/subgraph/aqua-0-ethglobal-arc-testnet), deployed by Rithik, with `_meta.hasIndexingErrors = false`. The public MCP and dashboard read from it. [`deployments/graph-studio-arc-testnet.json`](deployments/graph-studio-arc-testnet.json) · **Live**
 - [x] **The Graph is load-bearing.** `health`, `get_balance`, `get_strategies`, `get_fees`, `list_opportunities`, `protocol_snapshot` and `graph_query` read subgraph entities. A Graph failure is surfaced as an error, with no silent RPC fallback. [`graph.ts`](packages/shared/src/graph.ts), [`packages/subgraph`](packages/subgraph) · **Live**
-- [x] **Meaningful work.** The agent maps a loose request ("usdc to brl") to a pair, decides whether a class already exists and which venue can ship, runs a multi-step strategy setup idempotently, and explains what changed after mining. [`index.ts`](apps/mcp/src/index.ts) · **Live** (reads, pegged writes on Arc), **Fork-proven** (forex curve)
-- [ ] **Aqua venue in the read model.** The subgraph indexes both Aqua venues as `AquaStrategy`, `AquaOrder` and `AquaFill` with a `venue` label, plus per-LP fill stats and fees. Studio still runs the earlier schema; the redeploy from this branch is pending. [`packages/subgraph`](packages/subgraph/README.md) · **Built, not yet deployed**
+- [x] **Meaningful work.** The agent maps a loose request ("usdc to brl") to a pair, decides whether a class already exists and which venue can ship, runs a multi-step strategy setup idempotently, and explains what changed after mining. [`index.ts`](apps/mcp/src/index.ts) · **Live** (reads, pegged and forex writes on Arc)
+- [x] **Aqua venues in the read model.** The subgraph indexes both Aqua venues, pegged and forex, as `AquaStrategy`, `AquaOrder` and `AquaFill` with a `venue` label, plus per-LP fill stats and fees. Subgraph Studio serves it as version `ethglobal-arc-d179c59`, synced to the Arc head. [`packages/subgraph`](packages/subgraph/README.md), [`graph-studio-arc-testnet.json`](deployments/graph-studio-arc-testnet.json) · **Live**
 - [x] **Open source, runnable from docs.** This README, [`docs/`](docs), [`.env.example`](.env.example), `pnpm check-env` and CI. · **Live**
 - [ ] **2–4 minute demo video.** · **In progress**
 - [x] **Continuity documented.** [Pre-existing vs built at ETHGlobal](#continuity-pre-existing-vs-built-at-ethglobal), [`docs/CONTINUITY.md`](docs/CONTINUITY.md) · **Live**
 
 > [!WARNING]
 > **Gaps / next:**
-> 1. Redeploy the Arc subgraph to Studio from this branch so both Aqua venues are served.
-> 2. Redeploy the public MCP with the 19 tools (**Planned**; today they run locally).
-> 3. Have `get_shared_backing` read the indexed Aqua entities once Studio serves them; today it uses on-chain reads, and says so in its response.
+> 1. Redeploy the public MCP with the 19 tools (**Planned**; today they run locally).
+> 2. Have `get_shared_backing` read the indexed Aqua entities, which Studio now serves; today it uses on-chain reads, and says so in its response.
 
 ### The Graph: Composable or Standardized Graph Products
 
@@ -457,10 +470,10 @@ Aqua0 is registered in the **Continuity** track. We target Arc, 1inch and The Gr
 > - a GitHub or Replit repo link.
 
 **How Aqua0 delivers**
-- [x] **Stablecoin-native FX liquidity on Arc.** Arc's native USDC is the shared quote asset, and one USDC balance makes markets in several local currencies. Principal, fees and gas are all USDC. [See it on-chain](#see-it-on-chain) · **Live** (vault core and pegged venue), **Deployed, awaiting wiring** (forex venue)
+- [x] **Stablecoin-native FX liquidity on Arc.** Arc's native USDC is the shared quote asset, and one USDC balance makes markets in several local currencies. Principal, fees and gas are all USDC. [See it on-chain](#see-it-on-chain) · **Live** (vault core, pegged and forex venues)
 - [x] **Multi-step atomic settlement.** One swap runs the maker program, pulls output from the vault just in time, pushes the taker's input into Aqua, sweeps it into the counter vault, credits the LPs that sold and books the spread as fees. [Swap sequence](#a-swap-through-the-maker-hooks) · **Live**
-- [ ] **Conditional fills.** The forex curve refuses to fill on a stale or out-of-band oracle price, and reverts a swap that would push the book past its halt band. [Forex curve](#forex-curve-in-brief) · **Fork-proven**; on Arc **Deployed, awaiting wiring**
-- [x] **Real FX market data on Arc.** RedStone BRL and MXNe feeds on Arc Testnet, updated on-chain only with prices signed by 3 of RedStone's 5 primary-prod signers. USDC/BRL forex strategies price from them, so non-USD stablecoin pairs track a market rate rather than a number someone typed. [Forex curve](#forex-curve-in-brief) · **Live** on Arc (feeds), **Fork-proven** (forex swaps on them)
+- [x] **Conditional fills.** The forex curve refuses to fill on a stale or out-of-band oracle price, and reverts a swap that would push the book past its halt band. [Forex curve](#forex-curve-in-brief) · **Live** on Arc (staleness and band checks on every forex swap), **Fork-proven** (halt band)
+- [x] **Real FX market data on Arc.** RedStone BRL and MXNe feeds on Arc Testnet, updated on-chain only with prices signed by 3 of RedStone's 5 primary-prod signers. USDC/BRL forex strategies price from them, so non-USD stablecoin pairs track a market rate rather than a number someone typed. [Forex curve](#forex-curve-in-brief) · **Live** on Arc (feeds and forex swaps on them)
 - [x] **Working frontend and backend.** The [judge dashboard](https://ethglobal-demo.18-207-103-187.nip.io/) reads and prepares only; the backend is its Node API, the MCP server and the contracts. [`apps/dashboard`](apps/dashboard) · **Live**
 - [x] **Architecture diagram and detailed documentation.** [How it works](#how-it-works), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/ARC_DEPLOYMENT.md`](docs/ARC_DEPLOYMENT.md) · **Live**
 - [ ] **App Kits, Circle Wallets, Circle Contracts, CCTP, Gateway, StableFX.** Not integrated. [`docs/ARC_TRACK.md`](docs/ARC_TRACK.md) · **Planned**
@@ -469,9 +482,8 @@ Aqua0 is registered in the **Continuity** track. We target Arc, 1inch and The Gr
 
 > [!WARNING]
 > **Gaps / next:**
-> 1. Wire the forex adapter on Arc Testnet and run the forex flow there.
-> 2. Evaluate StableFX (USDC/EURC only today) for a EURC pair, and CCTP or Gateway for USDC onboarding.
-> 3. Deploy to Arc Mainnet only after a security review.
+> 1. Evaluate StableFX (USDC/EURC only today) for a EURC pair, and CCTP or Gateway for USDC onboarding.
+> 2. Deploy to Arc Mainnet only after a security review.
 
 ### Arc: Best Agentic Economy Application with Circle Agent Stack
 
@@ -484,7 +496,7 @@ Aqua0 is registered in the **Continuity** track. We target Arc, 1inch and The Gr
 
 **How Aqua0 delivers**
 - [x] **Agent tooling transacts on Arc.** With `MCP_WRITE_MODE=execute`, `deposit`, `create_strategy` and `swap` send transactions, restricted to Arc Testnet or a local fork. The live Arc run used the `aqua0` CLI in execute mode, which calls the same service functions. The public endpoint is prepare-only. [Execute mode](#connect-the-mcp) · **Live**
-- [x] **Decisions tied to real signals.** Indexed vault capital and commitments, `classForStrategy`, venue readiness, and an on-chain quote before every swap with an enforced minimum output. The forex curve adds signed RedStone prices, oracle staleness and band checks, and a halt band. · **Live** (Graph signals, quote and min-out), **Fork-proven** (forex oracle checks)
+- [x] **Decisions tied to real signals.** Indexed vault capital and commitments, `classForStrategy`, venue readiness, and an on-chain quote before every swap with an enforced minimum output. The forex curve adds signed RedStone prices, oracle staleness and band checks, and a halt band. · **Live** (Graph signals, quote and min-out, forex oracle checks), **Fork-proven** (halt band)
 - [x] **Circle Wallets for the agent's user.** A person signs in with Privy from the terminal (`login`), gets a Circle developer-controlled wallet on Arc, and the agent then deposits, creates strategies and swaps through Circle's API. A shared Aqua0 operator wallet sends the strategies the user signs and tops up new wallets with testnet USDC, so no per-user role is needed. [Sign in](#sign-in-with-privy-trade-with-a-circle-wallet) · **Live** (tx hashes in [`arc-testnet-strategies.json`](deployments/arc-testnet-strategies.json) `circleSignInRun`)
 - [ ] **Agent Stack and autonomy.** The agent acts on user instructions, not autonomously, and does not use Agent Stack. · **Planned**
 - [ ] **Nanopayments, Paymaster or App Kits.** Candidates: per-quote USDC nanopayments and sponsored LP transactions. · **Planned**
@@ -510,19 +522,19 @@ Aqua0 is registered in the **Continuity** track. We target Arc, 1inch and The Gr
 - **Proper git history**, not a single final-day commit.
 
 **How Aqua0 delivers**
-- [x] **Sophisticated position: shared-backing FX market making.** One vault deposit backs several SwapVM strategies that the AquaAdapter ships into Aqua as maker, settled just in time through maker hooks. [How it works](#how-it-works) · **Live** on Arc Testnet (pegged venue)
-- [x] **SwapVM programs.** A `[FlatFeeAmountIn][PeggedSwap]` program per strategy (opcodes 21 and 31) is live; a forex-curve program (`ForexCurve`, opcode 34) is fork-proven. [`ArcFxStrategies.s.sol`](packages/contracts/script/ArcFxStrategies.s.sol), [`fx.ts`](packages/shared/src/fx.ts), [`swapvm.ts`](packages/shared/src/swapvm.ts) · **Live** (pegged), **Fork-proven** (forex)
-- [x] **A new SwapVM instruction.** ForexCurve, Tomás's forex curve, at index 34 in a modified router. It matches all 979 reference vectors within a few wei, runs end to end on an Arc fork, and is deployed and verified on Arc. [`packages/contracts/src`](packages/contracts/src), [`ForexCurveArcFork.t.sol`](packages/contracts/test/fork/ForexCurveArcFork.t.sol) · **Deployed, awaiting wiring**
-- [x] **Oracle-anchored on real signed prices.** ForexCurve reads its feed on every swap. On Arc the USDC/BRL feed carries RedStone prices signed by 3 of 5 primary-prod signers, and `swap` pushes the latest one right before swapping. [`AquaRedStoneFeeds.sol`](packages/contracts/src/oracles/AquaRedStoneFeeds.sol) · **Live** (feeds), **Fork-proven** (forex swaps on them)
+- [x] **Sophisticated position: shared-backing FX market making.** One vault deposit backs several SwapVM strategies that the AquaAdapter ships into Aqua as maker, settled just in time through maker hooks. [How it works](#how-it-works) · **Live** on Arc Testnet (pegged and forex venues)
+- [x] **SwapVM programs.** A `[FlatFeeAmountIn][PeggedSwap]` program (opcodes 21 and 31) and a forex-curve program (`ForexCurve`, opcode 34) both run live strategies. [`ArcFxStrategies.s.sol`](packages/contracts/script/ArcFxStrategies.s.sol), [`fx.ts`](packages/shared/src/fx.ts), [`swapvm.ts`](packages/shared/src/swapvm.ts) · **Live**
+- [x] **A new SwapVM instruction.** ForexCurve, Tomás's forex curve, at index 34 in a modified router. It matches all 979 reference vectors within a few wei, runs end to end on an Arc fork, and runs live strategies on Arc, verified on Arcscan. [`packages/contracts/src`](packages/contracts/src), [`ForexCurveArcFork.t.sol`](packages/contracts/test/fork/ForexCurveArcFork.t.sol) · **Live**
+- [x] **Oracle-anchored on real signed prices.** ForexCurve reads its feed on every swap. On Arc the USDC/BRL feed carries RedStone prices signed by 3 of 5 primary-prod signers, and `swap` pushes the latest one right before swapping. [`AquaRedStoneFeeds.sol`](packages/contracts/src/oracles/AquaRedStoneFeeds.sol) · **Live** (feeds and forex swaps on them)
 - [x] **Official contracts.** aqua 0.1.0 `AquaRouter` and swap-vm v1.0.2 `AquaSwapVMRouter`, built from unmodified upstream source, run the live strategies on Arc Testnet. [`DeployAquaVenue.s.sol`](packages/contracts/script/DeployAquaVenue.s.sol), [broadcast](packages/contracts/broadcast/DeployAquaVenue.s.sol/5042002/run-latest.json) · **Live**
-- [x] **On-chain token transfers.** On Arc Testnet the router moved real ARGt and BRAt out of Aqua and USDC in, with the hooks moving tokens out of and into the vaults: [0.1 USDC → 138.912644 ARGt](https://testnet.arcscan.app/tx/0x24d95d61c83e3dfdf5ffa8530350635eb9c9b5f71b51835f31b98eb61c5102fb) and [0.1 USDC → 0.545728 BRAt](https://testnet.arcscan.app/tx/0x811e5fd474e554e7a3330f09f34edb09f40ca50475028be89c4de3e6cfd32539). · **Live**
+- [x] **On-chain token transfers.** On Arc Testnet the router moved real ARGt and BRAt out of Aqua and USDC in, with the hooks moving tokens out of and into the vaults: [0.1 USDC → 138.912644 ARGt](https://testnet.arcscan.app/tx/0x24d95d61c83e3dfdf5ffa8530350635eb9c9b5f71b51835f31b98eb61c5102fb) and [0.1 USDC → 0.545728 BRAt](https://testnet.arcscan.app/tx/0x811e5fd474e554e7a3330f09f34edb09f40ca50475028be89c4de3e6cfd32539) on the pegged venue, [0.1 USDC → 139.58 ARGt](https://testnet.arcscan.app/tx/0x9c7e64ca0750e8f51ecd79b8e72f21e8422729401dc101edd640e6a39c6bcd0e) and [0.1 USDC → 0.513733 BRAt](https://testnet.arcscan.app/tx/0x20f50a2aa481496af1818392f5da094fa02213e0f0400ebec1335d198ccabd97) on the forex venue. · **Live**
 - [x] **Positions via test scripts.** [`run-arc-fx-strategies.sh`](packages/contracts/script/run-arc-fx-strategies.sh) (Foundry), [`test-arc-fork-strategies.sh`](scripts/test-arc-fork-strategies.sh) (pegged, MCP service path) and [`test-arc-fork-forex.sh`](scripts/test-arc-fork-forex.sh) (forex curve, MCP service path), all with assertions. · **Fork-proven**
 - [x] **Proper git history.** 60+ commits from the whole team across 2026-09-05, 09-08 and 09-12. · **Live**
 - [x] **Continuity split.** The AquaAdapter and vaults pre-exist; the Arc venues, strategy scripts, MCP SwapVM tools and the ForexCurve instruction are event work. [`docs/CONTINUITY.md`](docs/CONTINUITY.md) · **Live**
 
 > [!WARNING]
 > **Gaps / next:**
-> 1. The core admin wires the forex adapter on Arc Testnet (allowlist plus `VENUE_SETTLER_ROLE`); until then forex swaps are fork-only.
+> 1. The live forex strategies have only traded inside the flat band; the inventory fee and halt band are shown on a fork ([`test-arc-fork-forex.sh`](scripts/test-arc-fork-forex.sh)).
 
 <details>
 <summary><b>SwapVM wire facts (swap-vm v1.0.2 <code>AquaSwapVMRouter</code>)</b></summary>
@@ -587,7 +599,7 @@ What rate is the ARS feed on? Prepare a +5% move and tell me who can send it.
 Create a USDC/BRL forex strategy as a dry run and walk me through each step.
 ```
 
-`set_fx_price` moves only the ARS/USD feed, and only sends in execute mode when the signer owns it; otherwise it returns the prepared call. It refuses the RedStone BRL feed. Until the forex adapter is wired, there are no live forex strategies on Arc, so forex quotes and swaps are shown on a fork ([`test-arc-fork-forex.sh`](scripts/test-arc-fork-forex.sh)).
+`set_fx_price` moves only the ARS/USD feed, and only sends in execute mode when the signer owns it; otherwise it returns the prepared call. It refuses the RedStone BRL feed. Forex strategies are live on Arc; the fork proof ([`test-arc-fork-forex.sh`](scripts/test-arc-fork-forex.sh)) also shows the inventory fee, the halt band and an ARS feed move.
 
 ### Sign in with Privy, trade with a Circle wallet
 
@@ -750,12 +762,12 @@ Arc Testnet, chain id `5042002`. Full records are in [`deployments/arc-testnet.j
 | Aqua (`AquaRouter`, 1inch aqua 0.1.0) | [`0x490d…20D4`](https://testnet.arcscan.app/address/0x490d2eceD9aCF99e1db6090f820775bFa70020D4) | **Live** |
 | `AquaSwapVMRouter` (1inch swap-vm v1.0.2), pegged venue | [`0xb20b…F763`](https://testnet.arcscan.app/address/0xb20bc70b485eC1352C190d26fCaB1959d219F763) | **Live** |
 | Aqua0 `AquaAdapter`, pegged venue | [`0xbF72…4Ca5`](https://testnet.arcscan.app/address/0xbF72D34b804636496c3308796908152b82624Ca5) ([deploy tx](https://testnet.arcscan.app/tx/0x24a8f224e81b86c1f1827e3247912ff5dde01e7f47108521b6ac73581e4188d9)) | **Live**: allowlisted, `VENUE_SETTLER_ROLE` on all 3 vaults |
-| `AquaForexSwapVMRouter` (ForexCurve = opcode 34) | [`0x0661…1E3d`](https://testnet.arcscan.app/address/0x0661435C2684Dcf62c547bA75a3300f928701E3d) | **Deployed, awaiting wiring**; verified on Arcscan |
-| Aqua0 `AquaAdapter`, forex venue | [`0x7b42…fE80`](https://testnet.arcscan.app/address/0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80) | **Deployed, awaiting wiring**; verified on Arcscan; `OPERATOR_ROLE` granted to the shared Circle operator |
+| `AquaForexSwapVMRouter` (ForexCurve = opcode 34) | [`0x0661…1E3d`](https://testnet.arcscan.app/address/0x0661435C2684Dcf62c547bA75a3300f928701E3d) | **Live**; verified on Arcscan |
+| Aqua0 `AquaAdapter`, forex venue | [`0x7b42…fE80`](https://testnet.arcscan.app/address/0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80) | **Live**: allowlisted ([tx](https://testnet.arcscan.app/tx/0x6991957627a2440fbe17d2854af4344727124f02b5b97184e60b14eea39461a9)), `VENUE_SETTLER_ROLE` on all 3 vaults; verified on Arcscan; `OPERATOR_ROLE` granted to the shared Circle operator |
 | `AquaRedStoneMultiFeedAdapter` (RedStone `MultiFeedAdapterWithoutRoundsPrimaryProd`) | [`0x1a3f…3ea0`](https://testnet.arcscan.app/address/0x1a3fff65628048e4188C40dd5cf55A27Fb513ea0) ([first update tx](https://testnet.arcscan.app/tx/0x3ec11cc0830567cb25a5d9b9b1f36c8caa5d966216c552b8a3098fee75d44ecf)) | **Live**: no owner, nothing to wire |
 | `AquaRedStonePriceFeed` BRL (USD per 1 BRL, 8 dp) | [`0xac4D…1796`](https://testnet.arcscan.app/address/0xac4D10eE7FF790c2E505fBBD6A72d15D7Cbc1796) | **Live** (readable with `get_fx_prices`); default USDC/BRL feed |
 | `AquaRedStonePriceFeed` MXNe (MXN per 1 USD, 8 dp) | [`0xc7cD…07ad`](https://testnet.arcscan.app/address/0xc7cDEfF4e7534dAdeEBFc701c80d8C65b91807ad) | **Live** (readable with `get_fx_prices`); no Aqua0 MXN vault yet |
-| `ManualFxOracle` ARS/USD (1400) | [`0xc05A…E70C`](https://testnet.arcscan.app/address/0xc05A3Fb016f973C82b0232EF50336d4C0466E70C) | **Deployed, awaiting wiring** (readable with `get_fx_prices`) |
+| `ManualFxOracle` ARS/USD (1400) | [`0xc05A…E70C`](https://testnet.arcscan.app/address/0xc05A3Fb016f973C82b0232EF50336d4C0466E70C) | **Live**: prices forex USDC/ARS (readable with `get_fx_prices`) |
 | `ManualFxOracle` BRL/USD (5.50) | [`0x1AE6…5e71`](https://testnet.arcscan.app/address/0x1AE6542b9da89Ed2AEf00600710Bba75DbFF5e71) | Deployed, no longer the default (replaced by RedStone; set `FX_ORACLE_BRL_USD` to use it) |
 
 | Token | Address | Decimals |
@@ -766,23 +778,21 @@ Arc Testnet, chain id `5042002`. Full records are in [`deployments/arc-testnet.j
 
 | Endpoint | URL | Status |
 | --- | --- | --- |
-| Subgraph Studio query (always the latest version) | `https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/version/latest` | **Live**, earlier schema; both-venue indexing **Built, not yet deployed** |
+| Subgraph Studio query (always the latest version) | `https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/version/latest` | **Live**: version `ethglobal-arc-d179c59`, indexing both Aqua venues |
 | Subgraph Studio project | [`aqua-0-ethglobal-arc-testnet`](https://thegraph.com/studio/subgraph/aqua-0-ethglobal-arc-testnet) | **Live** |
 | MCP (Streamable HTTP) | `https://ethglobal-mcp.18-207-103-187.nip.io/mcp` | **Live**, earlier prepare-only build (12 tools, no signer) |
 | MCP health | `https://ethglobal-mcp.18-207-103-187.nip.io/health` | **Live** (Graph `_meta` query) |
 | Judge dashboard | `https://ethglobal-demo.18-207-103-187.nip.io/` | **Live**, read-only and prepare-only |
 
 <details>
-<summary><b>Venue wiring: done for the pegged adapter, pending for the forex adapter</b></summary>
+<summary><b>Venue wiring: done for both adapters</b></summary>
 
-The core admin sent these for the pegged AquaAdapter `0xbF72…4Ca5`, which is why the live run could settle swaps. The forex AquaAdapter `0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80` needs the same four calls, or admin roles granted to the team so it can wire them:
+An AquaAdapter settles swaps only after four calls: `VaultRegistry.setAdapterAllowed(adapter, true)`, and `grantRole(keccak256("VENUE_SETTLER_ROLE"), adapter)` on the USDC, ARGt and BRAt AssetVaults.
 
-1. `VaultRegistry.setAdapterAllowed(0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80, true)`
-2. `grantRole(keccak256("VENUE_SETTLER_ROLE"), forexAdapter)` on the USDC AssetVault
-3. The same on the ARGt AssetVault
-4. The same on the BRAt AssetVault
+- **Pegged AquaAdapter `0xbF72…4Ca5`:** sent by the core admin.
+- **Forex AquaAdapter `0x7b42…fE80`:** the core admin `0xBaA3…407C` granted the team key `0x7E61…730D` `DEFAULT_ADMIN_ROLE` on the VaultRegistry and `CAPITAL_ADMIN_ROLE` on the three vaults. The team key then sent the calls: [allowlist](https://testnet.arcscan.app/tx/0x6991957627a2440fbe17d2854af4344727124f02b5b97184e60b14eea39461a9), and `VENUE_SETTLER_ROLE` on the [USDC](https://testnet.arcscan.app/tx/0xabb80a89b83301e9b5d23542c9d18306bd10a6aeb494645ae7e6479c8210dc42), [ARGt](https://testnet.arcscan.app/tx/0xdb32e2892676637708a634a06ad53afcbab755edcc6a7d58e81d4a48a07e1431) and [BRAt](https://testnet.arcscan.app/tx/0x6994050e5bdf09fbc79512a9aee8419e9a965214daaf41c7bae64cd8ad9b6754) vaults. Recorded under `forexVenue.coreWiring` in [`deployments/arc-testnet.json`](deployments/arc-testnet.json).
 
-Until they land there are no live forex strategies on Arc, and `create_strategy` falls back to the pegged venue with an `opcodeNote`. The shared Circle operator already holds `OPERATOR_ROLE` on the forex adapter; any other signer that ships on it from the MCP needs that role too.
+To ship from the MCP, a signer needs `OPERATOR_ROLE` on the adapter, or a Circle operator that holds it. The shared Circle operator holds it on both adapters.
 
 "Verified" in the deploy scripts means the post-deploy checks passed on-chain: the router is bound to Aqua, the adapter is bound to the registry and router, and `oneStrategyPerToken` is off, so one token can back several strategies. It does **not** mean source verification on arcscan.
 
@@ -811,7 +821,7 @@ All write tools send only when the server runs with `MCP_WRITE_MODE=execute` and
 | `prepare_authorize_strategy` | ABI | `AssetVault.setCommitment` calldata |
 | `prepare_deposit` | ABI | `AssetVault.deposit` calldata, raw units |
 | `prepare_withdraw` | ABI | `AssetVault.withdraw` calldata, raw units |
-| `create_strategy` | Write | `{pair, chain?, opcode?, params?, strategist?, fundFxLeg?, dryRun?}`: class → vault legs → FX funding → commitments → EIP-712 sign → `AquaAdapter.shipStrategyWithFee`. Idempotent. Accepts loose pairs ("usdc to brl", "pesos"). `opcode` is `"forex"` (the default; while the forex adapter is not wired it falls back to pegged and explains why in `opcodeNote`) or `"pegged"`. Human params: `feeBps` (the curve's fee `ε` for forex, the flat fee for pegged), `alpha`, `beta`, `delta`, `maxFee` or `maxFeePercent`, `lambda`, `bandPercent` or `minPrice`/`maxPrice`, `maxStaleness`, `usdcAmount`, `fxAmount`; pegged takes `price` instead of the curve params. The old CryptoSwap params (`a`, `gamma`, `outFeeBps`, `feeGamma`, `flatFeeBps`) return an error. |
+| `create_strategy` | Write | `{pair, chain?, opcode?, params?, strategist?, fundFxLeg?, dryRun?}`: class → vault legs → FX funding → commitments → EIP-712 sign → `AquaAdapter.shipStrategyWithFee`. Idempotent. Accepts loose pairs ("usdc to brl", "pesos"). `opcode` is `"forex"` (the default; if the forex venue cannot ship for the signer it uses pegged and explains why in `opcodeNote`) or `"pegged"`. Human params: `feeBps` (the curve's fee `ε` for forex, the flat fee for pegged), `alpha`, `beta`, `delta`, `maxFee` or `maxFeePercent`, `lambda`, `bandPercent` or `minPrice`/`maxPrice`, `maxStaleness`, `usdcAmount`, `fxAmount`; pegged takes `price` instead of the curve params. The old CryptoSwap params (`a`, `gamma`, `outFeeBps`, `feeGamma`, `flatFeeBps`) return an error. |
 | `deposit` | Write | Deposit USDC, ARS (ARGt) or BRL (BRAt) in human units; approves when needed |
 | `quote_swap` | RPC read | Exact-in quote via the strategy's router (`AquaForexSwapVMRouter` or `AquaSwapVMRouter`; forex is tried first); shows oracle or fixed price, execution price and effective spread; sends nothing. RedStone-priced strategies are quoted at the latest signed price through an `eth_call` state override. |
 | `swap` | Write | For a RedStone-priced strategy, first pushes the latest signed price (`updateDataFeedsValuesPartial`, about 130k gas). Then quotes, enforces min out on-chain (`slippageBps` default 50, or `minAmountOut`), approves, swaps; same pricing fields |
@@ -886,14 +896,14 @@ Aqua0 and its vault contracts, including the AquaAdapter, pre-exist in the priva
 
 | Pre-existing Aqua0 work | Built during ETHGlobal |
 | --- | --- |
-| Vault contracts: VaultRegistry, VaultFactory, Composer, FillerRegistry, AssetVault with non-subtractive commitments and venue settlement | Aqua0 vault subgraph, required-events check, Arc manifest generator, Subgraph Studio deployment (**Live**); both-venue Aqua indexing (**Built, not yet deployed**) |
+| Vault contracts: VaultRegistry, VaultFactory, Composer, FillerRegistry, AssetVault with non-subtractive commitments and venue settlement | Aqua0 vault subgraph, required-events check, Arc manifest generator, Subgraph Studio deployment and both-venue Aqua indexing (**Live**) |
 | `AquaAdapter`: maker hooks, `shipStrategyWithFee`, EIP-712 strategist signatures | Graph-backed typed service, MCP server with public deployment, CLI, judge dashboard, agent skill |
 | Base mainnet Aqua0 deployment | Arc Testnet deployment of the vault core and USDC/ARGt/BRAt vaults |
 | Strategy-key derivation in the Aqua0 web app | Arc RPC proxy for Graph Node |
 | 1inch Aqua and SwapVM (official sources) | Aqua 0.1.0, AquaSwapVMRouter and AquaAdapter on Arc, wired and running live strategies (**Live**); Arc strategy scripts |
 | RedStone connector and price-feed contracts (vendored unmodified, BUSL-1.1) | `AquaRedStoneFeeds` BRL and MXNe feeds on Arc, their deploy script and the Arc-calldata replay test (**Live**); signed-payload fetch, decode and quote state override in the service |
-| | MCP SwapVM tools: `create_strategy`, `deposit`, `quote_swap`, `swap`, `get_shared_backing` (**Live** on Arc, pegged venue) |
-| | ForexCurve instruction, `AquaForexSwapVMRouter` and forex adapter on Arc (**Deployed, awaiting wiring**), ARS/USD feed; forex MCP tools `opcode:"forex"`, `get_fx_prices` and `set_fx_price`, with RedStone BRL pricing (**Fork-proven**) |
+| | MCP SwapVM tools: `create_strategy`, `deposit`, `quote_swap`, `swap`, `get_shared_backing` (**Live** on Arc, pegged and forex venues) |
+| | ForexCurve instruction, `AquaForexSwapVMRouter`, forex adapter and ARS/USD feed on Arc (**Live**); forex MCP tools `opcode:"forex"`, `get_fx_prices` and `set_fx_price`, with RedStone BRL pricing (**Live**; `set_fx_price` **Fork-proven**) |
 
 Details: [`docs/CONTINUITY.md`](docs/CONTINUITY.md).
 
@@ -911,11 +921,11 @@ Details: [`docs/CONTINUITY.md`](docs/CONTINUITY.md).
 - [x] Wire the pegged venue and run the two-strategy demo on Arc Testnet · **Live**
 - [x] Publish the Arc subgraph to Subgraph Studio · **Live**
 - [x] SKILL.md for agent clients · **Live**
-- [ ] Wire the forex adapter on Arc and run the forex flow there · **Deployed, awaiting wiring**
-- [ ] Redeploy the subgraph to Studio with both Aqua venues · **Built, not yet deployed**
+- [x] Wire the forex adapter on Arc and run the forex flow there · **Live**
+- [x] Redeploy the subgraph to Studio with both Aqua venues · **Live**
 - [ ] Redeploy the public MCP with the 19 tools · **Planned**
 - [x] Port Tomás's forex curve to SwapVM and match all 979 reference vectors within a few wei
-- [x] Signed FX prices for the forex curve: RedStone BRL and MXNe feeds on Arc, pushed on-chain before a swap (Pyth dropped: its free tier excludes FX) · **Live** (feeds), **Fork-proven** (forex swaps on them)
+- [x] Signed FX prices for the forex curve: RedStone BRL and MXNe feeds on Arc, pushed on-chain before a swap (Pyth dropped: its free tier excludes FX) · **Live** (feeds and forex swaps on them)
 - [ ] A volatility-based spread for the forex curve; a composable Graph tool · **Planned**
 - [ ] Circle Wallets or Agent Stack, Paymaster, Nanopayments; StableFX as an FX source; CCTP or Gateway onboarding · **Planned**
 - [ ] Security review of ForexCurve, then Arc Mainnet · **Planned**
