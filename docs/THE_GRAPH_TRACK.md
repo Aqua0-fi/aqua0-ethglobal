@@ -34,6 +34,18 @@ chmod 600 .secrets/graph-studio.env
 
 The deploy script intentionally deploys `packages/subgraph/subgraph.arc.yaml`. The self-hosted AWS Graph Node remains useful as a development/fallback indexer, but the hackathon provider deployment should use The Graph's native Arc Testnet support rather than the old Base-provider workaround.
 
+## Live ETHGlobal deployment
+
+The Arc Testnet subgraph is now deployed in Subgraph Studio and fully indexed. Public deployment metadata is committed in [`deployments/graph-studio-arc-testnet.json`](../deployments/graph-studio-arc-testnet.json).
+
+- Studio project: `https://thegraph.com/studio/subgraph/aqua-0-ethglobal-arc-testnet`
+- Provider query endpoint: `https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/ethglobal-d3ad9d9`
+- Network: `arc-testnet` (`5042002`)
+- Manifest: `packages/subgraph/subgraph.arc.yaml`
+- Public MCP and dashboard are configured to this Studio endpoint, not the self-hosted fallback Graph Node.
+
+The deployment was smoke-tested through the public MCP with `health`, `protocol_snapshot`, `list_opportunities`, raw `graph_query`, and `prepare_create_strategy`; the provider returned live Arc vault, strategy, and strategy-vault state with `_meta.hasIndexingErrors = false`.
+
 ## Demo proof
 
 A good judge flow is:

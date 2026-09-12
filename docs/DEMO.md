@@ -37,7 +37,7 @@ Expected tools:
 3. `list_opportunities`
 4. optionally `graph_query` for an ad-hoc follow-up
 
-For The Graph bounty submission, point `GRAPH_ENDPOINT` at the Subgraph Studio / Graph Network deployment described in `THE_GRAPH_TRACK.md`. The self-hosted AWS node is the development and Arc-Testnet indexing path, not a substitute for the bounty's provider requirement.
+For the live ETHGlobal demo, `GRAPH_ENDPOINT` already points at the Arc Testnet Subgraph Studio deployment described in `THE_GRAPH_TRACK.md`. The self-hosted AWS Graph Node remains only a development/fallback indexer; the judge-facing MCP and dashboard read from the Studio provider endpoint.
 
 ## 2. Show live Arc Shape-C deployment
 
