@@ -56,6 +56,119 @@
     "vaultCount": 3,
     "factoryHasRegistrarRole": true,
     "composerWiredToFillerRegistry": true,
-    "composerRoleGrantedToAllVaults": true
+    "composerRoleGrantedToAllVaults": true,
+    "arcscan": {
+      "explorer": "https://testnet.arcscan.app",
+      "checkedAt": "2026-09-12",
+      "contracts": {
+        "0x490d2eceD9aCF99e1db6090f820775bFa70020D4": {
+          "name": "AquaRouter",
+          "status": "verified",
+          "match": "full",
+          "url": "https://testnet.arcscan.app/address/0x490d2eceD9aCF99e1db6090f820775bFa70020D4#code"
+        },
+        "0xb20bc70b485eC1352C190d26fCaB1959d219F763": {
+          "name": "AquaSwapVMRouter",
+          "status": "verified",
+          "match": "full",
+          "url": "https://testnet.arcscan.app/address/0xb20bc70b485eC1352C190d26fCaB1959d219F763#code"
+        },
+        "0xb54AE15d2372F27718f32e9f6990330cdD3edaEB": {
+          "name": "AquaFXSwapVMRouter",
+          "status": "verified",
+          "match": "full",
+          "url": "https://testnet.arcscan.app/address/0xb54AE15d2372F27718f32e9f6990330cdD3edaEB#code"
+        },
+        "0xc05A3Fb016f973C82b0232EF50336d4C0466E70C": {
+          "name": "ManualFxOracle ARS/USD",
+          "status": "verified",
+          "match": "full",
+          "url": "https://testnet.arcscan.app/address/0xc05A3Fb016f973C82b0232EF50336d4C0466E70C#code"
+        },
+        "0x1AE6542b9da89Ed2AEf00600710Bba75DbFF5e71": {
+          "name": "ManualFxOracle BRL/USD",
+          "status": "verified",
+          "match": "full",
+          "url": "https://testnet.arcscan.app/address/0x1AE6542b9da89Ed2AEf00600710Bba75DbFF5e71#code"
+        },
+        "0x1a3fff65628048e4188C40dd5cf55A27Fb513ea0": {
+          "name": "AquaRedStoneMultiFeedAdapter",
+          "status": "verified",
+          "match": "full",
+          "url": "https://testnet.arcscan.app/address/0x1a3fff65628048e4188C40dd5cf55A27Fb513ea0#code"
+        },
+        "0xac4D10eE7FF790c2E505fBBD6A72d15D7Cbc1796": {
+          "name": "AquaRedStonePriceFeed BRL",
+          "status": "verified",
+          "match": "full",
+          "url": "https://testnet.arcscan.app/address/0xac4D10eE7FF790c2E505fBBD6A72d15D7Cbc1796#code"
+        },
+        "0xc7cDEfF4e7534dAdeEBFc701c80d8C65b91807ad": {
+          "name": "AquaRedStonePriceFeed MXNe",
+          "status": "verified",
+          "match": "full",
+          "url": "https://testnet.arcscan.app/address/0xc7cDEfF4e7534dAdeEBFc701c80d8C65b91807ad#code"
+        },
+        "0xbF72D34b804636496c3308796908152b82624Ca5": {
+          "name": "AquaAdapter (pegged venue)",
+          "status": "verified",
+          "match": "partial (compiled with cbor_metadata=false, so no metadata hash to match)",
+          "url": "https://testnet.arcscan.app/address/0xbF72D34b804636496c3308796908152b82624Ca5#code"
+        },
+        "0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5": {
+          "name": "AquaAdapter (FXSwap venue)",
+          "status": "verified",
+          "match": "partial (compiled with cbor_metadata=false, so no metadata hash to match)",
+          "url": "https://testnet.arcscan.app/address/0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5#code"
+        }
+      },
+      "vaultCore": {
+        "0x9E094b21C4263e0BE5BEffa0f8296B3fd982fFFf": {
+          "name": "VaultRegistry (ERC1967Proxy)",
+          "status": "proxy verified (partial); implementation 0x0969C6d2eF8258f0F0d9ac3863feBCA89E6a46Cd not verified",
+          "url": "https://testnet.arcscan.app/address/0x9E094b21C4263e0BE5BEffa0f8296B3fd982fFFf#code"
+        },
+        "0x879C0c90205172a8DD66afB8124994D866372FBa": {
+          "name": "VaultFactory (ERC1967Proxy)",
+          "status": "proxy verified (partial); implementation 0x55f150Fe2B3d9425Af6daCBD5B81576C545cCCdc not verified",
+          "url": "https://testnet.arcscan.app/address/0x879C0c90205172a8DD66afB8124994D866372FBa#code"
+        },
+        "0x656F28021a624aDfA0d92dDFdBb20577674aFEC7": {
+          "name": "Composer (ERC1967Proxy)",
+          "status": "proxy verified (partial); implementation 0x05c40985182c632C78e72E8385e943F5B7fA6Aed not verified",
+          "url": "https://testnet.arcscan.app/address/0x656F28021a624aDfA0d92dDFdBb20577674aFEC7#code"
+        },
+        "0xa8e08346DD7b6809C47A920c365bCC987Ea91297": {
+          "name": "FillerRegistry",
+          "status": "not verified",
+          "url": "https://testnet.arcscan.app/address/0xa8e08346DD7b6809C47A920c365bCC987Ea91297#code"
+        },
+        "0x77C04851838cb7f675e0366CEA253fEf08001C21": {
+          "name": "UpgradeableBeacon",
+          "status": "verified (partial)",
+          "url": "https://testnet.arcscan.app/address/0x77C04851838cb7f675e0366CEA253fEf08001C21#code"
+        },
+        "0xc2F0D96Ba81C67baFaD6530A6A2C5236c7b66EEd": {
+          "name": "AssetVault implementation",
+          "status": "not verified",
+          "url": "https://testnet.arcscan.app/address/0xc2F0D96Ba81C67baFaD6530A6A2C5236c7b66EEd#code"
+        },
+        "0x99c2ab427b29dB1Cc14D228d970596015d1C4429": {
+          "name": "AssetVault usdc (BeaconProxy)",
+          "status": "proxy verified (partial); implementation not verified",
+          "url": "https://testnet.arcscan.app/address/0x99c2ab427b29dB1Cc14D228d970596015d1C4429#code"
+        },
+        "0x8a3d6188C58d7877499592E179DfE3bd80c4F460": {
+          "name": "AssetVault argt (BeaconProxy)",
+          "status": "proxy verified (partial); implementation not verified",
+          "url": "https://testnet.arcscan.app/address/0x8a3d6188C58d7877499592E179DfE3bd80c4F460#code"
+        },
+        "0xEcB132648B781ec5742b582c526243Eeef900785": {
+          "name": "AssetVault brat (BeaconProxy)",
+          "status": "proxy verified (partial); implementation not verified",
+          "url": "https://testnet.arcscan.app/address/0xEcB132648B781ec5742b582c526243Eeef900785#code"
+        }
+      }
+    }
   }
 }
