@@ -1,7 +1,7 @@
 # Forex curve for the SwapVM opcode
 
 Shell v1 curve with an oracle, as DFX v2 runs it in production for EURC, CADC and XSGD against USDC.
-Reference implementation: `scripts/fxforex_math.py`. Port guide: `docs/FX_OPCODE_HANDOFF.md`.
+Reference implementation: `scripts/fxforex_math.py`. Solidity port: `packages/contracts/src/instructions/ForexCurve.sol`.
 
 ## The curve
 
@@ -55,4 +55,4 @@ Recommended: `α=0.5 β=0.15 δ=0.5 MAX=0.25 λ=0.3 ε=30 bps` + `conf`.
 
 ## Demo
 
-Arc Testnet, USDC/BRL. Pyth has no ARS feed. Details in `docs/FX_OPCODE_HANDOFF.md`.
+Arc Testnet, USDC/BRL. Pyth has no ARS feed. Details in `docs/ARC_DEPLOYMENT.md`.
