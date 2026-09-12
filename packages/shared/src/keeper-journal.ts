@@ -276,7 +276,9 @@ export function summarizeKeeperStatus(
         lastRebalance
           ? `Last rebalance: ${lastRebalance.pair ?? "a book"} at ${lastRebalance.at}${
               lastRebalance.spreadBeforeBps !== null ? `, spread ${lastRebalance.spreadBeforeBps.toFixed(2)} bps` : ""
-            }${lastRebalance.spreadAfterBps !== null ? ` -> ${lastRebalance.spreadAfterBps.toFixed(2)} bps` : ""} (${lastRebalance.txs.at(-1)?.url ?? "no tx"}). Reason: ${lastRebalance.reason}`
+            }${lastRebalance.spreadAfterBps !== null ? ` -> ${lastRebalance.spreadAfterBps.toFixed(2)} bps` : ""} (${
+              (lastRebalance.txs.find((tx) => tx.stage.startsWith("swap")) ?? lastRebalance.txs.at(-1))?.url ?? "no tx"
+            }). Reason: ${lastRebalance.reason}`
           : "No rebalance executed yet in this journal.",
         lastTick?.outcome ? `Latest decision: ${lastTick.outcome.action} (${lastTick.outcome.reason}).` : "",
         `Spent ${round6(nanoTotal)} USDC on ${bought} paid signals (${round6(nanoHour)} in the last hour) and $${round6(llmTotal)} on model calls.`
