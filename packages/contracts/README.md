@@ -30,7 +30,7 @@ MODE=fork AQUA0_CONTRACTS_DIR=../../../Aqua0/contracts DEPLOYER=0x... ./script/d
 
 # Arc Testnet (deploys, records addresses, prints the admin wiring calldata)
 MODE=arc AQUA0_CONTRACTS_DIR=... DEPLOYER=0x... \
-KEYSTORE_ACCOUNT=aqua0-deployer KEYSTORE_PASSWORD_FILE=~/.foundry/aqua0-deployer.pw \
+KEYSTORE_ACCOUNT=<keystore-name> KEYSTORE_PASSWORD_FILE=<path-to-password-file> \
 ./script/deploy-arc-aqua-venue.sh
 ```
 
@@ -44,10 +44,10 @@ settle-time debit and venue outflow limit remain the capital bound.
 ## Step 2 — two FX strategies on one USDC deposit
 
 ```bash
-MODE=fork DEPLOYER=0x... KEYSTORE_ACCOUNT=aqua0-deployer KEYSTORE_PASSWORD_FILE=... \
+MODE=fork DEPLOYER=0x... KEYSTORE_ACCOUNT=<keystore-name> KEYSTORE_PASSWORD_FILE=<path-to-password-file> \
 AQUA_ADAPTER=0x... AQUA_SWAPVM_ROUTER=0x... ./script/run-arc-fx-strategies.sh
 
-MODE=arc DEPLOYER=0x... KEYSTORE_ACCOUNT=aqua0-deployer KEYSTORE_PASSWORD_FILE=... ./script/run-arc-fx-strategies.sh
+MODE=arc DEPLOYER=0x... KEYSTORE_ACCOUNT=<keystore-name> KEYSTORE_PASSWORD_FILE=<path-to-password-file> ./script/run-arc-fx-strategies.sh
 ```
 
 Tunables (env): `USDC_DEPOSIT`, `USDC_SHIP`, `USDC_SWAP_IN`, `FEE_PPB` (1e9 = 100%), `LINEAR_WIDTH` (1e27 scale),
