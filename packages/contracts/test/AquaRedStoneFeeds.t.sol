@@ -7,7 +7,7 @@ import { IRedstoneAdapter } from "@redstone-finance/on-chain-relayer/contracts/c
 
 import { AquaRedStoneMultiFeedAdapter, AquaRedStonePriceFeed } from "../src/oracles/AquaRedStoneFeeds.sol";
 
-/// @notice RedStone feeds FXSwap reads on Arc. The signed-payload test replays the exact `updateDataFeedsValuesPartial`
+/// @notice RedStone feeds ForexCurve reads on Arc. The signed-payload test replays the exact `updateDataFeedsValuesPartial`
 ///         calldata sent on Arc Testnet (real redstone-primary-prod signatures), so signature, threshold and median
 ///         checks run here without a fork.
 contract AquaRedStoneFeedsTest is Test {

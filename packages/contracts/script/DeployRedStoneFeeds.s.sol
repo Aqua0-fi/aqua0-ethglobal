@@ -8,9 +8,9 @@ import { IRedstoneAdapter } from "@redstone-finance/on-chain-relayer/contracts/c
 import { AquaRedStoneMultiFeedAdapter, AquaRedStonePriceFeed } from "../src/oracles/AquaRedStoneFeeds.sol";
 
 /// @title DeployRedStoneFeeds
-/// @notice Deploys the RedStone price feeds FXSwap reads on Arc Testnet: one AquaRedStoneMultiFeedAdapter holding
+/// @notice Deploys the RedStone price feeds ForexCurve reads on Arc Testnet: one AquaRedStoneMultiFeedAdapter holding
 ///         RedStone `redstone-primary-prod` values, and one Chainlink-style AquaRedStonePriceFeed per feed.
-///         - `BRL`:  USD per 1 BRL, 8 decimals (FXSwap strategies on USDC/BRL set FLAG_INVERT_PRICE accordingly)
+///         - `BRL`:  USD per 1 BRL, 8 decimals (the forex curve's own orientation, so the invert flag stays off)
 ///         - `MXNe`: MXN per 1 USD, 8 decimals, priced from Etherfuse's MXNe stablecoin
 ///         Values arrive only through signed RedStone payloads pushed with `updateDataFeedsValuesPartial`; there is
 ///         no owner and nothing to configure after deployment.
