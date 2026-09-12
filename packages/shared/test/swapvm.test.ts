@@ -29,27 +29,21 @@ import {
 import {
   FOREX,
   FOREX_DEFAULTS,
-  FXSWAP,
   assertSupportedChain,
   buildForexProgram,
   buildForexStrategySpec,
-  buildFxSwapProgram,
-  buildFxSwapStrategySpec,
   buildPeggedStrategySpec,
   buildShipTypedData,
   buildTakerTraitsAndData,
   decodeForexArgs,
   forexMaxFeeLimit,
-  decodeFxSwapArgs,
   decodeSwapVMOrder,
   decodeSwapVMProgram,
   encodeForexArgs,
-  encodeFxSwapArgs,
   forexFlags,
   forexFxPerUsdcWad,
   forexOrientation,
   forexPairFields,
-  fxSwapOrientation,
   inferOpcodeFromParams,
   parseDurationSeconds,
   parseFeePpb,
@@ -61,7 +55,6 @@ import {
   strategySalt,
   type ForexArgs,
   type FxPair,
-  type FxSwapArgs,
   type StrategyParamsInput
 } from "../src/swapvm.js";
 
@@ -287,175 +280,6 @@ test("Arc deployment constants stay in sync with deployments/arc-testnet.json (F
   }
 });
 
-type ArgsVector = {
-  oracleKind: number;
-  flags: number;
-  oracle: string;
-  oracleDecimals: number;
-  maxStaleness: number;
-  minPrice: string;
-  maxPrice: string;
-  a: string;
-  gamma: string;
-  midFee: string;
-  outFee: string;
-  feeGamma: string;
-  rateLt: string;
-  rateGt: string;
-  flatFeePpb: number;
-  withFlatFee: boolean;
-  args: Hex;
-  program: Hex;
-};
-type OrientationVector = {
-  base: string;
-  baseDecimals: number;
-  quote: string;
-  quoteDecimals: number;
-  invertPrice: boolean;
-  rateLt: string;
-  rateGt: string;
-};
-const FXSWAP_VECTORS = JSON.parse(
-  readFileSync(new URL("./fixtures/fxswap-args-vectors.json", import.meta.url), "utf8")
-) as Record<string, ArgsVector> & { orientation: Record<string, OrientationVector> };
-const ARGS_VECTOR_NAMES = ["usdc-ars-defaults", "usdc-brl-flat-fee", "inverted-extremes"] as const;
-
-function vectorArgs(vector: ArgsVector): FxSwapArgs {
-  return {
-    oracleKind: vector.oracleKind,
-    flags: vector.flags,
-    oracle: vector.oracle,
-    oracleDecimals: vector.oracleDecimals,
-    maxStaleness: vector.maxStaleness,
-    minPrice: BigInt(vector.minPrice),
-    maxPrice: BigInt(vector.maxPrice),
-    a: BigInt(vector.a),
-    gamma: BigInt(vector.gamma),
-    midFee: BigInt(vector.midFee),
-    outFee: BigInt(vector.outFee),
-    feeGamma: BigInt(vector.feeGamma),
-    rateLt: BigInt(vector.rateLt),
-    rateGt: BigInt(vector.rateGt)
-  };
-}
-
-test("FXSwap args, program and orientation are byte-identical to the Solidity FXSwapArgsBuilder vectors", () => {
-  for (const name of ARGS_VECTOR_NAMES) {
-    const vector = FXSWAP_VECTORS[name];
-    assert.ok(vector, name);
-    const args = vectorArgs(vector);
-    const encoded = encodeFxSwapArgs(args);
-    assert.equal(encoded, vector.args.toLowerCase(), `${name} args`);
-    assert.equal((encoded.length - 2) / 2, FXSWAP.argsLength, `${name} length`);
-    assert.equal(
-      buildFxSwapProgram({ args, flatFeePpb: vector.withFlatFee ? vector.flatFeePpb : 0 }),
-      vector.program.toLowerCase(),
-      `${name} program`
-    );
-    assert.deepEqual(decodeFxSwapArgs(vector.args), { ...args, oracle: getAddress(vector.oracle) }, `${name} decode`);
-  }
-  for (const [name, vector] of Object.entries(FXSWAP_VECTORS.orientation)) {
-    assert.deepEqual(
-      fxSwapOrientation(vector.base, vector.baseDecimals, vector.quote, vector.quoteDecimals),
-      { invertPrice: vector.invertPrice, rateLt: BigInt(vector.rateLt), rateGt: BigInt(vector.rateGt) },
-      name
-    );
-  }
-  assert.throws(() => fxSwapOrientation(ARS_FEED, 18, ARS_FEED, 6), /FXSwapInvalidPair/);
-  assert.throws(() => fxSwapOrientation(ARS_FEED, 19, BRL_FEED, 6), /FXSwapUnsupportedDecimals/);
-});
-
-test("default FXSwap USDC/ARS strategy and human-unit params encode the Solidity vectors", () => {
-  const ars = buildFxSwapStrategySpec(FX_ADAPTER, resolvePair("USDC/ARS"), ARS_FEED, {}, { oraclePriceWad: 1_400n * WAD });
-  assert.equal(ars.program, FXSWAP_VECTORS["usdc-ars-defaults"]?.program.toLowerCase());
-  assert.equal(ars.label, "FXSwap oracle ARS");
-  assert.equal(ars.band.source, "default");
-  assert.equal(ars.fxShip, 1_400n * WAD);
-  assert.equal(ars.usdcShip, 1_000_000n);
-  assert.equal(ars.feePpb, 1_000_000);
-  assert.equal(ars.order.maker, getAddress(FX_ADAPTER));
-  assert.equal(ars.strategyId, keccak256(ars.strategyBytes));
-  // The strategy id only depends on the program: amounts and the live price do not move it.
-  assert.equal(
-    buildFxSwapStrategySpec(FX_ADAPTER, resolvePair("pesos"), ARS_FEED, { usdcAmount: "0.5" }, { oraclePriceWad: 1_470n * WAD })
-      .strategyId,
-    ars.strategyId
-  );
-
-  const brl = buildFxSwapStrategySpec(
-    FX_ADAPTER,
-    resolvePair("usdc to brl"),
-    BRL_FEED,
-    {
-      a: "250.5",
-      gamma: "0.00000001",
-      feeBps: "5 bps",
-      outFeePercent: "0.05%",
-      feeGamma: 0,
-      flatFeeBps: 30,
-      minPrice: "2.75",
-      maxPrice: 11,
-      maxStaleness: "24h",
-      oracleDecimals: 8,
-      fxAmount: "5.5"
-    }
-  );
-  assert.equal(brl.program, FXSWAP_VECTORS["usdc-brl-flat-fee"]?.program.toLowerCase());
-  assert.equal(brl.band.source, "explicit");
-  assert.equal(brl.flatFeePpb, 3_000_000);
-  assert.equal(brl.feePpb, 3_000_000 + 500_000 - 1_500);
-  assert.deepEqual(
-    decodeSwapVMProgram(brl.program).map((instruction) => instruction.name),
-    ["FlatFeeAmountIn", "FXSwap"]
-  );
-
-  const banded = buildFxSwapStrategySpec(FX_ADAPTER, resolvePair("ARS"), ARS_FEED, { bandPercent: "20%" }, {
-    oraclePriceWad: 1_470n * WAD
-  });
-  assert.equal(banded.band.minPrice, 1_176n * WAD);
-  assert.equal(banded.band.maxPrice, 1_764n * WAD);
-  assert.equal(banded.fxShip, 1_470n * WAD);
-  assert.notEqual(banded.strategyId, ars.strategyId);
-
-  assert.equal(parseDurationSeconds("7d"), 604_800);
-  assert.equal(parseDurationSeconds(3600), 3_600);
-  assert.equal(parseDurationSeconds("1.5 hours"), 5_400);
-  assert.throws(() => parseDurationSeconds("0"), /whole number of seconds/);
-  assert.throws(() => parseDurationSeconds("soon"), /duration/);
-});
-
-test("FXSwap on a USD-per-FX feed (RedStone BRL) flips the price flag and states the band in the feed's orientation", () => {
-  const pair = resolvePair("USDC/BRL");
-  const usdPerBrl = 194n * 10n ** 15n;
-  const brlPerUsd = (WAD * WAD) / usdPerBrl;
-  const redstone = buildFxSwapStrategySpec(FX_ADAPTER, pair, BRL_FEED, {}, { oraclePriceWad: usdPerBrl, feedQuote: "usdPerFx" });
-  const manual = buildFxSwapStrategySpec(FX_ADAPTER, pair, BRL_FEED, {}, { oraclePriceWad: brlPerUsd });
-  assert.equal(redstone.feedQuote, "usdPerFx");
-  assert.equal(manual.feedQuote, "fxPerUsd");
-  assert.equal(redstone.args.flags, manual.args.flags ^ FXSWAP.flagInvertPrice);
-  assert.equal(redstone.args.rateLt, manual.args.rateLt);
-  assert.equal(redstone.args.rateGt, manual.args.rateGt);
-  // Default band: half to double the 5.50 BRL per USD reference, as USD per BRL.
-  const reference = (WAD * WAD) / (55n * 10n ** 17n);
-  assert.equal(redstone.band.minPrice, reference / 2n);
-  assert.equal(redstone.band.maxPrice, reference * 2n);
-  // Same value-balanced ship whichever way the feed quotes.
-  assert.equal(redstone.fxShip, manual.fxShip);
-  assert.notEqual(redstone.strategyId, manual.strategyId);
-
-  const banded = buildFxSwapStrategySpec(FX_ADAPTER, pair, BRL_FEED, { bandPercent: 10 }, {
-    oraclePriceWad: usdPerBrl,
-    feedQuote: "usdPerFx"
-  });
-  assert.equal(banded.band.minPrice, (usdPerBrl * 9n) / 10n);
-  assert.equal(banded.band.maxPrice, (usdPerBrl * 11n) / 10n);
-  assert.throws(
-    () => buildFxSwapStrategySpec(FX_ADAPTER, pair, BRL_FEED, { minPrice: 1, maxPrice: 0.5, fxAmount: 1 }, { feedQuote: "usdPerFx" }),
-    /USD per BRL is invalid/
-  );
-});
-
 test("a per-strategist Salt keeps two users' identical strategies on separate ids", () => {
   const pair = resolvePair("USDC/BRL");
   const saltA = strategySalt(keccak256(toBytes("strategist A class")));
@@ -474,13 +298,6 @@ test("a per-strategist Salt keeps two users' identical strategies on separate id
   );
   assert.equal(a.amounts[0], plain.amounts[0]);
 
-  const fx = buildFxSwapStrategySpec(FX_ADAPTER, pair, BRL_FEED, { flatFeeBps: 30 }, { oraclePriceWad: 55n * 10n ** 17n, salt: saltA });
-  assert.deepEqual(
-    decodeSwapVMProgram(fx.program).map((instruction) => instruction.name),
-    ["Salt", "FlatFeeAmountIn", "FXSwap"]
-  );
-  assert.equal(fx.salt, saltA);
-
   const forexPlain = buildForexStrategySpec(FX_ADAPTER, pair, BRL_FEED, {}, { oraclePriceWad: 55n * 10n ** 17n });
   const forexA = buildForexStrategySpec(FX_ADAPTER, pair, BRL_FEED, {}, { oraclePriceWad: 55n * 10n ** 17n, salt: saltA });
   const forexB = buildForexStrategySpec(FX_ADAPTER, pair, BRL_FEED, {}, { oraclePriceWad: 55n * 10n ** 17n, salt: saltB });
@@ -493,42 +310,6 @@ test("a per-strategist Salt keeps two users' identical strategies on separate id
   assert.equal(forexA.salt, saltA);
   assert.equal(forexPlain.salt, undefined);
   assert.throws(() => buildSaltInstruction("0x"), /1 to 255 bytes/);
-});
-
-test("FXSwap validation mirrors FXSwapArgsBuilder.validate, and params are checked per opcode", () => {
-  const vector = FXSWAP_VECTORS["usdc-ars-defaults"];
-  assert.ok(vector);
-  const base = vectorArgs(vector);
-  assert.throws(() => encodeFxSwapArgs({ ...base, oracleKind: 1 }), /FXSwapUnsupportedOracleKind\(1\)/);
-  assert.throws(() => encodeFxSwapArgs({ ...base, flags: 2 }), /FXSwapInvalidFlags\(2\)/);
-  assert.throws(() => encodeFxSwapArgs({ ...base, oracle: `0x${"00".repeat(20)}` }), /FXSwapInvalidOracle/);
-  assert.throws(() => encodeFxSwapArgs({ ...base, maxStaleness: 0 }), /FXSwapInvalidMaxStaleness/);
-  assert.throws(() => encodeFxSwapArgs({ ...base, minPrice: 3_000n * WAD }), /FXSwapInvalidPriceBand/);
-  assert.throws(() => encodeFxSwapArgs({ ...base, gamma: 1n }), /FXSwapInvalidCurve/);
-  assert.throws(() => encodeFxSwapArgs({ ...base, a: FXSWAP.maxA + 1n }), /FXSwapInvalidCurve/);
-  assert.throws(() => encodeFxSwapArgs({ ...base, midFee: 2n * 10n ** 16n }), /FXSwapInvalidFees/);
-  assert.throws(() => encodeFxSwapArgs({ ...base, feeGamma: 0n }), /FXSwapInvalidFees/);
-  assert.throws(() => encodeFxSwapArgs({ ...base, rateGt: 0n }), /FXSwapInvalidRates/);
-  assert.throws(() => encodeFxSwapArgs({ ...base, a: 1n << 64n }), /uint64/);
-  assert.throws(() => decodeFxSwapArgs(`0x${"00".repeat(114)}`), /FXSwapInvalidArgsLength\(114\)/);
-
-  const pair = resolvePair("USDC/ARS");
-  const price = { oraclePriceWad: 1_400n * WAD };
-  assert.throws(() => buildFxSwapStrategySpec(FX_ADAPTER, pair, ARS_FEED, { price: 1400 }, price), /only apply to opcode "pegged"/);
-  assert.throws(() => buildPeggedStrategySpec(ADAPTER, pair, { beta: 0.1 }), /only apply to opcode "forex"/);
-  assert.throws(() => buildFxSwapStrategySpec(FX_ADAPTER, pair, ARS_FEED, { lambda: 0.5 }, price), /only apply to the forex curve/);
-  assert.throws(() => buildFxSwapStrategySpec(FX_ADAPTER, pair, ARS_FEED, { bandPercent: 10 }), /live oracle price/);
-  assert.throws(() => buildFxSwapStrategySpec(FX_ADAPTER, pair, ARS_FEED, {}), /fxAmount defaults/);
-  assert.throws(
-    () => buildFxSwapStrategySpec(FX_ADAPTER, pair, ARS_FEED, { bandPercent: 10, minPrice: 1000 }, price),
-    /not both/
-  );
-  assert.throws(() => buildFxSwapStrategySpec(FX_ADAPTER, pair, ARS_FEED, { feeBps: 10, feePercent: 0.1 }, price), /only one/);
-  // A mid fee above the default out fee lifts the out fee with it instead of failing validation.
-  assert.equal(
-    buildFxSwapStrategySpec(FX_ADAPTER, pair, ARS_FEED, { feeBps: 150 }, price).args.outFee,
-    15n * 10n ** 15n
-  );
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -601,14 +382,13 @@ test("forex USDC/ARS defaults encode the hand-computed 123-byte ForexCurve args,
   assert.equal(buildForexProgram({ args: decoded }), ars.program);
   assert.deepEqual(decodeSwapVMProgram(ars.program)[0], { opcode: 34, name: "ForexCurve", args: decoded });
 
-  // Opcode 34 with 115 bytes of args is still FXSwap.
-  const fxVector = FXSWAP_VECTORS["usdc-ars-defaults"];
-  assert.ok(fxVector);
+  // Opcode 34 with args of any other length is not ForexCurve.
+  const otherArgs = `0x${"00".repeat(115)}` as Hex;
   assert.deepEqual(
-    decodeSwapVMProgram(fxVector.program).map((instruction) => instruction.name),
-    ["FXSwap"]
+    decodeSwapVMProgram(`0x2273${otherArgs.slice(2)}`).map((instruction) => instruction.name),
+    ["unknown"]
   );
-  assert.throws(() => decodeForexArgs(fxVector.args), /ForexCurveInvalidArgsLength\(115\)/);
+  assert.throws(() => decodeForexArgs(otherArgs), /ForexCurveInvalidArgsLength\(115\)/);
 });
 
 test("forex flags: p is USDC per FX unit, inverted only for FX-per-USD feeds; FLAG_QUOTE_IS_GT follows address order", () => {
@@ -718,6 +498,11 @@ test("forex params: curve params as decimals or percent, epsilon via the fee fie
   assert.equal(explicit.band.source, "explicit");
   assert.equal(explicit.args.minPrice, 9n * 10n ** 16n);
   assert.equal(explicit.args.maxStaleness, 3_600);
+  assert.equal(parseDurationSeconds("7d"), 604_800);
+  assert.equal(parseDurationSeconds(3600), 3_600);
+  assert.equal(parseDurationSeconds("1.5 hours"), 5_400);
+  assert.throws(() => parseDurationSeconds("0"), /whole number of seconds/);
+  assert.throws(() => parseDurationSeconds("soon"), /duration/);
   assert.equal(explicit.args.oracleDecimals, 8);
   assert.equal(explicit.fxShip, 55n * 10n ** 17n);
   assert.equal(explicit.label, "tight BRL");
@@ -734,6 +519,7 @@ test("forex params: curve params as decimals or percent, epsilon via the fee fie
     /outFeeBps, feeGamma belong to the CryptoSwap-style FXSwap curve/
   );
   assert.throws(() => build({ price: 1400 }), /only apply to opcode "pegged"/);
+  assert.throws(() => buildPeggedStrategySpec(ADAPTER, pair, { beta: 0.1 }), /only apply to opcode "forex"/);
   assert.throws(() => build({ maxFee: 0.05, maxFeePercent: 5 }), /only one of maxFee or maxFeePercent/);
   assert.throws(() => build({ feeBps: 10, feePercent: 0.1 }), /only one/);
   assert.throws(() => build({ beta: 0.6 }), /ForexCurveInvalidCurve\(.*\): beta \(flat band\) must be below alpha/);

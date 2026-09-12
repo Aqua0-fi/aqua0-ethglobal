@@ -89,11 +89,8 @@ on the USDC, ARGt and BRAt vaults, so forex strategies trade live on Arc.
 
 Tests: `test/ForexCurve.t.sol`, `test/ForexCurveInvariants.t.sol`, `test/ForexCurveVectors.t.sol` (all 979 reference
 vectors in `test/fixtures/fxforex-vectors-wad.json`, matched within a few wei of a 100-digit re-solve) and
-`test/fork/ForexCurveArcFork.t.sol` (skipped with `FOREX_SKIP_FORK=true` or `FXSWAP_SKIP_FORK=true`). 83 Foundry
-tests pass.
-
-The FXSwap instruction, `AquaFXSwapVMRouter` and `script/deploy-arc-fx-venue.sh` are still in the tree. That venue is
-superseded by the forex venue and was never wired.
+`test/fork/ForexCurveArcFork.t.sol` (skipped with `FOREX_SKIP_FORK=true` or `FXSWAP_SKIP_FORK=true`). 41 Foundry
+tests pass without the fork test.
 
 ## RedStone FX feeds
 
