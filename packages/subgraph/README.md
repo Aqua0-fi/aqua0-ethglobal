@@ -32,11 +32,12 @@ PUBLIC_ARC_VAULT_FACTORY=0x879C0c90205172a8DD66afB8124994D866372FBa \
 PUBLIC_ARC_VAULT_REGISTRY=0x9E094b21C4263e0BE5BEffa0f8296B3fd982fFFf \
 PUBLIC_ARC_COMPOSER=0x656F28021a624aDfA0d92dDFdBb20577674aFEC7 \
 PUBLIC_ARC_FILLER_REGISTRY=0xa8e08346DD7b6809C47A920c365bCC987Ea91297 \
+PUBLIC_ARC_AQUA_ADAPTER=0xbF72D34b804636496c3308796908152b82624Ca5 \
 PUBLIC_ARC_START_BLOCK=60613306 \
 pnpm --filter @aqua0/subgraph generate:arc
 ```
 
-`PUBLIC_ARC_AQUA_ADAPTER` and `PUBLIC_ARC_V4_ADAPTER` are optional and are omitted until real adapter deployments exist. The generated manifest uses Graph network `arc-testnet`; Arc chain id is `5042002`.
+`PUBLIC_ARC_AQUA_ADAPTER` is now the live Arc Aqua + SwapVM venue adapter. `PUBLIC_ARC_V4_ADAPTER` remains optional and is omitted until a real Arc V4 adapter deployment exists. The generated manifest uses Graph network `arc-testnet`; Arc chain id is `5042002`.
 
 Arc's public RPC limits large topic-OR `eth_getLogs` requests. The AWS Graph Node therefore uses the compatibility shim in `../../infra/arc-rpc-proxy`, which splits only oversized log-filter topic lists and otherwise passes JSON-RPC through unchanged.
 

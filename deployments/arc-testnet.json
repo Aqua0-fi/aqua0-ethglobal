@@ -13,7 +13,7 @@
     "fillerRegistry": "0xa8e08346DD7b6809C47A920c365bCC987Ea91297",
     "upgradeableBeacon": "0x77C04851838cb7f675e0366CEA253fEf08001C21",
     "assetVaultImplementation": "0xc2F0D96Ba81C67baFaD6530A6A2C5236c7b66EEd",
-    "aquaAdapter": null,
+    "aquaAdapter": "0xbF72D34b804636496c3308796908152b82624Ca5",
     "v4Adapter": null
   },
   "assets": {

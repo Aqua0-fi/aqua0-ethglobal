@@ -101,6 +101,39 @@ dataSources:
         - event: FillerParticipationSet(indexed address,bool,uint256)
           handler: handleFillerParticipationSet
       file: ./src/filler-registry.ts
+  - kind: ethereum/contract
+    name: AquaAdapter
+    network: arc-testnet
+    source:
+      address: "0xbF72D34b804636496c3308796908152b82624Ca5"
+      abi: AquaAdapter
+      startBlock: 60613306
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - AquaStrategyShippedEvent
+        - AquaStrategyDockedEvent
+        - AquaStrategyReshippedEvent
+        - AquaStrategyReconciledEvent
+      abis:
+        - name: AquaAdapter
+          file: ./abis/AquaAdapter.json
+      eventHandlers:
+        - event: AdapterStrategyShipped(indexed address,indexed bytes32,address[],uint256[])
+          handler: handleAdapterStrategyShipped
+        - event: AdapterStrategyDocked(indexed address,indexed bytes32,bytes32)
+          handler: handleAdapterStrategyDocked
+        - event: AdapterStrategyEmergencyDocked(indexed address,indexed bytes32,bytes32)
+          handler: handleAdapterStrategyEmergencyDocked
+        - event: AdapterStrategyReshipped(indexed address,indexed bytes32,bytes32,bytes32,uint256[])
+          handler: handleAdapterStrategyReshipped
+        - event: AdapterStrategyReconciled(indexed address,indexed bytes32,address[],uint256[],uint256[])
+          handler: handleAdapterStrategyReconciled
+        - event: AdapterStrategyForceCleared(indexed address,indexed bytes32,bytes32,bool)
+          handler: handleAdapterStrategyForceCleared
+      file: ./src/aqua-adapter.ts
 templates:
   - kind: ethereum/contract
     name: AssetVault
