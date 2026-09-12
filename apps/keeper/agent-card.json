@@ -1,0 +1,13 @@
+{
+  "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+  "name": "Aqua0 FX book keeper",
+  "description": "Autonomous keeper for Aqua0 forex strategies on Arc Testnet. It buys oracle, book and vault signals with Circle Nanopayments, decides with a rules or model policy inside hard limits enforced in code, and rebalances tilted USDC/FX books from its own Circle wallet. It recommends docking when an oracle is stale; it cannot dock.",
+  "agent_type": "market-maintenance",
+  "capabilities": ["buy_signals_nanopayments", "rebalance_forex_book", "recommend_dock", "top_up_balances"],
+  "strategies": [
+    { "pair": "USDC/ARS", "strategyId": "0xc39dd71deb079e2cd3b725f31562a74cea0e5266244170df4974739402f58597" },
+    { "pair": "USDC/BRL", "strategyId": "0x87e021d4a0a607f009dbb4689b593ce816c6d13fde885282ce385888290f2aa1" }
+  ],
+  "source": "https://github.com/Aqua0-fi/aqua0-ethglobal/tree/main/apps/keeper",
+  "version": "0.1.0"
+}
