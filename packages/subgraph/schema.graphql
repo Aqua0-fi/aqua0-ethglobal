@@ -581,6 +581,178 @@ type AquaStrategyForceClearedEvent @entity(immutable: true) {
   dockAttempted: Boolean!
 }
 
+"""
+An Aqua0 venue adapter that ships vault-backed strategies into 1inch Aqua. Id is the adapter address.
+"""
+type AquaVenueAdapter @entity(immutable: false) {
+  id: ID!
+  address: Bytes!
+  network: String!
+  "Venue label from the manifest data source context: pegged | fxswap (null where no context is set, e.g. Base)."
+  venue: String
+  aqua: Bytes
+  swapVMRouter: Bytes
+  oneStrategyPerToken: Boolean
+  strategyCount: BigInt!
+  fillCount: BigInt!
+  firstSeenBlock: BigInt!
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: BigInt!
+  strategies: [AquaStrategy!]! @derivedFrom(field: "adapter")
+  orders: [AquaOrder!]! @derivedFrom(field: "adapter")
+  fills: [AquaFill!]! @derivedFrom(field: "adapter")
+}
+
+"""
+A strategy an Aqua0 adapter shipped into Aqua. Id is `<adapter>-<strategyId>`. `strategyId` is keccak256 of the
+shipped order bytes and equals the first Aqua order hash; a reship moves the live hash to a new `AquaOrder`.
+`classId` / `strategy` link the AssetVault strategy class whose committed LPs fund it.
+"""
+type AquaStrategy @entity(immutable: false) {
+  id: ID!
+  adapter: AquaVenueAdapter!
+  strategyId: Bytes!
+  "pegged | fxswap, copied from the adapter."
+  venue: String
+  classId: BigInt
+  strategy: Strategy
+  network: String!
+  "LIVE | DOCKED | EMERGENCY_DOCKED | FORCE_CLEARED"
+  status: String!
+  tokens: [Bytes!]!
+  shippedAmounts: [BigInt!]!
+  feePpb: BigInt
+  currentOrderHash: Bytes
+  currentOrder: AquaOrder
+  shipCount: BigInt!
+  reshipCount: BigInt!
+  fillCount: BigInt!
+  shippedAtBlock: BigInt!
+  shippedAtTimestamp: BigInt!
+  shippedAtTxHash: Bytes!
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: BigInt!
+  orders: [AquaOrder!]! @derivedFrom(field: "aquaStrategy")
+  fills: [AquaFill!]! @derivedFrom(field: "aquaStrategy")
+}
+
+"""
+One Aqua order hash an adapter strategy has been live under. Id is `<maker>-<orderHash>`.
+"""
+type AquaOrder @entity(immutable: false) {
+  id: ID!
+  orderHash: Bytes!
+  maker: Bytes!
+  adapter: AquaVenueAdapter!
+  aquaStrategy: AquaStrategy!
+  network: String!
+  active: Boolean!
+  fillCount: BigInt!
+  shippedAtBlock: BigInt!
+  shippedAtTimestamp: BigInt!
+  shippedAtTxHash: Bytes!
+  retiredAtBlock: BigInt
+  retiredAtTimestamp: BigInt
+  fills: [AquaFill!]! @derivedFrom(field: "order")
+}
+
+"""
+A swap filled through the indexed AquaSwapVMRouter (`Swapped`). When the maker is an indexed Aqua0 adapter and the
+order hash maps to one of its shipped strategies, the fill links the strategy, its vault class, the vault
+settlements the maker hooks booked during the swap, and the per-LP principal sales (out leg, `tokenOut` units)
+and fee credits (in leg, `tokenIn` units) that served it.
+"""
+type AquaFill @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  router: Bytes!
+  "pegged | fxswap, from the router data source context (falls back to the maker adapter's venue)."
+  venue: String
+  orderHash: Bytes!
+  maker: Bytes!
+  taker: Bytes!
+  tokenIn: Bytes!
+  tokenOut: Bytes!
+  amountIn: BigInt!
+  amountOut: BigInt!
+  servedByAqua0: Boolean!
+  adapter: AquaVenueAdapter
+  order: AquaOrder
+  aquaStrategy: AquaStrategy
+  aquaStrategyId: Bytes
+  strategyClassId: BigInt
+  strategy: Strategy
+  vaultIn: Bytes
+  vaultOut: Bytes
+  venueSettlements: [ClassVenueSettledEvent!]!
+  principalSales: [StrategyPrincipalSoldEvent!]!
+  feeAccruals: [StrategyFeeAccruedEvent!]!
+  lps: [Bytes!]!
+  principalSold: BigInt!
+  feesCredited: BigInt!
+}
+
+"""
+Per-LP count of Aqua fills their committed capital served. Id is the LP address.
+"""
+type AquaLPFillStats @entity(immutable: false) {
+  id: ID!
+  lp: Bytes!
+  network: String!
+  fillCount: BigInt!
+  firstFillBlock: BigInt!
+  lastFillBlock: BigInt!
+  lastFillTimestamp: BigInt!
+}
+
+"""
+Per-(vault, LP) Aqua fill totals in that vault's asset units. Id is `<vault>-<lp>`.
+"""
+type AquaLPVaultFillStats @entity(immutable: false) {
+  id: ID!
+  vault: Bytes!
+  lp: Bytes!
+  network: String!
+  fillCount: BigInt!
+  principalSold: BigInt!
+  feesCredited: BigInt!
+  lastFillBlock: BigInt!
+  lastFillTimestamp: BigInt!
+}
+
+"""
+Internal scratch row threading vault settlement logs (emitted inside the maker hooks) onto the router `Swapped`
+log that follows them in the same transaction. Not meant to be queried.
+"""
+type AquaSwapSettlementBuffer @entity(immutable: false) {
+  id: ID!
+  txHash: Bytes!
+  pendingPrincipalSales: [String!]!
+  pendingFeeAccruals: [String!]!
+  venueSettlements: [String!]!
+  principalSales: [String!]!
+  "Adapter address each promoted principal sale belongs to (parallel to principalSales)."
+  principalSaleVenues: [String!]!
+  feeAccruals: [String!]!
+  "Adapter address each promoted fee accrual belongs to (parallel to feeAccruals)."
+  feeAccrualVenues: [String!]!
+}
+
+type AquaAdapterOneStrategyPerTokenSetEvent @entity(immutable: true) {
+  id: ID!
+  txHash: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  network: String!
+  adapter: Bytes!
+  enabled: Boolean!
+}
+
 type ComposerExecutedEvent @entity(immutable: true) {
   id: ID!
   txHash: Bytes!

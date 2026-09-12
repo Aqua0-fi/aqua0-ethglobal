@@ -12,7 +12,9 @@
     "lint": "node scripts/assert-required-events.mjs && graph build subgraph.base.yaml",
     "test:required-events": "node scripts/assert-required-events.mjs",
     "typecheck": "node scripts/assert-required-events.mjs && graph codegen subgraph.base.yaml && graph build subgraph.base.yaml",
-    "generate:arc": "node scripts/generate-arc-manifest.mjs"
+    "generate:arc": "node scripts/generate-arc-manifest.mjs",
+    "codegen:arc": "graph codegen subgraph.arc.yaml",
+    "graph:build:arc": "graph build subgraph.arc.yaml"
   },
   "dependencies": {
     "@graphprotocol/graph-ts": "^0.38.2"

@@ -162,7 +162,7 @@ function makePublicConfig(input: {
 
   return {
     app: {
-      title: "Aqua0 Shape-C / Arc Testnet",
+      title: "Aqua0 Vaults / Arc Testnet",
       subtitle: "Judge dashboard for live indexed vaults, shared backing, and prepare-only strategy setup."
     },
     graph: {

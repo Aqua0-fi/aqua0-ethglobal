@@ -8,10 +8,17 @@ import {
   http,
   keccak256,
   toBytes,
-  type Hex
+  type Chain,
+  type Hex,
+  type HttpTransport,
+  type PublicClient,
+  type WalletClient
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
+import { assetVaultAbi, vaultRegistryAbi } from "./abis.js";
+
+export type ReadClient = PublicClient<HttpTransport, Chain>;
 import { ARC_TESTNET } from "./constants.js";
 import { normalizeAddress, normalizeBytes32 } from "./graph.js";
 
@@ -23,6 +30,18 @@ export type WriteConfig = {
   vaultRegistryAddress?: string;
   writePrivateKey?: string;
   mcpWriteMode?: WriteMode;
+  /** Aqua0 AquaAdapter (SwapVM venue). Defaults to the Arc Testnet deployment when WRITE_CHAIN_ID is Arc. */
+  aquaAdapterAddress?: string;
+  /** 1inch AquaSwapVMRouter. Defaults to the Arc Testnet deployment when WRITE_CHAIN_ID is Arc. */
+  aquaSwapVMRouterAddress?: string;
+  /** AquaFXSwapVMRouter (FXSwap venue). Defaults to the Arc Testnet deployment when WRITE_CHAIN_ID is Arc. */
+  fxswapRouterAddress?: string;
+  /** AquaAdapter bound to the FXSwap router (a second adapter: each binds one router immutably). */
+  fxswapAquaAdapterAddress?: string;
+  /** ARS-per-USD feed (ManualFxOracle / Chainlink-style) used by USDC/ARS FXSwap strategies. */
+  fxOracleArsUsdAddress?: string;
+  /** BRL-per-USD feed used by USDC/BRL FXSwap strategies. */
+  fxOracleBrlUsdAddress?: string;
 };
 
 export type PreparedTransaction = {
@@ -74,74 +93,6 @@ export type ExecutionResult = {
     status: "success" | "reverted";
   }>;
 };
-
-const vaultRegistryAbi = [
-  {
-    type: "function",
-    name: "classForStrategy",
-    inputs: [{ name: "", type: "bytes32" }],
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view"
-  },
-  {
-    type: "function",
-    name: "registerStrategyClass",
-    inputs: [{ name: "strategyKey", type: "bytes32" }],
-    outputs: [{ name: "classId", type: "uint256" }],
-    stateMutability: "nonpayable"
-  }
-] as const;
-
-const assetVaultAbi = [
-  {
-    type: "function",
-    name: "registerStrategy",
-    inputs: [
-      { name: "strategyId", type: "uint256" },
-      { name: "strategist", type: "address" }
-    ],
-    outputs: [],
-    stateMutability: "nonpayable"
-  },
-  {
-    type: "function",
-    name: "classStrategist",
-    inputs: [{ name: "strategyId", type: "uint256" }],
-    outputs: [{ name: "strategist", type: "address" }],
-    stateMutability: "view"
-  },
-  {
-    type: "function",
-    name: "setCommitment",
-    inputs: [
-      { name: "strategyId", type: "uint256" },
-      { name: "backing", type: "bool" }
-    ],
-    outputs: [],
-    stateMutability: "nonpayable"
-  },
-  {
-    type: "function",
-    name: "deposit",
-    inputs: [
-      { name: "assets", type: "uint256" },
-      { name: "receiver", type: "address" }
-    ],
-    outputs: [{ name: "received", type: "uint256" }],
-    stateMutability: "nonpayable"
-  },
-  {
-    type: "function",
-    name: "withdraw",
-    inputs: [
-      { name: "assets", type: "uint256" },
-      { name: "receiver", type: "address" },
-      { name: "owner", type: "address" }
-    ],
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "nonpayable"
-  }
-] as const;
 
 export function deriveStrategyKey(input: {
   strategist: string;
@@ -492,7 +443,7 @@ async function readClassForStrategy(config: WriteConfig, strategyKey: Hex): Prom
   });
 }
 
-function createReadClient(config: WriteConfig) {
+export function createReadClient(config: WriteConfig): ReadClient {
   const chainId = requireWriteChainId(config);
   const rpcUrl = requireWriteRpcUrl(config);
   return createPublicClient({
@@ -501,7 +452,9 @@ function createReadClient(config: WriteConfig) {
   });
 }
 
-async function createExecutionClients(config: WriteConfig) {
+export async function createExecutionClients(
+  config: WriteConfig
+): Promise<{ publicClient: ReadClient; wallet: WalletClient<HttpTransport, Chain> }> {
   const chainId = requireWriteChainId(config);
   const rpcUrl = requireWriteRpcUrl(config);
   const chain = makeChain(chainId, rpcUrl);
@@ -531,7 +484,7 @@ function makeChain(chainId: number, rpcUrl: string) {
   });
 }
 
-function requireWriteChainId(config: WriteConfig): number {
+export function requireWriteChainId(config: WriteConfig): number {
   if (!config.writeChainId || !Number.isSafeInteger(config.writeChainId) || config.writeChainId <= 0) {
     throw new Error("WRITE_CHAIN_ID is required");
   }
@@ -560,7 +513,7 @@ function parseUint(value: string, field: string): bigint {
   return BigInt(trimmed);
 }
 
-function normalizePrivateKey(value: string | undefined): Hex {
+export function normalizePrivateKey(value: string | undefined): Hex {
   if (!value || !/^0x[0-9a-fA-F]{64}$/.test(value)) {
     throw new Error("WRITE_PRIVATE_KEY must be a 32-byte hex string");
   }
@@ -579,7 +532,7 @@ function isLocalRpcUrl(value: string): boolean {
   }
 }
 
-function assertReceiptSuccess(
+export function assertReceiptSuccess(
   receipt: { status: "success" | "reverted" },
   stage: string,
   hash: Hex

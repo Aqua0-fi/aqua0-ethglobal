@@ -1,165 +1,846 @@
-# Aqua0 ETHGlobal Continuity
+# Aqua0: one USDC deposit, many FX strategies, from your terminal
 
-Agentic terminal layer for Aqua0 Shape-C on Arc Testnet. The Graph is the load-bearing analytics source: MCP tools and CLI analytics read indexed subgraph entities only and do not silently fall back to RPC.
+[![Arc Testnet](https://img.shields.io/badge/Arc-Testnet%205042002-1f6feb)](https://testnet.arcscan.app/address/0x9E094b21C4263e0BE5BEffa0f8296B3fd982fFFf)
+[![1inch Aqua + SwapVM](https://img.shields.io/badge/1inch-Aqua%20%2B%20SwapVM-1b314f)](#1inch-build-an-aqua-app-and-continuity)
+[![The Graph](https://img.shields.io/badge/The%20Graph-Subgraph%20Studio-6747ed)](#the-graph-best-ai-tooling-or-ai-use-case)
+[![MCP](https://img.shields.io/badge/MCP-19%20tools-111111)](#mcp-tool-reference)
+[![Agent Skill](https://img.shields.io/badge/Agent%20Skill-aqua0-444444)](skills/aqua0/SKILL.md)
+[![ETHGlobal](https://img.shields.io/badge/ETHGlobal-Continuity%20track-555555)](#continuity-pre-existing-vs-built-at-ethglobal)
 
-## Setup
+**Aqua0 is shared liquidity for 1inch SwapVM.** An LP deposits once into a per-asset `AssetVault`, and that single principal backs many SwapVM strategies at the same time. Nothing is split between them. Tokens stay in the vault until a swap pulls them just in time.
+
+For ETHGlobal we put Aqua0 on **Arc** and made it agent-native. From Claude Code, Codex or any MCP client, an agent reads state from **The Graph** and ships USDC ↔ Argentine peso and USDC ↔ Brazilian real strategies through **1inch Aqua**, all backed by the same USDC.
+
+<!-- TODO: add demo video link -->
+
+> [!IMPORTANT]
+> **What's live right now (2026-09-12)**
+> - **Live:** the two-strategy shared-backing flow on Arc Testnet (pegged venue). One 2 USDC deposit backs a USDC/ARS and a USDC/BRL SwapVM strategy shipped into 1inch Aqua, and both filled on-chain ([see it on-chain](#see-it-on-chain)). Also live: the Aqua0 vault core, the Arc subgraph on Subgraph Studio, the public MCP endpoint (earlier 12-tool prepare-only build) and the judge dashboard.
+> - **Deployed, awaiting wiring:** the FXSwap venue on Arc (`AquaFXSwapVMRouter`, an FXSwap AquaAdapter, ARS/USD and BRL/USD feeds). The core admin still has to allowlist the FX adapter and grant it `VENUE_SETTLER_ROLE`.
+> - **Fork-proven:** the FXSwap flow through the MCP service path. One 2 USDC deposit backs FXSwap USDC/ARS and USDC/BRL, swaps fill at the oracle price, and a +5% feed move reprices the quote.
+> - **Built, not yet deployed:** subgraph indexing of both Aqua venues (the Studio redeploy is pending). The 19-tool MCP runs locally over stdio; the hosted redeploy is **Planned**.
+> - **In progress:** FXSwap validation against Tomás's reference formulas and vectors.
+
+<kbd>[Demo](#the-demo-in-four-steps)</kbd> <kbd>[On-chain](#see-it-on-chain)</kbd> <kbd>[How it works](#how-it-works)</kbd> <kbd>[FXSwap](#fxswap-in-brief)</kbd> <kbd>[Prize tracks](#prize-tracks)</kbd> <kbd>[Try it](#try-it)</kbd> <kbd>[Deployments](#deployments)</kbd> <kbd>[Reference](#reference)</kbd>
+
+## The demo in four steps
+
+Everything happens in an agentic terminal. The figures below come from the live Arc Testnet run on 2026-09-12. The demo wallet `0xAFF7…b02c` drove it through the `aqua0` CLI in execute mode, which calls the same service functions as the MCP tools.
+
+```text
+you   › What does Aqua0 hold on Arc, and what is my USDC backing?
+agent › health · protocol_snapshot · get_balance · get_shared_backing
+        Three vaults: USDC, ARGt, BRAt. Your USDC principal is 2 USDC, not committed to any strategy yet.
+
+you   › Create a USDC to Argentine peso strategy, half a USDC.
+agent › create_strategy {"pair":"USDC/ARS","params":{"usdcAmount":"0.5"}}
+        opcodeNote: the FXSwap adapter is not wired yet, so this uses the pegged venue.
+        class → vault legs → fund ARGt leg → commit → EIP-712 sign → AquaAdapter.shipStrategyWithFee
+        USDC/ARS is live in Aqua (class 2), backed by your 2 USDC.
+
+you   › Now the same USDC with Brazilian reais.
+agent › create_strategy {"pair":"usdc to brl","params":{"usdcAmount":"0.5"}}
+        USDC/BRL is live in Aqua (class 3), backed by the same 2 USDC.
+
+you   › Swap 0.1 USDC on each, then query my backing again.
+agent › quote_swap · swap · get_shared_backing
+        0.1 USDC → 138.912644 ARGt   ·   0.1 USDC → 0.545728 BRAt
+        Principal 2 USDC, counted once. USDC/ARS: 2 USDC committed. USDC/BRL: 2 USDC committed. Nothing was split.
+```
+
+*"One capital, Argentine pesos and Brazilian reais, both live, all from a terminal."*
+
+| # | Step | MCP tools | Status |
+| --- | --- | --- | --- |
+| 1 | Query state | `health`, `protocol_snapshot`, `get_balance`, `get_strategies` (The Graph); `get_shared_backing` (on-chain reads) | **Live** |
+| 2 | Create USDC ↔ ARS strategy | `deposit`, `create_strategy` | **Live** on Arc (pegged venue) |
+| 3 | Create USDC ↔ BRL on the same USDC | `create_strategy` | **Live** on Arc (pegged venue) |
+| 4 | Query again, one swap each | `quote_swap`, `swap`, `get_shared_backing` | **Live** on Arc (pegged venue) |
+| + | FXSwap: move the FX feed and re-quote | `get_fx_prices`, `set_fx_price`, `quote_swap` | **Fork-proven**; the Arc FX venue is **Deployed, awaiting wiring** |
+
+Repeatable proofs: [`scripts/test-arc-fork-strategies.sh`](scripts/test-arc-fork-strategies.sh) (pegged) and [`scripts/test-arc-fork-fxswap.sh`](scripts/test-arc-fork-fxswap.sh) (FXSwap) fork Arc, run these steps through the CLI and assert the fills, idempotency and shared backing.
+
+### See it on-chain
+
+Arc Testnet transactions from the live run. Every hash is in [`deployments/arc-testnet-strategies.json`](deployments/arc-testnet-strategies.json) under `liveVenueRun`.
+
+- [Deposit 2 USDC into the USDC AssetVault](https://testnet.arcscan.app/tx/0x088fb34b8147f936b7c10ac8066de4a59773f7d393f33eda64a4defeb8f6c6bd)
+- [Ship the USDC/ARS strategy (class 2) through the AquaAdapter](https://testnet.arcscan.app/tx/0x97d5fea443f9090f6b9dd2432036bdfbc2ed58d636e8ac802742d2e499968471)
+- [Ship the USDC/BRL strategy (class 3) on the same USDC](https://testnet.arcscan.app/tx/0x7571eea087df535b0a4391a48d510abeb9ed0084cc3816946040c05214aa2293)
+- [Swap 0.1 USDC → 138.912644 ARGt](https://testnet.arcscan.app/tx/0x24d95d61c83e3dfdf5ffa8530350635eb9c9b5f71b51835f31b98eb61c5102fb)
+- [Swap 0.1 USDC → 0.545728 BRAt](https://testnet.arcscan.app/tx/0x811e5fd474e554e7a3330f09f34edb09f40ca50475028be89c4de3e6cfd32539)
+
+> [!NOTE]
+> **Seeing 2 USDC twice is correct.** Aqua0 commitments are *non-subtractive*: each committed class counts the LP's full principal as backing. Each strategy shipped 0.5 USDC of virtual balance into Aqua, and the same 2 USDC stands behind both. Real outflow is still bounded when a swap settles, by the class's own idle debit and the vault's outflow limit. A vault can never pay out more than it holds.
+
+> [!TIP]
+> **Pegged live today, FXSwap once wired.** `create_strategy` defaults to `opcode:"fxswap"` as soon as the FXSwap adapter is wired into the vault core. Until then it falls back to `opcode:"pegged"`, a `[FlatFeeAmountIn 30 bps][PeggedSwap]` program pinned at a fixed FX price, and says why in `opcodeNote`. The live Arc run used pegged. Apart from the program and router, the flow is identical.
+
+## How it works
+
+```mermaid
+flowchart TB
+  subgraph CLIENTS["Agent clients"]
+    CC["Claude Code"]
+    CDX["Codex"]
+    ANYC["Any MCP client"]
+    CLI["aqua0 CLI"]
+    WEB["Judge dashboard"]
+  end
+
+  subgraph LAYER["Aqua0 agent layer - built at ETHGlobal"]
+    MCP["apps/mcp: MCP server, stdio or Streamable HTTP"]
+    DAPI["apps/dashboard: Node HTTP API"]
+    SVC["packages/shared: typed Aqua0 service"]
+  end
+
+  subgraph READM["Read model - The Graph"]
+    SG["packages/subgraph: Aqua0 vault subgraph"]
+    STU["Subgraph Studio - live"]
+    GN["Self-hosted Graph Node - dev fallback"]
+    PX["infra/arc-rpc-proxy"]
+  end
+
+  subgraph ARC["Arc Testnet - chain 5042002"]
+    subgraph CORE["Aqua0 vault core - live"]
+      REG["VaultRegistry"]
+      VU["USDC AssetVault"]
+      VA["ARGt AssetVault"]
+      VB["BRAt AssetVault"]
+    end
+    subgraph VENUE["Pegged venue - live"]
+      AD["Aqua0 AquaAdapter"]
+      AQ["1inch Aqua 0.1.0"]
+      RT["AquaSwapVMRouter - swap-vm v1.0.2"]
+    end
+    subgraph FXVENUE["FXSwap venue - deployed, awaiting wiring"]
+      FXAD["FXSwap AquaAdapter"]
+      FXR["AquaFXSwapVMRouter - FXSwap opcode 34"]
+      FEEDS["ManualFxOracle feeds: ARS/USD and BRL/USD"]
+    end
+  end
+
+  TAKER["Taker or resolver"]
+
+  CC --> MCP
+  CDX --> MCP
+  ANYC --> MCP
+  CLI --> SVC
+  WEB --> DAPI
+  MCP --> SVC
+  DAPI --> SVC
+
+  SVC -->|"analytics: GraphQL"| STU
+  SVC -.->|"fallback"| GN
+  SG --> STU
+  SG -.-> GN
+  STU -->|"core events - live"| CORE
+  STU -.->|"venue entities - built, not yet deployed"| VENUE
+  GN -.->|"eth_getLogs"| PX
+  PX -.-> CORE
+  SVC -->|"create_strategy, deposit, swap - live"| VENUE
+  SVC -.->|"fxswap strategies, set_fx_price - fork-proven"| FXVENUE
+
+  REG --- VU
+  REG --- VA
+  REG --- VB
+  AD -->|"ship and dock"| AQ
+  TAKER -->|"swap"| RT
+  TAKER -.->|"swap with FXSwap"| FXR
+  RT -->|"pull and push balances"| AQ
+  RT -->|"maker hooks"| AD
+  FXR -.->|"reads price"| FEEDS
+  FXR -.-> AQ
+  FXR -.->|"maker hooks"| FXAD
+  FXAD -.->|"ship and dock"| AQ
+  AD -->|"settleVenueOut and settleVenueCredit"| VU
+  AD --> VA
+  AD --> VB
+  FXAD -.->|"same vaults once wired"| CORE
+```
+
+`packages/shared` is the one typed service behind the MCP, CLI and dashboard. The Graph is the read model for analytics. The Aqua0 vaults hold capital, and each AquaAdapter is the Aqua *maker* for the strategies on its router. Both venues share the same vaults and strategy classes. More: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+### Shared backing
+
+```mermaid
+flowchart LR
+  LP["LP deposits 2 USDC once"] --> UV["USDC AssetVault: principal 2 USDC"]
+  UV -->|"setCommitment true"| C2["Class 2 USDC/ARGt: committedBacking 2 USDC"]
+  UV -->|"setCommitment true"| C3["Class 3 USDC/BRAt: committedBacking 2 USDC"]
+  VA["ARGt AssetVault: ARGt leg"] --> C2
+  VB["BRAt AssetVault: BRAt leg"] --> C3
+  C2 --> S2["AquaAdapter ships the USDC/ARGt program into Aqua, 0.5 USDC"]
+  C3 --> S3["AquaAdapter ships the USDC/BRAt program into Aqua, 0.5 USDC"]
+  S2 --> F2["Fill: 0.1 USDC in, 138.912644 ARGt out"]
+  S3 --> F3["Fill: 0.1 USDC in, 0.545728 BRAt out"]
+  F2 --> AFTER["After both fills: both classes still show 2 USDC committedBacking"]
+  F3 --> AFTER
+  BOUND["Bound at settle time: own idle debit and the vault outflow limit"] -.-> UV
+```
+
+Figures from the **live** Arc Testnet run. Class ids are assigned at registration, so they vary per strategist and chain.
+
+### Creating a strategy
+
+A single idempotent `create_strategy` call walks the whole sequence and reports steps that are already done as skipped. No tokens move when a strategy ships.
+
+<details>
+<summary><b>Sequence: <code>create_strategy</code> from class registration to Aqua ship</b></summary>
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor User as User in a terminal
+  participant MCP as Aqua0 MCP create_strategy
+  participant Registry as VaultRegistry
+  participant UV as USDC AssetVault
+  participant FV as ARGt AssetVault
+  participant Adapter as AquaAdapter
+  participant Aqua as 1inch Aqua
+
+  User->>MCP: create a USDC/ARS strategy
+  Note over MCP: Pick the venue. FXSwap if its adapter is wired, otherwise pegged with an opcodeNote
+  MCP->>Registry: classForStrategy(strategyKey)
+  opt class not registered yet
+    MCP->>Registry: registerStrategyClass(strategyKey)
+  end
+  MCP->>UV: registerStrategy(classId, strategist)
+  MCP->>FV: registerStrategy(classId, strategist)
+  opt ARGt leg short of backing
+    MCP->>FV: deposit open-mint demo ARGt
+  end
+  MCP->>UV: setCommitment(classId, true)
+  MCP->>FV: setCommitment(classId, true)
+  Note over MCP: Strategist signs EIP-712 ShipStrategy(classId, strategyId, tokens, amounts, feePpb, nonce, deadline)
+  MCP->>Adapter: shipStrategyWithFee(classId, program, tokens, amounts, feePpb, nonce, deadline, signature)
+  Adapter->>Aqua: ship(router, program, tokens, amounts)
+  Aqua-->>Adapter: strategyHash
+  Note over UV,Aqua: Tokens stay in the vaults. Aqua records virtual balances for the adapter as maker.
+  MCP-->>User: steps sent or skipped, strategyId, live
+```
+
+- **Strategy key** is `keccak256(abi.encode(strategist, chainId, sorted token0/token1, keccak256(trimmed label)))`, so a class id is never guessed.
+- **Program** is `maker = AquaAdapter` with maker traits `useAqua | postTransferIn | preTransferOut`, the only combination the adapter accepts. Pegged ships `[FlatFeeAmountIn][PeggedSwap]` to `AquaSwapVMRouter`; FXSwap ships an FXSwap program to `AquaFXSwapVMRouter` through its own adapter.
+- **Signature** uses EIP-712 domain `AquaAdapter` v`1`, is ERC-1271-aware and nonce-protected. In prepare mode the tool returns the calldata and typed data instead of sending.
+
+</details>
+
+### A swap through the maker hooks
+
+The router runs the maker program, pulls the output just in time from the vault, and sweeps the taker's input back into the counter vault. The LPs that sold are credited, and the spread is booked as LP fees.
+
+<details>
+<summary><b>Sequence: exact-in swap settled through <code>preTransferOut</code> and <code>postTransferIn</code></b></summary>
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Taker
+  participant Router as AquaSwapVMRouter
+  participant Aqua as 1inch Aqua
+  participant Adapter as AquaAdapter
+  participant FXV as ARGt AssetVault
+  participant UV as USDC AssetVault
+
+  Taker->>Router: swap(order, USDC, ARGt, amountIn, takerData)
+  Router->>Router: run the maker program, fee then curve, to get amountOut
+  Router->>Adapter: preTransferOut hook
+  Adapter->>FXV: settleVenueOut(classId, adapter, amountOut)
+  FXV-->>Adapter: ARGt just in time, plus the LP allocation that sold
+  Router->>Aqua: pull(adapter, strategyHash, ARGt, amountOut, taker)
+  Aqua-->>Taker: ARGt
+  Router->>Aqua: take USDC from taker and push(adapter, router, strategyHash, USDC, amountIn)
+  Router->>Adapter: postTransferIn hook
+  Adapter->>UV: settleVenueCredit(classId, received, alloc, refPriceRay)
+  Note over UV: USDC is swept into the vault and credited to the LPs whose ARGt was sold. The spread is booked as LP fees.
+  Router-->>Taker: Swapped(orderHash, maker, taker, tokenIn, tokenOut, amountIn, amountOut)
+```
+
+The adapter handles either transfer order; whichever hook runs second performs the counter vault's `settleVenueCredit`. The `swap` tool quotes first and enforces a minimum output on-chain (default 50 bps slippage). `quote_swap` and `swap` report the oracle price (or the fixed price for pegged), the execution price and the effective spread.
+
+</details>
+
+## FXSwap in brief
+
+**Why.** swap-vm's `PeggedSwap` centres liquidity at a fixed ratio, but FX rates float. A pegged curve leaves liquidity at a stale price, and arbitrageurs take the difference from LPs.
+
+**What.** FXSwap is a new SwapVM instruction that adapts Curve CryptoSwap to two tokens, anchored to an oracle and fully **stateless**. It has no `price_scale`, EMA, `tweak_price` or `xcp_profit`. On every swap it:
+
+- reads the oracle the maker declared in its program;
+- checks staleness and a min/max price band;
+- rescales balances by the oracle price;
+- solves `D` and `y` from scratch.
+
+The spread widens as inventory drifts off balance.
+
+| | Status |
+| --- | --- |
+| Instruction index **34** in [`AquaFXSwapVMRouter`](packages/contracts/src/routers/AquaFXSwapVMRouter.sol), a modified swap-vm v1.0.2 router (EIP-712 name `AquaSwapVMRouter`, version `1.0.2-fx`, 24,434 bytes, under EIP-170). On Arc at [`0xb54A…aEB`](https://testnet.arcscan.app/address/0xb54AE15d2372F27718f32e9f6990330cdD3edaEB), with an FXSwap AquaAdapter and ARS/USD (1400) and BRL/USD (5.50) feeds, via [`deploy-arc-fx-venue.sh`](packages/contracts/script/deploy-arc-fx-venue.sh) | **Deployed, awaiting wiring** |
+| 46 Foundry tests (unit, maths properties, vectors, Arc-fork end to end), green in CI. On an Arc fork, moving the ARS/USD feed from 1400 to 1500 moves execution from 1397.88 to 1497.06. Gas is about 202k per exact-in swap. | **Fork-proven** |
+| MCP and CLI: `create_strategy` with `opcode:"fxswap"`, `quote_swap`, `swap`, `get_fx_prices`, `set_fx_price`. [`test-arc-fork-fxswap.sh`](scripts/test-arc-fork-fxswap.sh): one 2 USDC deposit backs FXSwap USDC/ARS and USDC/BRL; 0.1 USDC → 139.462 ARGt at oracle 1400 (spread about 38 bps); the feed owner moves ARS/USD +5% and the quote rises 4.79%; a non-owner update is refused. `FX_VENUE=deployed` runs it against the real Arc FX contracts. The TypeScript args encoder is byte-identical to the Solidity `FXSwapArgsBuilder` (vector test). | **Fork-proven** |
+| Formula validation against Tomás's reference formulas and vectors ([`fxswap-vectors.json`](packages/contracts/test/fixtures/fxswap-vectors.json)) | **In progress** |
+
+**MCP defaults:** A = 100, γ = 0.1, fee 10 bps at balance rising to 1% with imbalance (`feeGamma` 0.03), price band 0.5x–2x of 1400 ARS / 5.5 BRL per USD, and a max feed age of 7 days, because the demo feeds are set by hand.
+
+| Design vs the build plan | |
+| --- | --- |
+| Stateless CryptoSwap-style curve, `D` and `y` solved fresh each swap | ✅ |
+| Oracle address and staleness declared in the program (Option B) | ✅ |
+| Max-deviation check | ⚠️ simplified to a min/max price band |
+| Signed Pyth prices (Option C) | **Planned** |
+| Volatility-based spread | **Planned** |
+
+<details>
+<summary><b>The maths: invariant, solver and dynamic fee</b></summary>
+
+```text
+K · D^(n−1) · Σx  +  Πx  =  K · D^n  +  (D/n)^n        with n = 2
+K   = A · K₀ · γ² / (γ + 1 − K₀)²
+K₀  = Πx · n^n / D^n
+
+fee = midFee · g + outFee · (1 − g)
+g   = feeGamma / (feeGamma + 1 − K₀)
+```
+
+- **Balances** are scaled to 18 decimals (`rate = 10^(18 − decimals)`) and priced with the oracle answer, so the curve sits centred at the live FX rate.
+- **Solver.** `D` and `y` are solved with Newton-Raphson inside a bracket, with a bisection fallback, exact to 1 wei. Rounding always favours the maker.
+- **Fee.** `K₀` is 1 at perfect balance, so the fee is `midFee` there and rises towards `outFee` as the pool tips.
+- **Oracle kinds.** `0` is a Chainlink-style `latestRoundData` feed (`ManualFxOracle` for the demo). `1` is reserved for Pyth pull updates, and parsing rejects it today.
+
+| | Curve CryptoSwap pool | FXSwap instruction |
+| --- | --- | --- |
+| Price reference | Internal `price_scale`, moved by an EMA | Oracle read on every swap, from the feed the maker declares |
+| Repricing | `tweak_price`, gated by `xcp_profit` | None to maintain; `D` is solved fresh each swap |
+| Stale-price protection | Repeg only when profitable | Maker-set max staleness and price band; the swap reverts outside them |
+| One-sided flow | Pool fee schedule | Spread that widens with inventory imbalance |
+
+```mermaid
+flowchart TD
+  Q["Router runs the maker program: amountIn of token X for token Y"] --> O["Read the price from the oracle declared in the program"]
+  O --> CHK{"Fresh and inside the min and max price band?"}
+  CHK -->|"no"| REV["Revert: stale or out-of-band price, no fill"]
+  CHK -->|"yes"| SC["Scale balances by token decimals and the oracle price"]
+  SC --> DD["Solve D fresh from the invariant"]
+  DD --> YY["Solve the new y after adding amountIn to x"]
+  YY --> FEE["Apply the dynamic fee: midFee near balance, outFee far from it"]
+  FEE --> OUT["amountOut in token units, rounded in the maker's favour"]
+  OUT --> HOOK["Maker hooks settle through the Aqua0 vaults"]
+```
+
+</details>
+
+<details>
+<summary><b>Program arguments: the 115-byte layout</b></summary>
+
+Big-endian and packed. Source: [`FXSwap.sol`](packages/contracts/src/instructions/FXSwap.sol).
+
+| Offset | Size | Field | Meaning |
+| --- | --- | --- | --- |
+| 0 | 1 | `oracleKind` | `0` = Chainlink-style feed; `1` = reserved (Pyth pull) |
+| 1 | 1 | `flags` | bit 0 = invert price (the feed quotes the lower-address token per 1 greater-address token) |
+| 2 | 20 | `oracle` | Price feed address |
+| 22 | 1 | `oracleDecimals` | Feed decimals; `0` = read `decimals()` every swap |
+| 23 | 4 | `maxStaleness` | Max answer age in seconds, `> 0` |
+| 27 | 16 | `minPrice` | Lowest accepted answer, WAD, in the feed's orientation |
+| 43 | 16 | `maxPrice` | Highest accepted answer, WAD |
+| 59 | 8 | `A` | `A × 1e4` |
+| 67 | 8 | `γ` | WAD |
+| 75 | 8 | `midFee` | Fee at balance, WAD |
+| 83 | 8 | `outFee` | Fee far from balance, WAD, `≥ midFee` |
+| 91 | 8 | `feeGamma` | Fee transition width, WAD |
+| 99 | 8 | `rateLt` | Decimals multiplier of the lower-address token |
+| 107 | 8 | `rateGt` | Decimals multiplier of the greater-address token |
+
+`AquaFXSwapVMRouter` keeps every other swap-vm v1.0.2 `AquaOpcodes` index (FlatFeeAmountIn 21, PeggedSwap 31, XYCSwap 17). XYCConcentrate, Decay and the protocol-fee opcodes were removed to fit under EIP-170, and their slots are kept as no-ops.
+
+</details>
+
+## Prize tracks
+
+Aqua0 is registered in the **Continuity** track. We target Arc, 1inch and The Graph. Only work built during the event is submitted for judging ([what pre-existed](#continuity-pre-existing-vs-built-at-ethglobal)).
+
+| Prize | Pool | Fit today | Main gap |
+| --- | --- | --- | --- |
+| [The Graph: Best AI Tooling or AI Use Case](#the-graph-best-ai-tooling-or-ai-use-case) (Continuity pool) | $2,500 / $1,500 / $1,000 | Reusable Graph-backed MCP server and agent skill; the agent reads live Subgraph Studio data and acts on it | Aqua venue entities not yet on Studio; public MCP on the earlier build |
+| [The Graph: Composable or Standardized Graph Products](#the-graph-composable-or-standardized-graph-products) | $2,500 / $1,500 / $1,000 | Stretch; not met | One subgraph, no composition: **Planned** |
+| [Arc: Best DeFi / Onchain Finance Application](#arc-best-defi--onchain-finance-application) | $3,500 ($2,500 mainnet-conditional) | USDC-quoted shared FX liquidity, live on Arc Testnet | Testnet only; no Circle products beyond Arc and USDC yet |
+| [Arc: Best Agentic Economy Application with Circle Agent Stack](#arc-best-agentic-economy-application-with-circle-agent-stack) | $3,500 ($2,500 mainnet-conditional) | Partial: the agent transacts in execute mode | No Agent Stack or Circle Wallets |
+| [Arc: Best DeFi or Agentic Application (Continuity)](#arc-best-defi-or-agentic-application-continuity) | $3,000 ($2,000 mainnet-conditional) | Entered as the DeFi application | Same as the DeFi prize |
+| [1inch: Build an Aqua App (and Continuity)](#1inch-build-an-aqua-app-and-continuity) | $2,500 / $1,500 / $1,000; Continuity $1,500 / $500 | Official Aqua and SwapVM, live fills on Arc Testnet, a new SwapVM instruction | FXSwap venue awaiting wiring; validation in progress |
+
+### The Graph: Best AI Tooling or AI Use Case
+
+**What they're looking for**
+- **Tooling** that makes The Graph easier to use from AI environments (MCP servers, agent SKILLs, x402, A2A, framework plugins, client configs), **or** AI agents and apps that use The Graph as their live source of blockchain data.
+- The Graph must be **load-bearing**: Subgraphs, the Subgraph MCP or Substreams are the data source.
+- **Live data from a Graph provider**, such as a Subgraph Studio endpoint with an API key. Mocked, local-only or static data doesn't qualify.
+- **Meaningful work** with the data (reasoning, decisions, automation, natural language), not just printing query results.
+- Tooling must be **reusable infrastructure**, open source with a clear README or SKILL.md, a public repo and a 2–4 minute video.
+- Continuity pool: document pre-existing work; only event work is judged.
+
+**How Aqua0 delivers**
+- [x] **Reusable MCP infrastructure.** Tools are exposed over stdio or Streamable HTTP, sit on a typed service package with a CLI on top, and ship with an Arc manifest generator and an Arc RPC proxy that any Graph Node can reuse. [`apps/mcp`](apps/mcp), [`packages/shared`](packages/shared), [`infra/arc-rpc-proxy`](infra/arc-rpc-proxy) · **Live**
+- [x] **Agent skill.** [`skills/aqua0/SKILL.md`](skills/aqua0/SKILL.md) tells Claude Code, Codex and similar agents when to use Aqua0, how to connect, which tool answers which job, and how to stay safe. · **Live**
+- [x] **Live provider data.** The Arc subgraph is on [Subgraph Studio](https://thegraph.com/studio/subgraph/aqua-0-ethglobal-arc-testnet), deployed by Rithik, with `_meta.hasIndexingErrors = false`. The public MCP and dashboard read from it. [`deployments/graph-studio-arc-testnet.json`](deployments/graph-studio-arc-testnet.json) · **Live**
+- [x] **The Graph is load-bearing.** `health`, `get_balance`, `get_strategies`, `get_fees`, `list_opportunities`, `protocol_snapshot` and `graph_query` read subgraph entities. A Graph failure is surfaced as an error, with no silent RPC fallback. [`graph.ts`](packages/shared/src/graph.ts), [`packages/subgraph`](packages/subgraph) · **Live**
+- [x] **Meaningful work.** The agent maps a loose request ("usdc to brl") to a pair, decides whether a class already exists and which venue can ship, runs a multi-step strategy setup idempotently, and explains what changed after mining. [`index.ts`](apps/mcp/src/index.ts) · **Live** (reads, pegged writes on Arc), **Fork-proven** (FXSwap)
+- [ ] **Aqua venue in the read model.** The subgraph indexes both Aqua venues as `AquaStrategy`, `AquaOrder` and `AquaFill` with a `venue` label, plus per-LP fill stats and fees. Studio still runs the earlier schema; the redeploy from this branch is pending. [`packages/subgraph`](packages/subgraph/README.md) · **Built, not yet deployed**
+- [x] **Open source, runnable from docs.** This README, [`docs/`](docs), [`.env.example`](.env.example), `pnpm check-env` and CI. · **Live**
+- [ ] **2–4 minute demo video.** · **In progress**
+- [x] **Continuity documented.** [Pre-existing vs built at ETHGlobal](#continuity-pre-existing-vs-built-at-ethglobal), [`docs/CONTINUITY.md`](docs/CONTINUITY.md) · **Live**
+
+> [!WARNING]
+> **Gaps / next:**
+> 1. Redeploy the Arc subgraph to Studio from this branch so both Aqua venues are served.
+> 2. Redeploy the public MCP with the 19 tools (**Planned**; today they run locally).
+> 3. Have `get_shared_backing` read the indexed Aqua entities once Studio serves them; today it uses on-chain reads, and says so in its response.
+
+### The Graph: Composable or Standardized Graph Products
+
+**What they're looking for:** a project that composes **two or more** Graph products (Subgraphs, Substreams, the Subgraph MCP) or builds meaningfully on a **standardized schema**, such as Messari Standardized Subgraphs. It must use live provider data and make clear what the standard or composition made easier. Querying one subgraph doesn't qualify. Public repo and a 2–4 minute video.
+
+**How Aqua0 delivers**
+- [ ] **Two or more Graph products, or a standardized schema.** Aqua0 queries one custom subgraph today. · **Planned**
+- [x] **Live provider data.** The Arc subgraph on Subgraph Studio. · **Live**
+
+> [!WARNING]
+> **Gaps / next:** an MCP tool that composes the Aqua0 subgraph with the Subgraph MCP or a standardized DEX subgraph. It would benchmark an Aqua0 strategy's fills and fees against the same pair on other venues, so the agent can recommend where to commit shared capital. This prize remains a stretch and is not met.
+
+### Arc: Best DeFi / Onchain Finance Application
+
+**What they're looking for**
+- **Stablecoin-native DeFi on Arc**: lending, swaps, liquidity, FX, yield, payments or treasury, built on Arc and USDC.
+- **Advanced programmable money flows**: conditional payments, onchain automation, multi-step settlement.
+- App Kits where relevant, and a clear case for why stablecoin-native infrastructure changes what's possible.
+- Core products: Arc, USDC, App Kits, Circle Wallets, Circle Contracts, CCTP, Gateway, StableFX.
+- $2,500 of the prize requires deployment to Arc Mainnet by September 30.
+
+> [!NOTE]
+> **All Arc prizes require:**
+> - a functional MVP with a working frontend, a backend and an architecture diagram;
+> - a video demo and presentation of the core functions and the use of Circle's developer tools, backed by detailed documentation;
+> - a GitHub or Replit repo link.
+
+**How Aqua0 delivers**
+- [x] **Stablecoin-native FX liquidity on Arc.** Arc's native USDC is the shared quote asset, and one USDC balance makes markets in several local currencies. Principal, fees and gas are all USDC. [See it on-chain](#see-it-on-chain) · **Live** (vault core and pegged venue), **Deployed, awaiting wiring** (FXSwap venue)
+- [x] **Multi-step atomic settlement.** One swap runs the maker program, pulls output from the vault just in time, pushes the taker's input into Aqua, sweeps it into the counter vault, credits the LPs that sold and books the spread as fees. [Swap sequence](#a-swap-through-the-maker-hooks) · **Live**
+- [ ] **Conditional fills.** FXSwap refuses to fill on a stale or out-of-band oracle price. [FXSwap](#fxswap-in-brief) · **Fork-proven**; on Arc **Deployed, awaiting wiring**
+- [x] **Working frontend and backend.** The [judge dashboard](https://ethglobal-demo.18-207-103-187.nip.io/) reads and prepares only; the backend is its Node API, the MCP server and the contracts. [`apps/dashboard`](apps/dashboard) · **Live**
+- [x] **Architecture diagram and detailed documentation.** [How it works](#how-it-works), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/ARC_DEPLOYMENT.md`](docs/ARC_DEPLOYMENT.md) · **Live**
+- [ ] **App Kits, Circle Wallets, Circle Contracts, CCTP, Gateway, StableFX.** Not integrated. [`docs/ARC_TRACK.md`](docs/ARC_TRACK.md) · **Planned**
+- [ ] **Video demo.** · **In progress**
+- [ ] **Arc Mainnet by September 30** (conditional share). · **Planned**
+
+> [!WARNING]
+> **Gaps / next:**
+> 1. Wire the FXSwap adapter on Arc Testnet and run the FXSwap flow there.
+> 2. Evaluate StableFX as an FX price source and CCTP or Gateway for USDC onboarding.
+> 3. Deploy to Arc Mainnet only after a security review.
+
+### Arc: Best Agentic Economy Application with Circle Agent Stack
+
+**What they're looking for**
+- **Autonomous agents that transact on Arc**: they hold wallets, make payments, manage risk, settle jobs or trade with other agents in USDC.
+- Clear **decision logic tied to real signals**.
+- **Agent Stack** connecting agents to wallets, USDC payments and onchain actions, plus Nanopayments, Paymaster or App Kits where relevant.
+- Core products: Arc, USDC, Agent Stack, App Kits, Circle Wallets, Circle Contracts, Nanopayments, Paymaster.
+- Same mainnet condition and common Arc requirements as above.
+
+**How Aqua0 delivers**
+- [x] **Agent tooling transacts on Arc.** With `MCP_WRITE_MODE=execute`, `deposit`, `create_strategy` and `swap` send transactions, restricted to Arc Testnet or a local fork. The live Arc run used the `aqua0` CLI in execute mode, which calls the same service functions. The public endpoint is prepare-only. [Execute mode](#connect-the-mcp) · **Live**
+- [x] **Decisions tied to real signals.** Indexed vault capital and commitments, `classForStrategy`, venue readiness, and an on-chain quote before every swap with an enforced minimum output. FXSwap adds oracle staleness and band checks. · **Live** (Graph signals, quote and min-out), **Fork-proven** (FXSwap oracle checks)
+- [ ] **Agent-held wallet via Circle Wallets or Agent Stack.** Execution uses a locally configured key, and the agent acts on user instructions rather than autonomously. · **Planned**
+- [ ] **Nanopayments, Paymaster or App Kits.** Candidates: per-quote USDC nanopayments and sponsored LP transactions. · **Planned**
+
+> [!WARNING]
+> **Gaps / next:** Aqua0 does not use Agent Stack today and we don't claim it. Our entry targets the DeFi prize; the Agent Stack steps are in [`docs/ARC_TRACK.md`](docs/ARC_TRACK.md).
+
+### Arc: Best DeFi or Agentic Application (Continuity)
+
+**What they're looking for:** either of the two Arc applications above, from a project registered in the Continuity track. $3,000, of which $2,000 is mainnet-conditional.
+
+**How Aqua0 delivers**
+- [x] **Entered as the DeFi application**, with the checklist above. · see statuses above
+- [x] **Continuity split documented.** The Aqua0 vault contracts and AquaAdapter pre-exist. Everything in the [continuity table](#continuity-pre-existing-vs-built-at-ethglobal) was built during the event. · **Live**
+
+### 1inch: Build an Aqua App (and Continuity)
+
+**What they're looking for**
+- A **custom Aqua app** implementing a **sophisticated DeFi position**, demonstrated through test scripts or a UI.
+- **SwapVM use scores higher.** You may modify opcodes and define your own instructions.
+- **Official Aqua and SwapVM contracts** must be used; redeploying a modified SwapVM contract is allowed.
+- **On-chain token transfers** in the final demo; local forks are fine.
+- **Proper git history**, not a single final-day commit.
+
+**How Aqua0 delivers**
+- [x] **Sophisticated position: shared-backing FX market making.** One vault deposit backs several SwapVM strategies that the AquaAdapter ships into Aqua as maker, settled just in time through maker hooks. [How it works](#how-it-works) · **Live** on Arc Testnet (pegged venue)
+- [x] **SwapVM programs.** A `[FlatFeeAmountIn][PeggedSwap]` program per strategy (opcodes 21 and 31) is live; an FXSwap program (opcode 34) is fork-proven. [`ArcFxStrategies.s.sol`](packages/contracts/script/ArcFxStrategies.s.sol), [`fx.ts`](packages/shared/src/fx.ts), [`swapvm.ts`](packages/shared/src/swapvm.ts) · **Live** (pegged), **Fork-proven** (FXSwap)
+- [x] **A new SwapVM instruction.** FXSwap at index 34 in a modified router, with 46 tests including an Arc fork run, deployed on Arc. [`packages/contracts/src`](packages/contracts/src), [`FXSwapArcFork.t.sol`](packages/contracts/test/fork/FXSwapArcFork.t.sol) · **Deployed, awaiting wiring**
+- [x] **Official contracts.** aqua 0.1.0 `AquaRouter` and swap-vm v1.0.2 `AquaSwapVMRouter`, built from unmodified upstream source, run the live strategies on Arc Testnet. [`DeployAquaVenue.s.sol`](packages/contracts/script/DeployAquaVenue.s.sol), [broadcast](packages/contracts/broadcast/DeployAquaVenue.s.sol/5042002/run-latest.json) · **Live**
+- [x] **On-chain token transfers.** On Arc Testnet the router moved real ARGt and BRAt out of Aqua and USDC in, with the hooks moving tokens out of and into the vaults: [0.1 USDC → 138.912644 ARGt](https://testnet.arcscan.app/tx/0x24d95d61c83e3dfdf5ffa8530350635eb9c9b5f71b51835f31b98eb61c5102fb) and [0.1 USDC → 0.545728 BRAt](https://testnet.arcscan.app/tx/0x811e5fd474e554e7a3330f09f34edb09f40ca50475028be89c4de3e6cfd32539). · **Live**
+- [x] **Positions via test scripts.** [`run-arc-fx-strategies.sh`](packages/contracts/script/run-arc-fx-strategies.sh) (Foundry), [`test-arc-fork-strategies.sh`](scripts/test-arc-fork-strategies.sh) (pegged, MCP service path) and [`test-arc-fork-fxswap.sh`](scripts/test-arc-fork-fxswap.sh) (FXSwap, MCP service path), all with assertions. · **Fork-proven**
+- [x] **Proper git history.** 60+ commits from the whole team across 2026-09-05, 09-08 and 09-12. · **Live**
+- [x] **Continuity split.** The AquaAdapter and vaults pre-exist; the Arc venues, strategy scripts, MCP SwapVM tools and FXSwap are event work. [`docs/CONTINUITY.md`](docs/CONTINUITY.md) · **Live**
+
+> [!WARNING]
+> **Gaps / next:**
+> 1. The core admin wires the FXSwap adapter on Arc Testnet (allowlist plus `VENUE_SETTLER_ROLE`); until then FXSwap swaps are fork-only.
+> 2. Finish FXSwap validation against Tomás's reference formulas and vectors.
+
+<details>
+<summary><b>SwapVM wire facts (swap-vm v1.0.2 <code>AquaSwapVMRouter</code>)</b></summary>
+
+| Item | Value |
+| --- | --- |
+| `FlatFeeAmountIn` opcode | 21 (`uint32` fee, 1e9 = 100%) |
+| `PeggedSwap` opcode | 31 (`x0, y0, linearWidth, rateLt, rateGt`, 5 × `uint256`) |
+| `FXSwap` opcode (`AquaFXSwapVMRouter` only) | 34 (115-byte args, [layout](#fxswap-in-brief)) |
+| Maker traits accepted by AquaAdapter | `useAqua (1<<254) \| postTransferIn (1<<251) \| preTransferOut (1<<250)` |
+| Taker data for an exact-in swap | 22-byte header `uint160(0) ++ uint16(0x0041)` (isExactIn, transferFrom + Aqua push) |
+| Taker approval target | The router (it pulls tokenIn and pushes it into Aqua) |
+
+</details>
+
+## Try it
+
+Requirements: Node 22 and pnpm 9. Foundry (`forge`, `anvil`, `cast`) is needed for the contracts and fork proofs. Agents can load the [Aqua0 agent skill](skills/aqua0/SKILL.md) for the tool map, examples and safety rules.
+
+### Connect the MCP
+
+**Public endpoint (no install):**
+
+```bash
+claude mcp add --transport http aqua0 https://ethglobal-mcp.18-207-103-187.nip.io/mcp
+```
+
+> [!NOTE]
+> The public endpoint is **Live** and reads from Subgraph Studio, but it still runs the earlier prepare-only build: 12 tools (reads plus `prepare_*`) and no signer. The strategy, swap and FX tools run locally today; a hosted redeploy is **Planned**.
+
+**Local stdio build (19 tools)**, for Claude Code or Codex:
+
+```bash
+pnpm install && pnpm build
+
+claude mcp add aqua0 \
+  -e GRAPH_ENDPOINT=https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/version/latest \
+  -e WRITE_RPC_URL=https://rpc.testnet.arc.network \
+  -e WRITE_CHAIN_ID=5042002 \
+  -e MCP_WRITE_MODE=prepare \
+  -e FXSWAP_ROUTER_ADDRESS=0xb54AE15d2372F27718f32e9f6990330cdD3edaEB \
+  -e FXSWAP_AQUA_ADAPTER_ADDRESS=0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5 \
+  -e FX_ORACLE_ARS_USD=0xc05A3Fb016f973C82b0232EF50336d4C0466E70C \
+  -e FX_ORACLE_BRL_USD=0x1AE6542b9da89Ed2AEf00600710Bba75DbFF5e71 \
+  -- node <repo>/apps/mcp/dist/index.js
+
+codex mcp add aqua0 \
+  --env GRAPH_ENDPOINT=https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/version/latest \
+  --env WRITE_RPC_URL=https://rpc.testnet.arc.network \
+  --env WRITE_CHAIN_ID=5042002 \
+  --env MCP_WRITE_MODE=prepare \
+  -- node <repo>/apps/mcp/dist/index.js
+```
+
+The FX variables are optional on Arc: the addresses above are the built-in defaults, shown for clarity. In prepare mode every write tool returns ordered calldata and EIP-712 typed data for a wallet to sign. Then try:
+
+```text
+Check Aqua0 health, show the protocol snapshot, and tell me which data came from The Graph.
+Is 0xAFF7Da673820fAA38289de8B03984A9cf20fb02c's USDC backing both FX strategies?
+How many Argentine pesos would 0.1 USDC buy right now? Show the execution price and spread.
+What rate are the FX feeds on? Prepare a +5% move on ARS/USD and tell me who can send it.
+Create a USDC/BRL FXSwap strategy as a dry run and walk me through each step.
+```
+
+`set_fx_price` only sends in execute mode when the signer owns the feed; otherwise it returns the prepared call. Until the FXSwap adapter is wired, there are no live FXSwap strategies on Arc, so "move the feed and re-quote" is shown on a fork ([`test-arc-fork-fxswap.sh`](scripts/test-arc-fork-fxswap.sh)).
+
+<details>
+<summary><b>Execute mode, Codex HTTP config, stdio-only clients, CLI</b></summary>
+
+**Execute mode** sends transactions itself. It needs:
+- `MCP_WRITE_MODE=execute`;
+- `WRITE_PRIVATE_KEY` for an address **without contract code**: an EIP-7702-delegated address is checked through ERC-1271 and rejected;
+- `OPERATOR_ROLE` for that address on the AquaAdapter it ships through;
+- for `set_fx_price`, the signer must be the feed owner, or nothing is sent.
+
+The guard only allows Arc Testnet (`5042002`) or a local fork URL, refuses Ethereum and Base mainnet, and fails on reverted receipts. `dryRun: true` always returns calldata instead of sending.
+
+> [!WARNING]
+> Use a throwaway testnet key, set only in the local server's environment. Never paste a key into a chat, and never give one to the public endpoint; it holds none by design.
+
+**Codex over HTTP** (`~/.codex/config.toml`):
+
+```toml
+[mcp_servers.aqua0]
+url = "https://ethglobal-mcp.18-207-103-187.nip.io/mcp"
+```
+
+**Stdio-only clients** can bridge to HTTP with `mcp-remote`:
+
+```json
+{ "mcpServers": { "aqua0": { "command": "npx", "args": ["-y", "mcp-remote", "https://ethglobal-mcp.18-207-103-187.nip.io/mcp"] } } }
+```
+
+**Serve over HTTP locally:** `MCP_TRANSPORT=http HOST=127.0.0.1 PORT=3000 pnpm --filter @aqua0/mcp dev` serves `http://127.0.0.1:3000/mcp`, with `/health` alongside.
+
+**The CLI mirrors the MCP** and honours the same `MCP_WRITE_MODE` guard:
+
+```bash
+pnpm --filter @aqua0/cli dev snapshot
+pnpm --filter @aqua0/cli dev deposit --token USDC --amount 2
+pnpm --filter @aqua0/cli dev create-strategy --pair USDC/ARS --opcode pegged --usdc-amount 0.5
+pnpm --filter @aqua0/cli dev create-strategy --pair USDC/BRL --opcode fxswap --fee-bps 5 --band-percent 15
+pnpm --filter @aqua0/cli dev quote --pair USDC/BRL --amount 0.1
+pnpm --filter @aqua0/cli dev swap --pair USDC/BRL --amount 0.1 --slippage-bps 50
+pnpm --filter @aqua0/cli dev shared-backing 0x...
+pnpm --filter @aqua0/cli dev fx-prices
+pnpm --filter @aqua0/cli dev set-fx-price --pair ARS --change-percent 5 --dry-run true
+```
+
+</details>
+
+### Run the fork proofs
 
 ```bash
 pnpm install
-cp .env.example .env
-# Fill GRAPH_ENDPOINT (and any write settings you want). check-env loads .env automatically.
-pnpm check-env
-pnpm typecheck
-pnpm build
-pnpm test
+./scripts/test-arc-fork-strategies.sh              # pegged venue
+./scripts/test-arc-fork-fxswap.sh                  # FXSwap, fresh venue on the fork
+FX_VENUE=deployed ./scripts/test-arc-fork-fxswap.sh  # FXSwap, the real Arc FX contracts
 ```
 
-Required config:
+Both fork Arc on `127.0.0.1:8579` and send the missing adapter wiring as impersonated admins, on the fork only. They then run deposit → two strategies → quote and swap each → shared backing through the MCP service path with a throwaway key, and assert the result. The FXSwap script also checks that a non-owner feed update is refused and that a +5% ARS/USD move reprices the quote. Only USDC is stubbed, because Arc's USDC calls native precompiles that a local fork lacks.
+
+<details>
+<summary><b>Foundry path, FXSwap tests, contracts setup</b></summary>
+
+```bash
+git submodule update --init packages/contracts/lib/swap-vm
+(cd packages/contracts/lib/swap-vm && npm install --ignore-scripts)
+(cd packages/contracts && forge build)
+
+# FXSwap: unit, maths, vector and Arc-fork tests (FXSWAP_SKIP_FORK=true skips the fork test)
+(cd packages/contracts && forge test)
+```
+
+The AquaAdapter is pre-existing Aqua0 code, compiled from a local Aqua0 contracts checkout (`AQUA0_CONTRACTS_DIR`).
+
+```bash
+cd packages/contracts
+
+# 1. Pegged venue + adapter on a local Arc fork (impersonates the core admin for wiring)
+anvil --fork-url https://rpc.testnet.arc.network --port 8577
+MODE=fork AQUA0_CONTRACTS_DIR=<path> DEPLOYER=<address> ./script/deploy-arc-aqua-venue.sh
+
+# 2. FXSwap venue: FX feeds, AquaFXSwapVMRouter and a second AquaAdapter bound to it
+MODE=fork AQUA0_CONTRACTS_DIR=<path> DEPLOYER=<address> ./script/deploy-arc-fx-venue.sh
+
+# 3. One USDC deposit, two FX strategies, one swap each (Foundry path, pegged)
+MODE=fork DEPLOYER=<address> KEYSTORE_ACCOUNT=<account> KEYSTORE_PASSWORD_FILE=<file> \
+AQUA_ADAPTER=<from step 1> AQUA_SWAPVM_ROUTER=<from step 1> ./script/run-arc-fx-strategies.sh
+```
+
+With `MODE=arc` the deploy scripts use a keystore signer, record addresses and print the admin-only wiring calldata instead of sending it. Tunables for step 3: `USDC_DEPOSIT`, `USDC_SHIP`, `USDC_SWAP_IN`, `FEE_PPB`, `LINEAR_WIDTH`, `ARS_PER_USDC_E2`, `BRL_PER_USDC_E2`. The scripts refuse any chain id other than `5042002`. More detail: [`packages/contracts/README.md`](packages/contracts/README.md).
+
+</details>
+
+<details>
+<summary><b>Subgraph: build, Arc manifest, Subgraph Studio</b></summary>
+
+```bash
+pnpm --filter @aqua0/subgraph test:required-events
+pnpm --filter @aqua0/subgraph codegen && pnpm --filter @aqua0/subgraph graph:build
+
+# Arc manifest: vault core plus both Aqua venues (pegged and FXSwap)
+PUBLIC_ARC_VAULT_FACTORY=0x879C0c90205172a8DD66afB8124994D866372FBa \
+PUBLIC_ARC_VAULT_REGISTRY=0x9E094b21C4263e0BE5BEffa0f8296B3fd982fFFf \
+PUBLIC_ARC_COMPOSER=0x656F28021a624aDfA0d92dDFdBb20577674aFEC7 \
+PUBLIC_ARC_FILLER_REGISTRY=0xa8e08346DD7b6809C47A920c365bCC987Ea91297 \
+PUBLIC_ARC_START_BLOCK=60613306 \
+PUBLIC_ARC_AQUA_ADAPTER=0xbF72D34b804636496c3308796908152b82624Ca5 \
+PUBLIC_ARC_AQUA_ADAPTER_START_BLOCK=61679229 \
+PUBLIC_ARC_AQUA_SWAPVM_ROUTER=0xb20bc70b485eC1352C190d26fCaB1959d219F763 \
+PUBLIC_ARC_AQUA_SWAPVM_ROUTER_START_BLOCK=61679223 \
+PUBLIC_ARC_FX_AQUA_ADAPTER=0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5 \
+PUBLIC_ARC_FX_AQUA_ADAPTER_START_BLOCK=61725501 \
+PUBLIC_ARC_FXSWAP_ROUTER=0xb54AE15d2372F27718f32e9f6990330cdD3edaEB \
+PUBLIC_ARC_FXSWAP_ROUTER_START_BLOCK=61725474 \
+pnpm --filter @aqua0/subgraph generate:arc
+
+# Subgraph Studio (defaults to Arc; credentials from the gitignored .secrets/graph-studio.env)
+./scripts/deploy-graph-studio.sh
+DRY_RUN=1 ./scripts/deploy-graph-studio.sh   # builds and prints the deploy command without a key
+```
+
+A self-hosted Graph Node, kept as a development fallback, indexes Arc through [`infra/arc-rpc-proxy`](infra/arc-rpc-proxy), because Arc's public RPC limits topic-OR lists in `eth_getLogs`. Entities and details: [`packages/subgraph/README.md`](packages/subgraph/README.md), [`docs/THE_GRAPH_TRACK.md`](docs/THE_GRAPH_TRACK.md).
+
+</details>
+
+## Deployments
+
+Arc Testnet, chain id `5042002`. Full records are in [`deployments/arc-testnet.json`](deployments/arc-testnet.json) and [`docs/ARC_DEPLOYMENT.md`](docs/ARC_DEPLOYMENT.md).
+
+| Contract | Address | Status |
+| --- | --- | --- |
+| VaultRegistry | [`0x9E09…fFFf`](https://testnet.arcscan.app/address/0x9E094b21C4263e0BE5BEffa0f8296B3fd982fFFf) | **Live** |
+| VaultFactory | [`0x879C…2FBa`](https://testnet.arcscan.app/address/0x879C0c90205172a8DD66afB8124994D866372FBa) | **Live** |
+| Composer | [`0x656F…FEC7`](https://testnet.arcscan.app/address/0x656F28021a624aDfA0d92dDFdBb20577674aFEC7) | **Live** |
+| FillerRegistry | [`0xa8e0…1297`](https://testnet.arcscan.app/address/0xa8e08346DD7b6809C47A920c365bCC987Ea91297) | **Live** |
+| USDC AssetVault | [`0x99c2…4429`](https://testnet.arcscan.app/address/0x99c2ab427b29dB1Cc14D228d970596015d1C4429) | **Live** |
+| ARGt AssetVault | [`0x8a3d…F460`](https://testnet.arcscan.app/address/0x8a3d6188C58d7877499592E179DfE3bd80c4F460) | **Live** |
+| BRAt AssetVault | [`0xEcB1…0785`](https://testnet.arcscan.app/address/0xEcB132648B781ec5742b582c526243Eeef900785) | **Live** |
+| Aqua (`AquaRouter`, 1inch aqua 0.1.0) | [`0x490d…20D4`](https://testnet.arcscan.app/address/0x490d2eceD9aCF99e1db6090f820775bFa70020D4) | **Live** |
+| `AquaSwapVMRouter` (1inch swap-vm v1.0.2), pegged venue | [`0xb20b…F763`](https://testnet.arcscan.app/address/0xb20bc70b485eC1352C190d26fCaB1959d219F763) | **Live** |
+| Aqua0 `AquaAdapter`, pegged venue | [`0xbF72…4Ca5`](https://testnet.arcscan.app/address/0xbF72D34b804636496c3308796908152b82624Ca5) ([deploy tx](https://testnet.arcscan.app/tx/0x24a8f224e81b86c1f1827e3247912ff5dde01e7f47108521b6ac73581e4188d9)) | **Live**: allowlisted, `VENUE_SETTLER_ROLE` on all 3 vaults |
+| `AquaFXSwapVMRouter` (FXSwap = opcode 34) | [`0xb54A…aEB`](https://testnet.arcscan.app/address/0xb54AE15d2372F27718f32e9f6990330cdD3edaEB) | **Deployed, awaiting wiring** |
+| Aqua0 `AquaAdapter`, FXSwap venue | [`0x8236…43D5`](https://testnet.arcscan.app/address/0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5) | **Deployed, awaiting wiring** |
+| `ManualFxOracle` ARS/USD (1400) | [`0xc05A…E70C`](https://testnet.arcscan.app/address/0xc05A3Fb016f973C82b0232EF50336d4C0466E70C) | **Deployed, awaiting wiring** (readable with `get_fx_prices`) |
+| `ManualFxOracle` BRL/USD (5.50) | [`0x1AE6…5e71`](https://testnet.arcscan.app/address/0x1AE6542b9da89Ed2AEf00600710Bba75DbFF5e71) | **Deployed, awaiting wiring** (readable with `get_fx_prices`) |
+
+| Token | Address | Decimals |
+| --- | --- | --- |
+| USDC (Arc native, ERC-20 interface) | [`0x3600000000000000000000000000000000000000`](https://testnet.arcscan.app/address/0x3600000000000000000000000000000000000000) | 6 |
+| ARGt, an open-mint **testnet demo token** standing in for an ARS stablecoin | [`0xd8dE250970842A581f89E885dA0F5165037714Ef`](https://testnet.arcscan.app/address/0xd8dE250970842A581f89E885dA0F5165037714Ef) | 18 |
+| BRAt, an open-mint **testnet demo token** standing in for a BRL stablecoin | [`0xa9482a878A3784663512f0Bf8d0be17aD6DEA38E`](https://testnet.arcscan.app/address/0xa9482a878A3784663512f0Bf8d0be17aD6DEA38E) | 18 |
+
+| Endpoint | URL | Status |
+| --- | --- | --- |
+| Subgraph Studio query (always the latest version) | `https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/version/latest` | **Live**, earlier schema; both-venue indexing **Built, not yet deployed** |
+| Subgraph Studio project | [`aqua-0-ethglobal-arc-testnet`](https://thegraph.com/studio/subgraph/aqua-0-ethglobal-arc-testnet) | **Live** |
+| MCP (Streamable HTTP) | `https://ethglobal-mcp.18-207-103-187.nip.io/mcp` | **Live**, earlier prepare-only build (12 tools, no signer) |
+| MCP health | `https://ethglobal-mcp.18-207-103-187.nip.io/health` | **Live** (Graph `_meta` query) |
+| Judge dashboard | `https://ethglobal-demo.18-207-103-187.nip.io/` | **Live**, read-only and prepare-only |
+
+<details>
+<summary><b>Venue wiring: done for the pegged adapter, pending for the FXSwap adapter</b></summary>
+
+The core admin sent these for the pegged AquaAdapter `0xbF72…4Ca5`, which is why the live run could settle swaps. The FXSwap AquaAdapter `0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5` needs the same four calls, or admin roles granted to the team so it can wire them:
+
+1. `VaultRegistry.setAdapterAllowed(0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5, true)`
+2. `grantRole(keccak256("VENUE_SETTLER_ROLE"), fxAdapter)` on the USDC AssetVault
+3. The same on the ARGt AssetVault
+4. The same on the BRAt AssetVault
+
+Until they land there are no live FXSwap strategies on Arc, and `create_strategy` falls back to the pegged venue with an `opcodeNote`. To ship on the FXSwap adapter from the MCP, the signer also needs `OPERATOR_ROLE` on it.
+
+"Verified" in the deploy scripts means the post-deploy checks passed on-chain: the router is bound to Aqua, the adapter is bound to the registry and router, and `oneStrategyPerToken` is off, so one token can back several strategies. It does **not** mean source verification on arcscan.
+
+</details>
+
+## Reference
+
+<a id="mcp-tool-reference"></a>
+
+<details>
+<summary><b>MCP tool reference (19 tools)</b></summary>
+
+All write tools send only when the server runs with `MCP_WRITE_MODE=execute` and `dryRun` isn't true. Otherwise they return calldata and typed data. `authorize_strategy` is additionally registered in execute mode.
+
+| Tool | Kind | What it does |
+| --- | --- | --- |
+| `health` | Graph | `_meta` query; configured vs reachable |
+| `info` | Config | Public chain and write config, secrets redacted |
+| `get_balance` | Graph | LP vault positions: principal, credit, deployed and free units |
+| `get_strategies` | Graph | LP strategy positions joined with strategy-vault legs |
+| `get_fees` | Graph | LP fee accrual history, optionally over a window |
+| `list_opportunities` | Graph | Live strategy vaults and recent lifecycle events |
+| `protocol_snapshot` | Graph | Vault and strategy counts and totals |
+| `graph_query` | Graph | Raw GraphQL escape hatch |
+| `prepare_create_strategy` | RPC read + ABI | Strategy key, `classForStrategy`, next-stage calldata |
+| `prepare_authorize_strategy` | ABI | `AssetVault.setCommitment` calldata |
+| `prepare_deposit` | ABI | `AssetVault.deposit` calldata, raw units |
+| `prepare_withdraw` | ABI | `AssetVault.withdraw` calldata, raw units |
+| `create_strategy` | Write | `{pair, chain?, opcode?, params?, strategist?, fundFxLeg?, dryRun?}`: class → vault legs → FX funding → commitments → EIP-712 sign → `AquaAdapter.shipStrategyWithFee`. Idempotent. Accepts loose pairs ("usdc to brl", "pesos"). `opcode` is `"fxswap"` (the default once the FX adapter is wired; until then it falls back to pegged and explains why in `opcodeNote`) or `"pegged"`. Human params: `a`, `gamma`, `feeBps`, `outFeeBps`, `feeGamma`, `flatFeeBps`, `bandPercent` or `minPrice`/`maxPrice`, `maxStaleness`, `usdcAmount`, `fxAmount`; pegged adds `price`. |
+| `deposit` | Write | Deposit USDC, ARS (ARGt) or BRL (BRAt) in human units; approves when needed |
+| `quote_swap` | RPC read | Exact-in quote via the strategy's router (`AquaFXSwapVMRouter` or `AquaSwapVMRouter`); shows oracle or fixed price, execution price and effective spread; sends nothing |
+| `swap` | Write | Quotes, enforces min out on-chain (`slippageBps` default 50, or `minAmountOut`), approves, swaps; same pricing fields |
+| `get_shared_backing` | RPC read | Principal counted once, every committed class, backing and availability per vault, shipped strategies on both venues tagged by opcode. Labelled as on-chain reads. |
+| `get_fx_prices` | RPC read | ARS/USD and BRL/USD feed price, raw answer, age, owner, and whether it sits in the default band |
+| `set_fx_price` | Write | `{pair, price \| changePercent, dryRun?}`: `ManualFxOracle.setAnswer`. Sends only in execute mode with the feed owner as signer; a non-owner gets an error and nothing is sent. Trust assumption: FXSwap strategies trade at whatever the feed says, bounded only by their price band and staleness window. |
+
+Source: [`apps/mcp/src/index.ts`](apps/mcp/src/index.ts). Graph reads return raw integer units as strings and never invent decimals. Agent guidance: [`skills/aqua0/SKILL.md`](skills/aqua0/SKILL.md).
+
+</details>
+
+<details>
+<summary><b>Environment variables</b></summary>
 
 | Variable | Purpose |
 | --- | --- |
-| `GRAPH_ENDPOINT` | Required GraphQL endpoint for the Aqua0 subgraph. |
-| `GRAPH_AUTH_TOKEN` | Optional bearer token for Graph reads. Omitted from `info`. |
-| `GRAPH_NETWORK` | Human-readable network label reported by health/info, e.g. `arc-testnet` or `base`. |
-| `WRITE_RPC_URL` | RPC used to read `classForStrategy` and optionally execute writes. |
-| `WRITE_CHAIN_ID` | Chain id used in strategy key derivation and write guards. |
-| `VAULT_REGISTRY_ADDRESS` | Shape-C `VaultRegistry` address for strategy class reads/writes. |
-| `MCP_WRITE_MODE` | `prepare` or `execute`; defaults to `prepare`. |
-| `WRITE_PRIVATE_KEY` | Secret required only for guarded execution mode. Never logged or returned. |
-| `MCP_TRANSPORT` | `stdio` or `http`; defaults to stdio. |
-| `HOST`, `PORT` | HTTP MCP bind settings. |
+| `GRAPH_ENDPOINT` | **Required.** GraphQL endpoint for the Aqua0 subgraph (the Studio query URL) |
+| `GRAPH_AUTH_TOKEN` | Optional bearer token (for example a Studio query key); never returned by `info` |
+| `GRAPH_NETWORK` | Network label for health and info, for example `arc-testnet` |
+| `WRITE_RPC_URL` | RPC for on-chain reads and guarded writes |
+| `WRITE_CHAIN_ID` | Chain id for strategy keys and the execution guard (`5042002`) |
+| `VAULT_REGISTRY_ADDRESS` | Aqua0 `VaultRegistry` (Arc default for pair commands) |
+| `AQUA_ADAPTER_ADDRESS`, `AQUA_SWAPVM_ROUTER_ADDRESS` | Pegged venue overrides; empty falls back to the Arc deployment |
+| `FXSWAP_ROUTER_ADDRESS`, `FXSWAP_AQUA_ADAPTER_ADDRESS` | FXSwap venue overrides; empty falls back to the Arc deployment |
+| `FX_ORACLE_ARS_USD`, `FX_ORACLE_BRL_USD` | FX feeds quoting FX units per 1 USD; empty falls back to the Arc feeds |
+| `MCP_WRITE_MODE` | `prepare` (default) or `execute` |
+| `WRITE_PRIVATE_KEY` | Secret, execute mode only; never logged or returned |
+| `MCP_TRANSPORT`, `HOST`, `PORT` | `stdio` (default) or `http`, and HTTP bind settings |
 
-## MCP Tools
+See [`.env.example`](.env.example); `pnpm check-env` validates it.
 
-| Tool | Source | Description |
-| --- | --- | --- |
-| `health` | Graph | Runs a cheap `_meta` query and reports configured vs reachable. |
-| `info` | Config | Returns public chain/write config with secrets redacted. |
-| `get_balance` | Graph | LP vault positions with raw principal/credit/deployed/free units and vault metadata. |
-| `get_strategies` | Graph | LP strategy positions joined with indexed `StrategyVault` and vault metadata. |
-| `get_fees` | Graph | LP `StrategyFeeAccruedEvent` history, optionally scoped by seconds, with raw-unit totals. |
-| `list_opportunities` | Graph | Live, unpaused indexed strategy vaults plus recent V4 swap and Aqua lifecycle events. |
-| `protocol_snapshot` | Graph | Vault/strategy counts and raw-unit totals from indexed entities. |
-| `graph_query` | Graph | Raw GraphQL escape hatch for advanced agents. |
-| `prepare_create_strategy` | RPC read + ABI encode | Derives the current Aqua0 `strategyKey`, reads `classForStrategy`, and returns stage calldata. |
-| `prepare_authorize_strategy` | ABI encode | Returns `AssetVault.setCommitment` calldata. |
-| `prepare_deposit` | ABI encode | Returns `AssetVault.deposit` calldata in raw units. |
-| `prepare_withdraw` | ABI encode | Returns `AssetVault.withdraw` calldata in raw units. |
-| `create_strategy` | Guarded write | Only registered when `MCP_WRITE_MODE=execute`; still enforces the execution guard. |
-| `authorize_strategy` | Guarded write | Only registered when `MCP_WRITE_MODE=execute`; calls `setCommitment` under the guard. |
+</details>
 
-Natural-language MCP clients should call the typed tools directly. There is no custom natural-language parser in this repo.
+<details>
+<summary><b>Repository layout</b></summary>
 
-## Transports
-
-Stdio:
-
-```bash
-pnpm --filter @aqua0/mcp dev
+```text
+apps/
+  mcp/              MCP server (stdio + Streamable HTTP)
+  cli/              aqua0 CLI mirroring the MCP tools
+  dashboard/        Judge dashboard: static UI + Node JSON API, read-only and prepare-only
+packages/
+  shared/           Graph client, analytics, strategy keys, SwapVM and FXSwap programs, calldata, execution guard
+  subgraph/         Aqua0 vault subgraph: schema, mappings, Base manifest, Arc manifest generator (both venues)
+  contracts/        Foundry: Aqua + SwapVM venues on Arc, FX strategy scripts, FXSwap instruction and router
+skills/aqua0/       Agent skill for Claude Code, Codex and other MCP clients
+deployments/        Public Arc Testnet addresses, strategy records and the live run (JSON)
+infra/arc-rpc-proxy eth_getLogs topic-splitting proxy for a self-hosted Graph Node on Arc
+deploy/aws/         Docker compose and Caddy examples for the public MCP and dashboard
+scripts/            Env check, Arc and Base fork proofs, Arc USDC demo tx printer, Studio deploy
+docs/               Architecture, Arc deployment, track notes, demo runbook, continuity scope
 ```
 
-Streamable HTTP:
+</details>
 
-```bash
-MCP_TRANSPORT=http HOST=0.0.0.0 PORT=3000 pnpm --filter @aqua0/mcp dev
-```
+<a id="continuity-pre-existing-vs-built-at-ethglobal"></a>
 
-HTTP exposes:
+<details>
+<summary><b>Continuity: pre-existing vs built at ETHGlobal</b></summary>
 
-| Path | Purpose |
+Aqua0 and its vault contracts, including the AquaAdapter, pre-exist in the private Aqua0 contracts repository. Only the right-hand column is submitted for judging. This repo's history starts on 2026-09-05.
+
+| Pre-existing Aqua0 work | Built during ETHGlobal |
 | --- | --- |
-| `/health` | JSON health check backed by a live Graph `_meta` query. |
-| `/mcp` | Streamable HTTP MCP endpoint. |
+| Vault contracts: VaultRegistry, VaultFactory, Composer, FillerRegistry, AssetVault with non-subtractive commitments and venue settlement | Aqua0 vault subgraph, required-events check, Arc manifest generator, Subgraph Studio deployment (**Live**); both-venue Aqua indexing (**Built, not yet deployed**) |
+| `AquaAdapter`: maker hooks, `shipStrategyWithFee`, EIP-712 strategist signatures | Graph-backed typed service, MCP server with public deployment, CLI, judge dashboard, agent skill |
+| Base mainnet Aqua0 deployment | Arc Testnet deployment of the vault core and USDC/ARGt/BRAt vaults |
+| Strategy-key derivation in the Aqua0 web app | Arc RPC proxy for Graph Node |
+| 1inch Aqua and SwapVM (official sources) | Aqua 0.1.0, AquaSwapVMRouter and AquaAdapter on Arc, wired and running live strategies (**Live**); Arc strategy scripts |
+| | MCP SwapVM tools: `create_strategy`, `deposit`, `quote_swap`, `swap`, `get_shared_backing` (**Live** on Arc, pegged venue) |
+| | FXSwap instruction, `AquaFXSwapVMRouter`, FX feeds and FXSwap adapter on Arc (**Deployed, awaiting wiring**); FXSwap MCP tools `get_fx_prices`, `set_fx_price` and `opcode:"fxswap"` (**Fork-proven**) |
 
-## Arc Judge Dashboard
+Details: [`docs/CONTINUITY.md`](docs/CONTINUITY.md).
 
-The Arc bounty web MVP lives in `apps/dashboard`. It is a framework-free TypeScript Node server that serves static HTML/CSS/vanilla JS plus JSON API routes backed by `@aqua0/shared`.
+</details>
 
-```bash
-GRAPH_ENDPOINT=https://your-subgraph-endpoint \
-WRITE_RPC_URL=https://rpc.testnet.arc.network \
-WRITE_CHAIN_ID=5042002 \
-VAULT_REGISTRY_ADDRESS=0x9E094b21C4263e0BE5BEffa0f8296B3fd982fFFf \
-pnpm --filter @aqua0/dashboard dev
-```
+## Team and roadmap
 
-HTTP exposes:
-
-| Path | Purpose |
+| Member | Role |
 | --- | --- |
-| `/` | Judge-facing dashboard for Arc vaults, live Graph data, and prepare-only strategy calldata. |
-| `/api/config` | Sanitized public Arc deployment and ARS/BRL preset config read from `deployments/*.json`. |
-| `/api/health` | `service.health`. |
-| `/api/snapshot` | `getProtocolSnapshot`. |
-| `/api/opportunities` | `listOpportunities`. |
-| `/api/live` | One raw Graph query for `_meta`, `vaults`, `strategies`, and `strategyVaults`. |
-| `/api/prepare-strategy` | POST prepare-only `prepareCreateStrategy`; no transaction execution or private key config. |
+| Rithik | The Graph subgraph, Subgraph Studio, MCP server, dashboard |
+| Yudhishthra | Arc SwapVM integration, FXSwap, MCP strategy tools |
+| Tomás | Arc deployment (build plan), FX formulas |
 
-AWS loopback compose is in `deploy/aws/dashboard.compose.yml` and binds `127.0.0.1:8400->3000`. Arc qualification notes are in [`docs/ARC_TRACK.md`](docs/ARC_TRACK.md).
-
-## CLI
-
-```bash
-pnpm --filter @aqua0/cli dev health
-pnpm --filter @aqua0/cli dev balance 0x...
-pnpm --filter @aqua0/cli dev strategies 0x...
-pnpm --filter @aqua0/cli dev fees 0x... 86400
-pnpm --filter @aqua0/cli dev opportunities
-pnpm --filter @aqua0/cli dev snapshot
-pnpm --filter @aqua0/cli dev create-strategy --strategist 0x... --token0 0x... --token1 0x... --label "ARS carry" --vault 0x... --vault 0x...
-pnpm --filter @aqua0/cli dev authorize --vault 0x... --strategy-id 123 --backing true
-```
-
-CLI write commands honor the same `MCP_WRITE_MODE` guard as MCP. In `prepare` mode they return calldata. In `execute` mode they send only when the explicit chain/RPC execution guard passes.
-
-## Strategy Key
-
-`prepare_create_strategy` derives the key exactly as the current Aqua0 frontend:
-
-```text
-keccak256(abi.encode(strategist, chainId, sorted token0/token1, keccak256(trimmed label)))
-```
-
-If `VaultRegistry.classForStrategy(strategyKey)` returns `0`, the result contains only stage 1 `registerStrategyClass` calldata and explains that the class id must be re-read after mining. It never infers `lastClassId`. If a class id exists, the result contains `AssetVault.registerStrategy(strategyId, strategist)` calldata for every supplied vault leg.
-
-## Execution Safety
-
-Default mode is preparation only. Execution requires all of:
-
-- `MCP_WRITE_MODE=execute`
-- `WRITE_PRIVATE_KEY`
-- `WRITE_RPC_URL`
-- `WRITE_CHAIN_ID`
-- chain id `5042002` for Arc Testnet, or a local Anvil URL
-
-The guard refuses Ethereum mainnet (`1`) and Base mainnet (`8453`) writes. Deposit and withdraw are preparation-only to avoid token-spend surprises.
-
-## Hackathon deployment notes
-
-- Live Arc judge dashboard: `https://ethglobal-demo.18-207-103-187.nip.io/`
-- Live Arc Testnet core addresses and verification: [`docs/ARC_DEPLOYMENT.md`](docs/ARC_DEPLOYMENT.md)
-- The Graph provider/submission path: [`docs/THE_GRAPH_TRACK.md`](docs/THE_GRAPH_TRACK.md)
-- Arc RPC compatibility shim for full canonical event coverage: [`infra/arc-rpc-proxy`](infra/arc-rpc-proxy)
-- Architecture diagram: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- Continuity / pre-existing-vs-new scope: [`docs/CONTINUITY.md`](docs/CONTINUITY.md)
-- Judge/demo runbook and public MCP endpoint: [`docs/DEMO.md`](docs/DEMO.md)
-
-## Example Agent Prompts
-
-Codex:
-
-```text
-Use the Aqua0 MCP tools. Check health, then get_balance and get_strategies for 0x... from The Graph. Return raw units only and mention vault symbols when indexed.
-```
-
-Claude:
-
-```text
-Using Aqua0's MCP server, call list_opportunities and protocol_snapshot. Summarize which strategy vaults have the largest raw availableFor without converting decimals.
-```
-
-Write prep:
-
-```text
-Call prepare_create_strategy for strategist 0x..., token0 0x..., token1 0x..., label "ETHGlobal FXSwap ARS proof", and vault legs 0x... and 0x.... Do not execute.
-```
+**Next**
+- [x] Wire the pegged venue and run the two-strategy demo on Arc Testnet · **Live**
+- [x] Publish the Arc subgraph to Subgraph Studio · **Live**
+- [x] SKILL.md for agent clients · **Live**
+- [ ] Wire the FXSwap adapter on Arc and run the FXSwap flow there · **Deployed, awaiting wiring**
+- [ ] Redeploy the subgraph to Studio with both Aqua venues · **Built, not yet deployed**
+- [ ] Redeploy the public MCP with the 19 tools · **Planned**
+- [ ] Validate FXSwap against Tomás's reference formulas and vectors · **In progress**
+- [ ] Signed Pyth prices and a volatility-based spread for FXSwap; a composable Graph tool · **Planned**
+- [ ] Circle Wallets or Agent Stack, Paymaster, Nanopayments; StableFX as an FX source; CCTP or Gateway onboarding · **Planned**
+- [ ] Security review of FXSwap, then Arc Mainnet · **Planned**

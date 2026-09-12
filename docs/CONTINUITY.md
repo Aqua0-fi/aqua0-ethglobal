@@ -1,25 +1,40 @@
 # Continuity scope
 
-Aqua0 is an existing open-source DeFi project. This ETHGlobal repository deliberately separates pre-existing protocol work from the feature work built for the Continuity event.
+Aqua0 is an existing DeFi protocol. Its vault contracts and the AquaAdapter live in the private Aqua0 contracts repository and are referenced here as external sources, not re-committed.
 
-## Pre-existing Aqua0 work
+This repository separates that pre-existing work from what was built during ETHGlobal, and only the event work should be judged. The event history is this repository's git log, which starts on 2026-09-05 and has commits from every team member.
 
-- Shape-C / AssetVault shared-capital contracts and registry/factory/composer architecture.
-- Existing Aqua / venue adapter work and Aqua0 product contracts outside this repository.
-- Existing Base deployments used as a realistic live-data source and local-fork reference.
+## Pre-existing Aqua0 work (not submitted for judging)
 
-## Built for this Continuity submission
+| Item | Notes |
+| --- | --- |
+| AssetVault shared-capital contracts: VaultRegistry, VaultFactory, Composer, FillerRegistry, AssetVault | Aqua0 contracts repository. The Arc deployment used source commit `8a9f1c2`. |
+| Aqua0 `AquaAdapter`: maker hooks `preTransferOut` / `postTransferIn`, `shipStrategyWithFee`, EIP-712 strategist signatures | Aqua0 contracts repository. Compiled from a local checkout by `packages/contracts/script/deploy-arc-aqua-venue.sh` and `deploy-arc-fx-venue.sh`. |
+| Non-subtractive commitment model (`setCommitment`, `committedBacking`, `availableFor`) and venue settlement (`settleVenueOut`, `settleVenueCredit`) | Aqua0 contracts repository |
+| Base mainnet Aqua0 vault deployment | Addresses in `packages/subgraph/subgraph.base.yaml` |
+| Strategy-key derivation used by the Aqua0 web app | Re-implemented and tested here |
+| 1inch Aqua and SwapVM | Official 1inch sources |
 
-- A dedicated Shape-C Subgraph schema and mappings for vault, LP, strategy, fee, settlement, fronting, Aqua lifecycle, and V4 settlement state.
-- Canonical library-event ABI indexing plus an automated event-coverage regression check.
-- Graph-backed analytics service and agent-facing MCP tools.
-- CLI parity for analytics and Shape-C write preparation.
-- Exact current Aqua0 strategy-key derivation and guarded Arc/local execution.
-- Streamable HTTP MCP deployment path and live AWS deployment.
-- Local-fork proof that one principal balance can back two FX strategy classes concurrently.
-- Live Arc Testnet Shape-C deployment with USDC, ARGt, and BRAt vaults.
-- Arc Subgraph generation from the canonical Base manifest.
-- Arc RPC topic-splitting compatibility proxy so Graph Node can retain full event coverage against the public Arc RPC.
-- Hackathon deployment/runbooks and provider deployment path.
+## Built during ETHGlobal
 
-The FXSwap SwapVM opcode itself is a separate track workstream; this repository's agent/indexing layer is designed to expose it once its real deployment/adapter addresses exist rather than inventing placeholder venue addresses.
+| Item | Location | Status |
+| --- | --- | --- |
+| Aqua0 vault subgraph schema and mappings, canonical event indexing, required-events check | `packages/subgraph` | **Live** on Subgraph Studio |
+| Arc manifest generation from the canonical Base manifest | `packages/subgraph/scripts/generate-arc-manifest.mjs` | **Live** |
+| Subgraph Studio deployment for Arc | `scripts/deploy-graph-studio.sh`, `deployments/graph-studio-arc-testnet.json` | **Live** (earlier schema) |
+| Both-venue Aqua indexing: `AquaStrategy`, `AquaOrder`, `AquaFill` with a `venue` label, per-LP fill stats and fees | `packages/subgraph` | **Built, not yet deployed** |
+| Arc RPC topic-splitting and rate-pacing proxy for a self-hosted Graph Node | `infra/arc-rpc-proxy` | Development fallback |
+| Graph-backed typed service: analytics, strategy keys, SwapVM and FXSwap programs, calldata, execution guard | `packages/shared` | **Live** |
+| MCP server (stdio + Streamable HTTP) and public deployment | `apps/mcp`, `deploy/aws` | **Live**; public endpoint on the earlier prepare-only build |
+| MCP SwapVM tools: `create_strategy`, `deposit`, `quote_swap`, `swap`, `get_shared_backing` | `packages/shared`, `apps/mcp`, `apps/cli` | **Live** on Arc (pegged venue, via the CLI) |
+| MCP FXSwap tools: `opcode:"fxswap"`, `get_fx_prices`, `set_fx_price`, oracle and spread pricing | `packages/shared`, `apps/mcp`, `apps/cli` | **Fork-proven** |
+| CLI with MCP parity | `apps/cli` | **Live** |
+| Agent skill | `skills/aqua0/SKILL.md` | **Live** |
+| Judge dashboard (web MVP) | `apps/dashboard` | **Live** |
+| Arc Testnet deployment of the Aqua0 vault core and USDC/ARGt/BRAt vaults | `deployments/arc-testnet.json` | **Live** |
+| 1inch Aqua 0.1.0 + AquaSwapVMRouter (swap-vm v1.0.2) + AquaAdapter on Arc, wired | `packages/contracts` | **Live** |
+| One USDC deposit, two FX strategies shipped and filled on Arc Testnet | `deployments/arc-testnet-strategies.json` (`liveVenueRun`) | **Live** |
+| Arc strategy scripts and fork proofs | `packages/contracts/script/ArcFxStrategies.s.sol`, `scripts/test-arc-fork-strategies.sh`, `scripts/test-arc-fork-fxswap.sh` | **Fork-proven** |
+| Base-fork proof that one principal backs two FX classes | `scripts/test-shared-backing-fork.sh` | **Fork-proven** |
+| FXSwap SwapVM instruction, `AquaFXSwapVMRouter`, 46 tests | `packages/contracts/src`, `packages/contracts/test` | CI green; validation against reference vectors **In progress** |
+| FXSwap venue on Arc: router, FXSwap AquaAdapter, ARS/USD and BRL/USD feeds | `packages/contracts/script/deploy-arc-fx-venue.sh` | **Deployed, awaiting wiring** |

@@ -1,25 +1,46 @@
-# Build Plan
+# Build plan
 
-## Current State
+The pitch, demo, architecture and prize mapping are in the [README](../README.md). This page tracks workstreams and the engineering boundaries they share.
 
-- Shape-C subgraph schema and mappings live in `packages/subgraph`.
-- `packages/shared` owns the native-fetch GraphQL client, typed analytics methods, raw Graph query escape hatch, strategy-key derivation, calldata preparation, and guarded execution helpers.
-- `apps/mcp` exposes typed tools over stdio and Streamable HTTP.
-- `apps/cli` exposes parity analytics commands and guarded write preparation/execution commands.
-- Tests cover strategy-key drift, Graph errors/raw-unit aggregation, and mainnet/Base execution refusal.
+## Workstreams
 
-## Operational Checklist
+| Workstream | Owner | Status |
+| --- | --- | --- |
+| Aqua0 vault subgraph, Arc manifest, Arc RPC proxy | Rithik | **Live** |
+| Subgraph Studio deployment for Arc | Rithik | **Live** (earlier schema); redeploy with both Aqua venues **Built, not yet deployed** |
+| MCP server, dashboard, public deployment | Rithik | **Live** (public endpoint on the earlier prepare-only build); hosted redeploy with 19 tools **Planned** |
+| Arc deployment of the Aqua0 vault core | Tomás | **Live** |
+| Pegged venue on Arc: Aqua + AquaSwapVMRouter + AquaAdapter | Yudhishthra | **Live** (wired; two strategies shipped and filled) |
+| Arc SwapVM integration: strategy scripts, MCP strategy tools, Aqua venue indexing | Yudhishthra | Tools **Live** on Arc (pegged); indexing **Built, not yet deployed** |
+| FXSwap instruction, `AquaFXSwapVMRouter`, FX feeds and FXSwap adapter on Arc | Yudhishthra | **Deployed, awaiting wiring** |
+| FXSwap in the MCP and CLI: `opcode:"fxswap"`, `get_fx_prices`, `set_fx_price` | Yudhishthra | **Fork-proven** |
+| FX formulas and FXSwap reference vectors | Tomás | **In progress** (validation) |
+| Agent skill | Yudhishthra | **Live** ([`skills/aqua0/SKILL.md`](../skills/aqua0/SKILL.md)) |
 
-1. Configure `GRAPH_ENDPOINT`.
-2. Configure `WRITE_RPC_URL`, `WRITE_CHAIN_ID`, and `VAULT_REGISTRY_ADDRESS` for write preparation.
+## FXSwap design vs build
+
+| Item | Status |
+| --- | --- |
+| Stateless CryptoSwap-style curve | ✅ |
+| Oracle address and staleness declared in the program (Option B) | ✅ |
+| Max-deviation check | ⚠️ simplified to a min/max price band |
+| Signed Pyth prices (Option C) | **Planned** |
+| Volatility-based spread | **Planned** |
+
+## Operational checklist
+
+1. Set `GRAPH_ENDPOINT` to the Subgraph Studio query endpoint.
+2. Set `WRITE_RPC_URL` and `WRITE_CHAIN_ID`. The Arc venue, FXSwap and feed addresses default from the Arc deployment.
 3. Leave `MCP_WRITE_MODE=prepare` unless deliberately testing guarded execution.
-4. For AWS-style deployments, run the MCP server with `MCP_TRANSPORT=http` and route `/mcp`; use `/health` for Graph-backed reachability.
-5. Run `pnpm typecheck`, `pnpm build`, `pnpm lint`, and `pnpm test` before release.
+4. For HTTP deployments, run with `MCP_TRANSPORT=http`, route `/mcp`, and use `/health` for Graph-backed reachability.
+5. Run `pnpm typecheck`, `pnpm build`, `pnpm lint` and `pnpm test` before release. CI runs these in the `verify` job, and `forge build` and `forge test` in the `contracts` job (the Arc fork test is skipped there).
 
 ## Boundaries
 
-- Analytics tools use Graph reads only.
-- Raw units are returned as integer strings; token decimals are not invented.
-- `create_strategy` may execute only after the guard passes and re-reads class ids after mining.
-- Deposit and withdraw are preparation-only.
-- Secrets are accepted through environment variables but omitted from `info` and normal logs.
+- Analytics tools read The Graph only. On-chain reads (`classForStrategy`, venue readiness, quotes, feeds, `get_shared_backing`) are labelled as such.
+- Write tools send only with `MCP_WRITE_MODE=execute` on Arc Testnet or a local fork, and `dryRun: true` always prepares. `prepare_withdraw` is preparation-only.
+- `create_strategy` is idempotent: finished steps are reported as skipped. It uses FXSwap only when that venue is ready, and otherwise says why in `opcodeNote`.
+- `swap` always quotes first and enforces a minimum output on-chain.
+- `set_fx_price` sends only when the signer owns the feed.
+- Secrets come from environment variables and are omitted from `info` and logs.
+- Documentation never claims something is live before it is on Arc Testnet or the public endpoints.

@@ -14,6 +14,16 @@ export function readCliConfig(env: NodeJS.ProcessEnv = process.env): Aqua0Servic
     ...(env.WRITE_CHAIN_ID ? { writeChainId: parsePositiveInt(env.WRITE_CHAIN_ID, "WRITE_CHAIN_ID") } : {}),
     ...(env.VAULT_REGISTRY_ADDRESS ? { vaultRegistryAddress: env.VAULT_REGISTRY_ADDRESS } : {}),
     ...(env.WRITE_PRIVATE_KEY ? { writePrivateKey: env.WRITE_PRIVATE_KEY } : {}),
+    ...(env.AQUA_ADAPTER_ADDRESS ? { aquaAdapterAddress: env.AQUA_ADAPTER_ADDRESS } : {}),
+    ...(env.AQUA_SWAPVM_ROUTER_ADDRESS
+      ? { aquaSwapVMRouterAddress: env.AQUA_SWAPVM_ROUTER_ADDRESS }
+      : {}),
+    ...(env.FXSWAP_ROUTER_ADDRESS ? { fxswapRouterAddress: env.FXSWAP_ROUTER_ADDRESS } : {}),
+    ...(env.FXSWAP_AQUA_ADAPTER_ADDRESS
+      ? { fxswapAquaAdapterAddress: env.FXSWAP_AQUA_ADAPTER_ADDRESS }
+      : {}),
+    ...(env.FX_ORACLE_ARS_USD ? { fxOracleArsUsdAddress: env.FX_ORACLE_ARS_USD } : {}),
+    ...(env.FX_ORACLE_BRL_USD ? { fxOracleBrlUsdAddress: env.FX_ORACLE_BRL_USD } : {}),
     mcpWriteMode: readWriteMode(env.MCP_WRITE_MODE)
   };
 }

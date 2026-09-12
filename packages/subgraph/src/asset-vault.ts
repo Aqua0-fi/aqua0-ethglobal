@@ -74,6 +74,7 @@ import {
   VaultDepositEvent,
   VaultWithdrawalEvent
 } from "../generated/schema";
+import { bufferFeeAccrual, bufferPrincipalSale, bufferVenueSettlement } from "./aqua-venue";
 import {
   eventId,
   network,
@@ -277,6 +278,7 @@ export function handleClassVenueSettled(event: ClassVenueSettled): void {
   history.venue = event.params.venue;
   history.netToStrategy = event.params.netToStrategy;
   history.save();
+  bufferVenueSettlement(event, eventId(event), event.params.vault, event.params.strategyId, event.params.venue);
 
   refreshVault(event.params.vault, event);
   refreshStrategyVault(event.params.vault, event.params.strategyId, event);
@@ -355,6 +357,7 @@ export function handleStrategyPrincipalSold(event: StrategyPrincipalSold): void 
   history.lp = event.params.lp;
   history.sold = event.params.sold;
   history.save();
+  bufferPrincipalSale(event, eventId(event));
 
   refreshStrategyState(event.params.vault, event.params.strategyId, event);
   refreshLPState(event.params.vault, event.params.lp, event.params.strategyId, event);
@@ -368,6 +371,7 @@ export function handleStrategyFeeAccrued(event: StrategyFeeAccrued): void {
   history.lp = event.params.lp;
   history.credited = event.params.credited;
   history.save();
+  bufferFeeAccrual(event, eventId(event));
 
   refreshStrategyState(event.params.vault, event.params.strategyId, event);
   refreshLPState(event.params.vault, event.params.lp, event.params.strategyId, event);

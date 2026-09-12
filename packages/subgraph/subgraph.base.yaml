@@ -113,10 +113,15 @@ dataSources:
       apiVersion: 0.0.9
       language: wasm/assemblyscript
       entities:
+        - AquaVenueAdapter
+        - AquaStrategy
+        - AquaOrder
         - AquaStrategyShippedEvent
         - AquaStrategyDockedEvent
         - AquaStrategyReshippedEvent
         - AquaStrategyReconciledEvent
+        - AquaStrategyForceClearedEvent
+        - AquaAdapterOneStrategyPerTokenSetEvent
       abis:
         - name: AquaAdapter
           file: ./abis/AquaAdapter.json
@@ -133,6 +138,8 @@ dataSources:
           handler: handleAdapterStrategyReconciled
         - event: AdapterStrategyForceCleared(indexed address,indexed bytes32,bytes32,bool)
           handler: handleAdapterStrategyForceCleared
+        - event: AdapterOneStrategyPerTokenSet(indexed address,bool)
+          handler: handleAdapterOneStrategyPerTokenSet
       file: ./src/aqua-adapter.ts
   - kind: ethereum/contract
     name: V4Adapter
@@ -170,6 +177,7 @@ templates:
         - Strategy
         - StrategyVault
         - LPStrategyPosition
+        - AquaSwapSettlementBuffer
       abis:
         - name: Events
           file: ./abis/Events.json

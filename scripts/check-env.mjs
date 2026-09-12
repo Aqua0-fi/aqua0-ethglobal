@@ -14,10 +14,44 @@ const optional = [
   "VAULT_REGISTRY_ADDRESS",
   "MCP_WRITE_MODE",
   "WRITE_PRIVATE_KEY",
+  "AQUA_ADAPTER_ADDRESS",
+  "AQUA_SWAPVM_ROUTER_ADDRESS",
+  "FXSWAP_ROUTER_ADDRESS",
+  "FXSWAP_AQUA_ADAPTER_ADDRESS",
+  "FX_ORACLE_ARS_USD",
+  "FX_ORACLE_BRL_USD",
   "MCP_TRANSPORT",
   "HOST",
   "PORT"
 ];
+
+const addressVariables = [
+  "VAULT_REGISTRY_ADDRESS",
+  "AQUA_ADAPTER_ADDRESS",
+  "AQUA_SWAPVM_ROUTER_ADDRESS",
+  "FXSWAP_ROUTER_ADDRESS",
+  "FXSWAP_AQUA_ADAPTER_ADDRESS",
+  "FX_ORACLE_ARS_USD",
+  "FX_ORACLE_BRL_USD"
+];
+
+for (const name of addressVariables) {
+  if (process.env[name] && !/^0x[0-9a-fA-F]{40}$/.test(process.env[name])) {
+    console.error(`${name} must be a 20-byte hex address`);
+    process.exit(1);
+  }
+}
+
+if (
+  process.env.FXSWAP_AQUA_ADAPTER_ADDRESS &&
+  process.env.AQUA_ADAPTER_ADDRESS &&
+  process.env.FXSWAP_AQUA_ADAPTER_ADDRESS.toLowerCase() === process.env.AQUA_ADAPTER_ADDRESS.toLowerCase()
+) {
+  console.error(
+    "FXSWAP_AQUA_ADAPTER_ADDRESS must be the AquaAdapter bound to the FXSwap router, not the pegged AQUA_ADAPTER_ADDRESS"
+  );
+  process.exit(1);
+}
 
 const missing = required.filter((name) => !process.env[name]);
 

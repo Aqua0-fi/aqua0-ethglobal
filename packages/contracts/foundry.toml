@@ -1,0 +1,19 @@
+# Aqua0 SwapVM contracts for Arc. Compiler settings mirror 1inch swap-vm v1.0.2 so the router we deploy
+# is built exactly like the upstream release; evm_version is pinned to cancun for Arc.
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+script = "script"
+test = "test"
+solc_version = "0.8.30"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 700
+via_ir = true
+auto_detect_remappings = false
+fs_permissions = [{ access = "read", path = "./" }]
+
+[profile.default.optimizer_details]
+yul = true
+yulDetails = { stackAllocation = true, optimizerSteps = "dhfoDgvulfnTUtnIf[xa[r]EscLMcCTUtTOntnfDIulLculVcul Tpeul]jmul[jul] VcTOcul jmul : fDnTOcmu" }
