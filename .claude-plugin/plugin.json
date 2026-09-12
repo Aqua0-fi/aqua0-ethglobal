@@ -1,0 +1,12 @@
+{
+  "name": "aqua0",
+  "displayName": "Aqua0",
+  "description": "Aqua0 on Arc Testnet: the Aqua0 agent skill plus the hosted Aqua0 MCP server (prepare-only, never signs). Read vaults, strategies and fees from The Graph and prepare deposit and strategy calldata for your own wallet.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Aqua0"
+  },
+  "homepage": "https://github.com/Aqua0-fi/aqua0-ethglobal#try-it",
+  "repository": "https://github.com/Aqua0-fi/aqua0-ethglobal",
+  "keywords": ["aqua0", "1inch", "aqua", "swapvm", "arc", "the-graph", "mcp", "fx"]
+}
