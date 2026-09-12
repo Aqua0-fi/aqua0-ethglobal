@@ -23,22 +23,24 @@ Usage:
   aqua0 fees <address> [seconds]
   aqua0 opportunities
   aqua0 snapshot
-  aqua0 create-strategy --pair USDC/ARS [--opcode fxswap|pegged] [strategy params] [--label <text>] [--dry-run true]
+  aqua0 create-strategy --pair USDC/ARS [--opcode forex|pegged] [strategy params] [--label <text>] [--dry-run true]
   aqua0 create-strategy --strategist <addr> --token0 <addr> --token1 <addr> --label <text> --vault <addr>...
   aqua0 authorize --vault <addr> --strategy-id <id> --backing true|false
   aqua0 deposit --token USDC --amount 2 [--unit human|raw] [--receiver <addr>] [--dry-run true]
-  aqua0 quote --pair USDC/ARS --amount 0.1 [--opcode fxswap|pegged] [--token-in USDC] [--strategy-id <bytes32>]
-  aqua0 swap --pair USDC/ARS --amount 0.1 [--opcode fxswap|pegged] [--token-in USDC] [--slippage-bps 50] [--dry-run true]
+  aqua0 quote --pair USDC/ARS --amount 0.1 [--opcode forex|pegged] [--token-in USDC] [--strategy-id <bytes32>]
+  aqua0 swap --pair USDC/ARS --amount 0.1 [--opcode forex|pegged] [--token-in USDC] [--slippage-bps 50] [--dry-run true]
   aqua0 shared-backing [address]
   aqua0 fx-prices [--pair ARS]
   aqua0 set-fx-price --pair ARS (--price 1470 | --change-percent 5) [--feed <addr>] [--dry-run true]
 
 Opcodes:
-  fxswap   FXSwap oracle-anchored curve on AquaFXSwapVMRouter (default when the FXSwap venue is configured)
+  forex    the forex curve (Shell v1 / DFX), priced from an FX oracle on AquaForexSwapVMRouter
+           (default when the forex venue is configured; "fxswap", "oracle", "dfx" also work)
   pegged   fixed-price PeggedSwap on the stock AquaSwapVMRouter
 
 Strategy params (shared):  --fee-bps --fee-percent --fee-ppb --usdc-amount --fx-amount --amount-unit human|raw --label
-  FXSwap:  --a 100 --gamma 0.1 --out-fee-bps 100 --out-fee-percent --fee-gamma 0.03 --flat-fee-bps
+  Forex:   --alpha 0.5 (halt band)  --beta 0.15 (flat band)  --delta 0.5 (fee slope)
+           --max-fee 0.25 | --max-fee-percent 25   --lambda 0.3 (rebate share)   --fee-bps 30 is its fee epsilon
            --band-percent 20 | --min-price 700 --max-price 2800   --max-staleness 7d   --oracle-decimals 0
   Pegged:  --price 1400 --price-e2 140000 --linear-width 1e28
 
@@ -52,8 +54,8 @@ Environment:
   VAULT_REGISTRY_ADDRESS       Aqua0 vault registry address (Arc default for pair commands)
   AQUA_ADAPTER_ADDRESS         Pegged-venue AquaAdapter (Arc default)
   AQUA_SWAPVM_ROUTER_ADDRESS   Pegged-venue AquaSwapVMRouter (Arc default)
-  FXSWAP_ROUTER_ADDRESS        AquaFXSwapVMRouter (Arc default)
-  FXSWAP_AQUA_ADAPTER_ADDRESS  AquaAdapter bound to the FXSwap router (Arc default)
+  FXSWAP_ROUTER_ADDRESS        Forex venue: AquaForexSwapVMRouter (Arc default)
+  FXSWAP_AQUA_ADAPTER_ADDRESS  Forex venue: AquaAdapter bound to that router (Arc default)
   FX_ORACLE_ARS_USD            ARS per USD feed (Arc default)
   FX_ORACLE_BRL_USD            BRL per USD feed override (Arc default: RedStone BRL feed)
   MCP_WRITE_MODE               prepare|execute, defaults to prepare
@@ -293,6 +295,25 @@ function optionalUnit(flags: Map<string, string[]>, name: string): AmountUnit | 
 }
 
 function readStrategyParams(flags: Map<string, string[]>): StrategyParamsInput {
+  // Flags of the CryptoSwap-style FXSwap curve, which the forex venue has no equivalent for. Declared here, not at
+  // module level: the commands above run during module evaluation, before a top-level const would be initialized.
+  const removedFxSwapFlags = [
+    "a",
+    "gamma",
+    "out-fee-bps",
+    "out-fee-percent",
+    "out-fee-ppb",
+    "fee-gamma",
+    "flat-fee-bps",
+    "flat-fee-percent",
+    "flat-fee-ppb"
+  ];
+  const removed = removedFxSwapFlags.filter((name) => flags.has(name));
+  if (removed.length > 0) {
+    throw new Error(
+      `${removed.map((name) => `--${name}`).join(", ")} no longer apply: the FX venue runs the forex curve (Shell v1 / DFX). Use --alpha, --beta, --delta, --max-fee and --lambda; its fee is --fee-bps, with no separate flat fee`
+    );
+  }
   return {
     price: optionalFlag(flags, "price"),
     priceE2: optionalFlag(flags, "price-e2"),
@@ -303,15 +324,12 @@ function readStrategyParams(flags: Map<string, string[]>): StrategyParamsInput {
     fxAmount: optionalFlag(flags, "fx-amount"),
     amountUnit: optionalUnit(flags, "amount-unit"),
     linearWidth: optionalFlag(flags, "linear-width"),
-    a: optionalFlag(flags, "a"),
-    gamma: optionalFlag(flags, "gamma"),
-    outFeeBps: optionalFlag(flags, "out-fee-bps"),
-    outFeePercent: optionalFlag(flags, "out-fee-percent"),
-    outFeePpb: optionalFlag(flags, "out-fee-ppb"),
-    feeGamma: optionalFlag(flags, "fee-gamma"),
-    flatFeeBps: optionalFlag(flags, "flat-fee-bps"),
-    flatFeePercent: optionalFlag(flags, "flat-fee-percent"),
-    flatFeePpb: optionalFlag(flags, "flat-fee-ppb"),
+    alpha: optionalFlag(flags, "alpha"),
+    beta: optionalFlag(flags, "beta"),
+    delta: optionalFlag(flags, "delta"),
+    maxFee: optionalFlag(flags, "max-fee"),
+    maxFeePercent: optionalFlag(flags, "max-fee-percent"),
+    lambda: optionalFlag(flags, "lambda"),
     bandPercent: optionalFlag(flags, "band-percent"),
     minPrice: optionalFlag(flags, "min-price"),
     maxPrice: optionalFlag(flags, "max-price"),

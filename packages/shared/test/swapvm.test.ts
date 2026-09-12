@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -27,17 +27,28 @@ import {
   resolveToolWriteMode
 } from "../src/fx.js";
 import {
+  FOREX,
+  FOREX_DEFAULTS,
   FXSWAP,
   assertSupportedChain,
+  buildForexProgram,
+  buildForexStrategySpec,
   buildFxSwapProgram,
   buildFxSwapStrategySpec,
   buildPeggedStrategySpec,
   buildShipTypedData,
   buildTakerTraitsAndData,
+  decodeForexArgs,
+  forexMaxFeeLimit,
   decodeFxSwapArgs,
   decodeSwapVMOrder,
   decodeSwapVMProgram,
+  encodeForexArgs,
   encodeFxSwapArgs,
+  forexFlags,
+  forexFxPerUsdcWad,
+  forexOrientation,
+  forexPairFields,
   fxSwapOrientation,
   inferOpcodeFromParams,
   parseDurationSeconds,
@@ -48,7 +59,10 @@ import {
   resolveToken,
   buildSaltInstruction,
   strategySalt,
-  type FxSwapArgs
+  type ForexArgs,
+  type FxPair,
+  type FxSwapArgs,
+  type StrategyParamsInput
 } from "../src/swapvm.js";
 
 const WAD = 10n ** 18n;
@@ -211,19 +225,26 @@ test("pairs, tokens and chains resolve from loose phrasing", () => {
   assert.throws(() => assertSupportedChain("base", 5042002), /Unsupported chain/);
 });
 
-test("opcode resolution: fxswap is the default once its venue is configured, pegged stays available", () => {
+test("opcode resolution: forex is the default once its venue is configured, pegged stays available", () => {
   const unconfigured = { fxswapRouterAddress: "", fxswapAquaAdapterAddress: "" };
-  assert.equal(resolveStrategyOpcode(undefined, {}), "fxswap");
-  assert.equal(resolveStrategyOpcode("", {}), "fxswap");
+  assert.equal(resolveStrategyOpcode(undefined, {}), "forex");
+  assert.equal(resolveStrategyOpcode("", {}), "forex");
   assert.equal(resolveStrategyOpcode("Pegged Swap", {}), "pegged");
-  assert.equal(resolveStrategyOpcode("oracle", {}), "fxswap");
+  for (const alias of ["forex", "fxswap", "fx", "oracle", "fx curve", "DFX", "shell", "Shell v1", "forex-curve"]) {
+    assert.equal(resolveStrategyOpcode(alias, {}), "forex", alias);
+  }
   assert.equal(resolveStrategyOpcode(undefined, {}, { price: 1400 }), "pegged");
-  assert.equal(resolveStrategyOpcode(undefined, {}, { bandPercent: 20 }), "fxswap");
-  assert.equal(resolveStrategyOpcode(undefined, {}, { feeBps: 10 }), "fxswap");
+  assert.equal(resolveStrategyOpcode(undefined, {}, { bandPercent: 20 }), "forex");
+  assert.equal(resolveStrategyOpcode(undefined, {}, { beta: 0.1 }), "forex");
+  assert.equal(resolveStrategyOpcode(undefined, {}, { feeBps: 10 }), "forex");
   assert.equal(resolveStrategyOpcode(undefined, unconfigured), "pegged");
-  assert.throws(() => resolveStrategyOpcode("fxswap", unconfigured), /FXSwap venue not configured/);
+  assert.throws(() => resolveStrategyOpcode("forex", unconfigured), /Forex venue not configured/);
   assert.throws(() => resolveStrategyOpcode("xyc", {}), /Unknown opcode/);
-  assert.throws(() => inferOpcodeFromParams({ price: 1400, gamma: 0.01 }), /mix pegged-only/);
+  assert.throws(() => inferOpcodeFromParams({ price: 1400, lambda: 0.5 }), /mix pegged-only/);
+  // FXSwap-only params arrive untyped from MCP JSON or old scripts; every opcode rejects them by name.
+  const legacy = { gamma: 0.01, a: 200 } as StrategyParamsInput;
+  assert.throws(() => inferOpcodeFromParams(legacy), /a, gamma belong to the CryptoSwap-style FXSwap curve/);
+  assert.throws(() => resolveStrategyOpcode(undefined, {}, { flatFeeBps: 30 } as StrategyParamsInput), /no SwapVM flat fee/);
 });
 
 test("Arc deployment constants stay in sync with deployments/arc-testnet.json (FX venue keys optional)", () => {
@@ -459,6 +480,18 @@ test("a per-strategist Salt keeps two users' identical strategies on separate id
     ["Salt", "FlatFeeAmountIn", "FXSwap"]
   );
   assert.equal(fx.salt, saltA);
+
+  const forexPlain = buildForexStrategySpec(FX_ADAPTER, pair, BRL_FEED, {}, { oraclePriceWad: 55n * 10n ** 17n });
+  const forexA = buildForexStrategySpec(FX_ADAPTER, pair, BRL_FEED, {}, { oraclePriceWad: 55n * 10n ** 17n, salt: saltA });
+  const forexB = buildForexStrategySpec(FX_ADAPTER, pair, BRL_FEED, {}, { oraclePriceWad: 55n * 10n ** 17n, salt: saltB });
+  assert.deepEqual(
+    decodeSwapVMProgram(forexA.program).map((instruction) => instruction.name),
+    ["Salt", "ForexCurve"]
+  );
+  assert.equal(forexA.program, `${buildSaltInstruction(saltA)}${forexPlain.program.slice(2)}`);
+  assert.notEqual(forexA.strategyId, forexB.strategyId);
+  assert.equal(forexA.salt, saltA);
+  assert.equal(forexPlain.salt, undefined);
   assert.throws(() => buildSaltInstruction("0x"), /1 to 255 bytes/);
 });
 
@@ -482,7 +515,8 @@ test("FXSwap validation mirrors FXSwapArgsBuilder.validate, and params are check
   const pair = resolvePair("USDC/ARS");
   const price = { oraclePriceWad: 1_400n * WAD };
   assert.throws(() => buildFxSwapStrategySpec(FX_ADAPTER, pair, ARS_FEED, { price: 1400 }, price), /only apply to opcode "pegged"/);
-  assert.throws(() => buildPeggedStrategySpec(ADAPTER, pair, { gamma: 0.01 }), /only apply to opcode "fxswap"/);
+  assert.throws(() => buildPeggedStrategySpec(ADAPTER, pair, { beta: 0.1 }), /only apply to opcode "forex"/);
+  assert.throws(() => buildFxSwapStrategySpec(FX_ADAPTER, pair, ARS_FEED, { lambda: 0.5 }, price), /only apply to the forex curve/);
   assert.throws(() => buildFxSwapStrategySpec(FX_ADAPTER, pair, ARS_FEED, { bandPercent: 10 }), /live oracle price/);
   assert.throws(() => buildFxSwapStrategySpec(FX_ADAPTER, pair, ARS_FEED, {}), /fxAmount defaults/);
   assert.throws(
@@ -497,25 +531,351 @@ test("FXSwap validation mirrors FXSwapArgsBuilder.validate, and params are check
   );
 });
 
-test("venues: FXSwap addresses default to the Arc deployment and can be overridden", async () => {
+// ---------------------------------------------------------------------------------------------
+// ForexCurve, the forex curve (Shell v1 / DFX): 123-byte args. Expected bytes are written out field by field here;
+// the Solidity cross-check below runs once test/fixtures/forex-args-vectors.json exists.
+
+const ARS_FOREX_DEFAULT_ARGS = `0x${[
+  "00", // oracleKind: Chainlink-style latestRoundData
+  "01", // flags: FLAG_INVERT_PRICE (the ARS feed quotes ARS per USD); USDC 0x3600.. is the lower address
+  "c05a3fb016f973c82b0232ef50336d4c0466e70c", // oracle
+  "00", // oracleDecimals: read decimals() on every swap
+  "00093a80", // maxStaleness 604800 s
+  "0000000000000025f273933db5700000", // minPrice 700e18 ARS per USD
+  "0000000000000097c9ce4cf6d5c00000", // maxPrice 2800e18
+  "06f05b59d3b20000", // alpha 0.5
+  "0214e8348c4f0000", // beta 0.15
+  "06f05b59d3b20000", // delta 0.5
+  "03782dace9d90000", // maxFee 0.25
+  "0429d069189e0000", // lambda 0.3
+  "000aa87bee538000", // epsilon 0.003 (30 bps)
+  "000000e8d4a51000", // rateLt 1e12: USDC, 6 decimals
+  "0000000000000001" // rateGt 1: ARGt, 18 decimals
+].join("")}` as Hex;
+
+test("forex USDC/ARS defaults encode the hand-computed 123-byte ForexCurve args, with no flat fee in front", () => {
+  assert.equal((ARS_FOREX_DEFAULT_ARGS.length - 2) / 2, FOREX.argsLength);
+  const ars = buildForexStrategySpec(FX_ADAPTER, resolvePair("USDC/ARS"), ARS_FEED, {}, { oraclePriceWad: 1_400n * WAD });
+  // [ForexCurve]: opcode 34 (0x22), 123 bytes (0x7b), args.
+  assert.equal(ars.program, `0x227b${ARS_FOREX_DEFAULT_ARGS.slice(2)}`);
+  assert.deepEqual(
+    decodeSwapVMProgram(ars.program).map((instruction) => instruction.name),
+    ["ForexCurve"]
+  );
+  assert.equal(ars.opcode, "forex");
+  assert.equal(ars.label, "Forex ARS");
+  assert.equal(ars.feedQuote, "fxPerUsd");
+  assert.equal(ars.band.source, "default");
+  assert.equal(ars.feePpb, 3_000_000);
+  assert.equal(ars.usdcShip, 1_000_000n);
+  assert.equal(ars.fxShip, 1_400n * WAD);
+  assert.equal(ars.order.maker, getAddress(FX_ADAPTER));
+  assert.equal(ars.strategyId, keccak256(ars.strategyBytes));
+  assert.deepEqual(ars.args, {
+    oracleKind: 0,
+    flags: FOREX.flagInvertPrice,
+    oracle: getAddress(ARS_FEED),
+    oracleDecimals: 0,
+    maxStaleness: 604_800,
+    minPrice: 700n * WAD,
+    maxPrice: 2_800n * WAD,
+    alpha: FOREX_DEFAULTS.alpha,
+    beta: FOREX_DEFAULTS.beta,
+    delta: FOREX_DEFAULTS.delta,
+    maxFee: FOREX_DEFAULTS.maxFee,
+    lambda: FOREX_DEFAULTS.lambda,
+    epsilon: FOREX_DEFAULTS.epsilon,
+    rateLt: 10n ** 12n,
+    rateGt: 1n
+  });
+  // The strategy id only depends on the program: amounts and the live price do not move it.
+  assert.equal(
+    buildForexStrategySpec(FX_ADAPTER, resolvePair("pesos"), ARS_FEED, { usdcAmount: "0.5" }, { oraclePriceWad: 1_470n * WAD })
+      .strategyId,
+    ars.strategyId
+  );
+
+  const decoded = decodeForexArgs(ARS_FOREX_DEFAULT_ARGS);
+  assert.deepEqual(decoded, ars.args);
+  assert.equal(encodeForexArgs(decoded), ARS_FOREX_DEFAULT_ARGS);
+  assert.equal(buildForexProgram({ args: decoded }), ars.program);
+  assert.deepEqual(decodeSwapVMProgram(ars.program)[0], { opcode: 34, name: "ForexCurve", args: decoded });
+
+  // Opcode 34 with 115 bytes of args is still FXSwap.
+  const fxVector = FXSWAP_VECTORS["usdc-ars-defaults"];
+  assert.ok(fxVector);
+  assert.deepEqual(
+    decodeSwapVMProgram(fxVector.program).map((instruction) => instruction.name),
+    ["FXSwap"]
+  );
+  assert.throws(() => decodeForexArgs(fxVector.args), /ForexCurveInvalidArgsLength\(115\)/);
+});
+
+test("forex flags: p is USDC per FX unit, inverted only for FX-per-USD feeds; FLAG_QUOTE_IS_GT follows address order", () => {
+  const pair = resolvePair("USDC/BRL");
+  const usdPerBrl = 194n * 10n ** 15n;
+  const brlPerUsd = (WAD * WAD) / usdPerBrl;
+  const redstone = buildForexStrategySpec(FX_ADAPTER, pair, BRL_FEED, {}, { oraclePriceWad: usdPerBrl, feedQuote: "usdPerFx" });
+  const manual = buildForexStrategySpec(FX_ADAPTER, pair, BRL_FEED, {}, { oraclePriceWad: brlPerUsd });
+  // RedStone BRL quotes USD per BRL, which is already the curve's price: no flag. USDC is below BRAt: no quoteIsGt.
+  assert.equal(redstone.args.flags, 0x00);
+  assert.equal(manual.args.flags, FOREX.flagInvertPrice);
+  // Flags are args byte 1, right after the 2-byte instruction header and oracleKind.
+  assert.equal(redstone.program.slice(8, 10), "00");
+  assert.equal(manual.program.slice(8, 10), "01");
+  assert.equal(redstone.fxShip, manual.fxShip);
+  assert.notEqual(redstone.strategyId, manual.strategyId);
+  // Default band: half to double the 5.50 BRL per USD reference, in the feed's orientation.
+  const reference = (WAD * WAD) / (55n * 10n ** 17n);
+  assert.equal(redstone.band.minPrice, reference / 2n);
+  assert.equal(redstone.band.maxPrice, reference * 2n);
+
+  // Both feed orientations give the same FX per USDC.
+  assert.equal(forexFxPerUsdcWad(redstone.args, usdPerBrl, pair), brlPerUsd);
+  assert.equal(forexFxPerUsdcWad(manual.args, brlPerUsd, pair), brlPerUsd);
+  const ars = resolvePair("USDC/ARS");
+  assert.equal(forexFxPerUsdcWad({ flags: FOREX.flagInvertPrice }, 1_400n * WAD, ars), 1_400n * WAD);
+  assert.equal(forexFxPerUsdcWad({ flags: 0 }, 5n * 10n ** 14n, ars), 2_000n * WAD);
+  // A program quoting in the FX token instead (quoteIsGt set while USDC is the lower address): p is FX per USDC.
+  assert.equal(forexFxPerUsdcWad({ flags: FOREX.flagQuoteIsGt }, 1_400n * WAD, ars), 1_400n * WAD);
+  assert.equal(
+    forexFxPerUsdcWad({ flags: FOREX.flagQuoteIsGt | FOREX.flagInvertPrice }, 5n * 10n ** 14n, ars),
+    2_000n * WAD
+  );
+  assert.equal(forexFxPerUsdcWad({ flags: 0 }, 0n, ars), 0n);
+
+  // An FX token below USDC's address makes USDC the greater token: FLAG_QUOTE_IS_GT and swapped rates.
+  const lowPair: FxPair = {
+    name: "USDC/LOW",
+    usdc: pair.usdc,
+    fx: { ...pair.fx, symbol: "LOWt", address: "0x1000000000000000000000000000000000000001", fiat: "LOW" }
+  };
+  assert.deepEqual(forexOrientation(lowPair.usdc.address, 6, lowPair.fx.address, 18), {
+    quoteIsGt: true,
+    rateLt: 1n,
+    rateGt: 10n ** 12n
+  });
+  assert.deepEqual(forexOrientation(pair.usdc.address, 6, pair.fx.address, 18), {
+    quoteIsGt: false,
+    rateLt: 10n ** 12n,
+    rateGt: 1n
+  });
+  assert.equal(forexFlags("fxPerUsd", true), 0x03);
+  assert.equal(forexFlags("usdPerFx", true), 0x02);
+  assert.equal(forexFlags("usdPerFx", false), 0x00);
+  // forexPairFields mirrors ForexCurveArgsBuilder.pairFields, including its USDC/BRAt and USDC/ARGt doc examples.
+  assert.deepEqual(forexPairFields(pair.usdc.address, 6, pair.fx.address, 18, false), {
+    flags: 0x00,
+    rateLt: 10n ** 12n,
+    rateGt: 1n
+  });
+  assert.deepEqual(forexPairFields(ars.usdc.address, 6, ars.fx.address, 18, true), {
+    flags: FOREX.flagInvertPrice,
+    rateLt: 10n ** 12n,
+    rateGt: 1n
+  });
+  assert.deepEqual(forexPairFields(lowPair.usdc.address, 6, lowPair.fx.address, 18, true), {
+    flags: FOREX.flagInvertPrice | FOREX.flagQuoteIsGt,
+    rateLt: 1n,
+    rateGt: 10n ** 12n
+  });
+  const low = buildForexStrategySpec(FX_ADAPTER, lowPair, BRL_FEED, { minPrice: 1, maxPrice: 10 }, { oraclePriceWad: 5n * WAD });
+  assert.equal(low.args.flags, FOREX.flagInvertPrice | FOREX.flagQuoteIsGt);
+  assert.equal(low.program.slice(8, 10), "03");
+  assert.equal(low.program.slice(-32), "0000000000000001000000e8d4a51000");
+  assert.equal(forexFxPerUsdcWad(low.args, 5n * WAD, lowPair), 5n * WAD);
+  assert.equal(low.fxShip, 5n * WAD);
+  assert.throws(() => forexOrientation(ARS_FEED, 6, ARS_FEED, 18), /ForexCurveInvalidPair/);
+  assert.throws(() => forexOrientation(ARS_FEED, 6, BRL_FEED, 19), /ForexCurveUnsupportedDecimals\(19\)/);
+});
+
+test("forex params: curve params as decimals or percent, epsilon via the fee fields, FXSwap params rejected", () => {
+  const pair = resolvePair("USDC/BRL");
+  const price = { oraclePriceWad: 55n * 10n ** 17n };
+  const build = (params: StrategyParamsInput) => buildForexStrategySpec(FX_ADAPTER, pair, BRL_FEED, params, price);
+
+  const custom = build({ alpha: "40%", beta: 0.1, delta: "1", maxFeePercent: 5, lambda: "0.5", feePercent: "0.15%" });
+  assert.equal(custom.args.alpha, 4n * 10n ** 17n);
+  assert.equal(custom.args.beta, 10n ** 17n);
+  assert.equal(custom.args.delta, WAD);
+  assert.equal(custom.args.maxFee, 5n * 10n ** 16n);
+  assert.equal(custom.args.lambda, 5n * 10n ** 17n);
+  assert.equal(custom.args.epsilon, 15n * 10n ** 14n);
+  assert.equal(custom.feePpb, 1_500_000);
+  assert.equal(build({ maxFee: "5%" }).args.maxFee, 5n * 10n ** 16n);
+  assert.equal(build({ maxFee: 0.05 }).args.maxFee, 5n * 10n ** 16n);
+  assert.equal(build({ feeBps: 5 }).feePpb, 500_000);
+  assert.equal(build({ feePpb: 1_000_000 }).args.epsilon, 10n ** 15n);
+  assert.equal(build({ beta: 0 }).args.beta, 0n);
+
+  const explicit = buildForexStrategySpec(
+    FX_ADAPTER,
+    pair,
+    BRL_FEED,
+    { minPrice: "0.09", maxPrice: 0.37, maxStaleness: "1h", oracleDecimals: 8, fxAmount: "5.5", label: " tight BRL " },
+    { feedQuote: "usdPerFx" }
+  );
+  assert.equal(explicit.band.source, "explicit");
+  assert.equal(explicit.args.minPrice, 9n * 10n ** 16n);
+  assert.equal(explicit.args.maxStaleness, 3_600);
+  assert.equal(explicit.args.oracleDecimals, 8);
+  assert.equal(explicit.fxShip, 55n * 10n ** 17n);
+  assert.equal(explicit.label, "tight BRL");
+  const banded = buildForexStrategySpec(FX_ADAPTER, resolvePair("ARS"), ARS_FEED, { bandPercent: "20%" }, {
+    oraclePriceWad: 1_470n * WAD
+  });
+  assert.equal(banded.band.minPrice, 1_176n * WAD);
+  assert.equal(banded.band.maxPrice, 1_764n * WAD);
+  assert.equal(banded.fxShip, 1_470n * WAD);
+
+  assert.throws(() => build({ flatFeeBps: 30 } as StrategyParamsInput), /flatFeeBps is not accepted: the forex curve \(Shell v1 \/ DFX\) charges its own proportional fee epsilon/);
+  assert.throws(
+    () => build({ outFeeBps: 200, feeGamma: 0.03 } as StrategyParamsInput),
+    /outFeeBps, feeGamma belong to the CryptoSwap-style FXSwap curve/
+  );
+  assert.throws(() => build({ price: 1400 }), /only apply to opcode "pegged"/);
+  assert.throws(() => build({ maxFee: 0.05, maxFeePercent: 5 }), /only one of maxFee or maxFeePercent/);
+  assert.throws(() => build({ feeBps: 10, feePercent: 0.1 }), /only one/);
+  assert.throws(() => build({ beta: 0.6 }), /ForexCurveInvalidCurve\(.*\): beta \(flat band\) must be below alpha/);
+  assert.throws(() => build({ alpha: 1 }), /ForexCurveInvalidCurve\(.*\): alpha \(halt band\) must be above 0 and below 1/);
+  assert.throws(() => build({ lambda: "150%" }), /ForexCurveInvalidFees\(.*\): lambda \(rebate share\)/);
+  assert.throws(() => build({ feeBps: 1000 }), /ForexCurveInvalidFees\(.*\): epsilon \(proportional fee\)/);
+  assert.throws(() => build({ feeBps: "0.000001" }), /finer than 1 ppb/);
+  assert.throws(() => build({ delta: 20 }), /ForexCurve delta \d+ does not fit its uint64 field/);
+  assert.throws(() => buildForexStrategySpec(FX_ADAPTER, pair, BRL_FEED, { bandPercent: 10 }), /live oracle price/);
+  assert.throws(() => buildForexStrategySpec(FX_ADAPTER, pair, BRL_FEED, {}), /fxAmount defaults/);
+});
+
+test("forex args validation covers flags, oracle, band and every curve range", () => {
+  const base = decodeForexArgs(ARS_FOREX_DEFAULT_ARGS);
+  const encode = (patch: Partial<ForexArgs>) => encodeForexArgs({ ...base, ...patch });
+  assert.throws(() => encode({ oracleKind: 1 }), /ForexCurveUnsupportedOracleKind\(1\)/);
+  assert.throws(() => encode({ flags: 4 }), /ForexCurveInvalidFlags\(4\)/);
+  assert.doesNotThrow(() => encode({ flags: 3 }));
+  assert.throws(() => encode({ oracle: `0x${"00".repeat(20)}` }), /ForexCurveInvalidOracle/);
+  assert.throws(() => encode({ maxStaleness: 0 }), /ForexCurveInvalidMaxStaleness/);
+  assert.throws(() => encode({ minPrice: 3_000n * WAD }), /ForexCurveInvalidPriceBand/);
+  assert.throws(() => encode({ minPrice: 0n }), /ForexCurveInvalidPriceBand/);
+  assert.throws(() => encode({ alpha: 0n }), /ForexCurveInvalidCurve\(0, \d+, \d+\): alpha \(halt band\)/);
+  assert.throws(() => encode({ alpha: WAD }), /ForexCurveInvalidCurve\(.*\): alpha \(halt band\)/);
+  assert.throws(() => encode({ beta: base.alpha }), /ForexCurveInvalidCurve\(.*\): beta \(flat band\)/);
+  assert.doesNotThrow(() => encode({ beta: 0n, delta: 0n, maxFee: 0n, lambda: 0n, epsilon: 0n }));
+  // delta's uint64 field tops out near 18.45; there is no other cap.
+  assert.doesNotThrow(() => encode({ delta: 18n * WAD }));
+  assert.throws(() => encode({ delta: 1n << 64n }), /uint64/);
+  // maxFee < min(1/2, (1 - alpha) / (2 alpha)): just under 0.5 at alpha 0.5, lower as alpha nears 1.
+  assert.equal(base.alpha, WAD / 2n);
+  assert.doesNotThrow(() => encode({ maxFee: WAD / 2n - 1n, lambda: WAD }));
+  assert.throws(() => encode({ maxFee: WAD / 2n }), /ForexCurveInvalidFees\(500000000000000000, .*\): maxFee/);
+  const alpha09 = (9n * WAD) / 10n;
+  assert.doesNotThrow(() => encode({ alpha: alpha09, maxFee: forexMaxFeeLimit(alpha09) }));
+  assert.throws(() => encode({ alpha: alpha09, maxFee: forexMaxFeeLimit(alpha09) + 1n }), /ForexCurveInvalidFees/);
+  assert.throws(() => encode({ lambda: WAD + 1n }), /ForexCurveInvalidFees\(.*\): lambda \(rebate share\)/);
+  assert.doesNotThrow(() => encode({ epsilon: 10n ** 17n - 1n }));
+  assert.throws(() => encode({ epsilon: 10n ** 17n }), /ForexCurveInvalidFees\(.*\): epsilon \(proportional fee\)/);
+  assert.throws(() => encode({ rateGt: 0n }), /ForexCurveInvalidRates/);
+  // Rates are 10^(18 - decimals): 1 (18 decimals) up to 1e18 (0 decimals).
+  assert.doesNotThrow(() => encode({ rateLt: WAD, rateGt: 1n }));
+  assert.throws(() => encode({ rateLt: WAD + 1n }), /ForexCurveInvalidRates\(1000000000000000001, 1\): rates are 10\^\(18 - token decimals\)/);
+  assert.throws(() => encode({ maxPrice: 1n << 128n }), /uint128/);
+  assert.throws(() => encode({ maxStaleness: 2 ** 32 }), /ForexCurve maxStaleness/);
+  assert.throws(() => decodeForexArgs(`0x${"00".repeat(122)}`), /ForexCurveInvalidArgsLength\(122\)/);
+  assert.throws(() => decodeForexArgs("0xzz"), /hex bytes/);
+});
+
+type ForexArgsVector = {
+  oracleKind: number;
+  flags: number;
+  oracle: string;
+  oracleDecimals: number;
+  maxStaleness: number;
+  minPrice: string;
+  maxPrice: string;
+  alpha: string;
+  beta: string;
+  delta: string;
+  maxFee: string;
+  lambda: string;
+  epsilon: string;
+  rateLt: string;
+  rateGt: string;
+  args: Hex;
+  program?: Hex;
+  salt?: Hex;
+  withSalt?: boolean;
+};
+const FOREX_VECTORS_URL = new URL("./fixtures/forex-args-vectors.json", import.meta.url);
+
+test(
+  "forex args and programs are byte-identical to the Solidity ForexCurve args builder vectors",
+  {
+    skip: existsSync(FOREX_VECTORS_URL)
+      ? false
+      : "test/fixtures/forex-args-vectors.json does not exist yet; it is generated from the Solidity ForexCurve args builder"
+  },
+  () => {
+    const vectors = JSON.parse(readFileSync(FOREX_VECTORS_URL, "utf8")) as Record<string, unknown>;
+    const limits = vectors.maxFeeLimit as Record<string, string> | undefined;
+    assert.ok(limits && Object.keys(limits).length > 0, "forex-args-vectors.json has no maxFeeLimit table");
+    for (const [alpha, limit] of Object.entries(limits)) {
+      assert.equal(forexMaxFeeLimit(BigInt(alpha)), BigInt(limit), `maxFeeLimit(${alpha}) matches ForexCurveArgsBuilder`);
+    }
+    const entries = Object.entries(vectors).filter(
+      (entry): entry is [string, ForexArgsVector] => typeof (entry[1] as { args?: unknown }).args === "string"
+    );
+    assert.ok(entries.length > 0, "forex-args-vectors.json has no entries with args");
+    for (const [name, vector] of entries) {
+      const args: ForexArgs = {
+        oracleKind: vector.oracleKind,
+        flags: vector.flags,
+        oracle: vector.oracle,
+        oracleDecimals: vector.oracleDecimals,
+        maxStaleness: vector.maxStaleness,
+        minPrice: BigInt(vector.minPrice),
+        maxPrice: BigInt(vector.maxPrice),
+        alpha: BigInt(vector.alpha),
+        beta: BigInt(vector.beta),
+        delta: BigInt(vector.delta),
+        maxFee: BigInt(vector.maxFee),
+        lambda: BigInt(vector.lambda),
+        epsilon: BigInt(vector.epsilon),
+        rateLt: BigInt(vector.rateLt),
+        rateGt: BigInt(vector.rateGt)
+      };
+      assert.equal(encodeForexArgs(args), vector.args.toLowerCase(), `${name} args`);
+      assert.deepEqual(decodeForexArgs(vector.args), { ...args, oracle: getAddress(vector.oracle) }, `${name} decode`);
+      if (vector.program) {
+        assert.equal(
+          buildForexProgram({ args, salt: vector.withSalt ? vector.salt : undefined }),
+          vector.program.toLowerCase(),
+          `${name} program`
+        );
+      }
+    }
+  }
+);
+
+test("venues: forex venue addresses default to the Arc deployment and can be overridden", async () => {
   const venue = resolveSwapVMVenue({ writeChainId: 5042002 });
-  assert.equal(venue.fxswap?.router, ARC_TESTNET_DEPLOYMENT.fxVenue.fxswapRouter?.toLowerCase());
-  assert.equal(venue.fxswap?.adapter, FX_ADAPTER.toLowerCase());
-  assert.equal(venue.fxswap?.oracles.ARGt, ARS_FEED.toLowerCase());
+  assert.equal(venue.forex?.opcode, "forex");
+  assert.equal(venue.forex?.name, "forex venue (AquaForexSwapVMRouter)");
+  assert.equal(venue.forex?.router, ARC_TESTNET_DEPLOYMENT.fxVenue.fxswapRouter?.toLowerCase());
+  assert.equal(venue.forex?.adapter, ARC_TESTNET_DEPLOYMENT.fxVenue.fxAquaAdapter?.toLowerCase());
+  assert.equal(venue.forex?.oracles.ARGt, ARS_FEED.toLowerCase());
   // USDC/BRL reads RedStone's BRL feed (USD per 1 BRL) unless FX_ORACLE_BRL_USD overrides it with a BRL-per-USD feed.
-  assert.equal(venue.fxswap?.oracles.BRAt, ARC_TESTNET_DEPLOYMENT.fxVenue.redstone.feeds.BRL?.toLowerCase());
-  assert.deepEqual(venue.fxswap?.feeds.BRAt, {
+  assert.equal(venue.forex?.oracles.BRAt, ARC_TESTNET_DEPLOYMENT.fxVenue.redstone.feeds.BRL?.toLowerCase());
+  assert.deepEqual(venue.forex?.feeds.BRAt, {
     address: ARC_TESTNET_DEPLOYMENT.fxVenue.redstone.feeds.BRL?.toLowerCase(),
     source: "redstone",
     quote: "usdPerFx",
     redstone: { feedId: "BRL", adapter: ARC_TESTNET_DEPLOYMENT.fxVenue.redstone.multiFeedAdapter?.toLowerCase() }
   });
-  assert.equal(venue.fxswap?.feeds.ARGt?.source, "manual");
-  const manualBrl = resolveSwapVMVenue({ writeChainId: 5042002, fxOracleBrlUsdAddress: BRL_FEED }).fxswap?.feeds.BRAt;
+  assert.equal(venue.forex?.feeds.ARGt?.source, "manual");
+  const manualBrl = resolveSwapVMVenue({ writeChainId: 5042002, fxOracleBrlUsdAddress: BRL_FEED }).forex?.feeds.BRAt;
   assert.deepEqual(manualBrl, { address: BRL_FEED.toLowerCase(), source: "manual", quote: "fxPerUsd" });
   assert.equal(venue.pegged.adapter, ADAPTER.toLowerCase());
   const override = `0x${"ab".repeat(20)}`;
-  assert.equal(resolveSwapVMVenue({ writeChainId: 5042002, fxOracleArsUsdAddress: override }).fxswap?.oracles.ARGt, override);
+  assert.equal(resolveSwapVMVenue({ writeChainId: 5042002, fxOracleArsUsdAddress: override }).forex?.oracles.ARGt, override);
   assert.throws(
     () => resolveSwapVMVenue({ writeChainId: 5042002, fxswapAquaAdapterAddress: ADAPTER }),
     /is the pegged AquaAdapter/

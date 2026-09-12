@@ -1,7 +1,7 @@
 /**
- * RedStone pull prices for FXSwap on Arc Testnet.
+ * RedStone pull prices for the forex curve on Arc Testnet.
  *
- * FXSwap reads a Chainlink-style feed (`latestRoundData`). On Arc that feed is an AquaRedStonePriceFeed over an
+ * The forex curve reads a Chainlink-style feed (`latestRoundData`). On Arc that feed is an AquaRedStonePriceFeed over an
  * AquaRedStoneMultiFeedAdapter holding RedStone `redstone-primary-prod` values. Nobody runs a keeper: before a swap
  * the client fetches a signed payload from RedStone's public gateways (no API key) and sends
  * `updateDataFeedsValuesPartial(feedIds)` with the payload appended to the calldata. The adapter stores a value only

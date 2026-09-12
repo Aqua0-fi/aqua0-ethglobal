@@ -70,13 +70,13 @@ export type WriteConfig = {
   aquaAdapterAddress?: string;
   /** 1inch AquaSwapVMRouter. Defaults to the Arc Testnet deployment when WRITE_CHAIN_ID is Arc. */
   aquaSwapVMRouterAddress?: string;
-  /** AquaFXSwapVMRouter (FXSwap venue). Defaults to the Arc Testnet deployment when WRITE_CHAIN_ID is Arc. */
+  /** AquaForexSwapVMRouter (forex venue). Defaults to the Arc Testnet deployment when WRITE_CHAIN_ID is Arc. */
   fxswapRouterAddress?: string;
-  /** AquaAdapter bound to the FXSwap router (a second adapter: each binds one router immutably). */
+  /** AquaAdapter bound to the forex router (a second adapter: each binds one router immutably). */
   fxswapAquaAdapterAddress?: string;
-  /** ARS-per-USD feed (ManualFxOracle / Chainlink-style) used by USDC/ARS FXSwap strategies. */
+  /** ARS-per-USD feed (ManualFxOracle / Chainlink-style) used by USDC/ARS forex strategies. */
   fxOracleArsUsdAddress?: string;
-  /** BRL-per-USD feed used by USDC/BRL FXSwap strategies. */
+  /** BRL-per-USD feed used by USDC/BRL forex strategies. */
   fxOracleBrlUsdAddress?: string;
 };
 

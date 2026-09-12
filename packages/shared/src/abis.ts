@@ -449,9 +449,47 @@ export const aquaSwapVMRouterAbi = [
   },
   { type: "error", name: "UnexpectedLock", inputs: [] },
   ...fxSwapErrors(),
+  ...forexCurveErrors(),
   ...aquaAdapterErrors,
   ...erc20Errors
 ] as const;
+
+/** ForexCurve instruction, ForexCurveArgsBuilder and ForexCurveMath custom errors (AquaForexSwapVMRouter opcode 34). */
+function forexCurveErrors() {
+  return [
+    { type: "error", name: "ForexCurveRecomputeDetected", inputs: [] },
+    { type: "error", name: "ForexCurveOracleInvalidAnswer", inputs: [{ name: "answer", type: "int256" }] },
+    {
+      type: "error",
+      name: "ForexCurveOracleStale",
+      inputs: [uint256("updatedAt"), uint256("maxStaleness"), uint256("nowTs")]
+    },
+    {
+      type: "error",
+      name: "ForexCurveOraclePriceOutOfBand",
+      inputs: [uint256("price"), uint256("minPrice"), uint256("maxPrice")]
+    },
+    // Args validation errors carry no parameters (router size); TypeScript's validateForexArgs explains them.
+    { type: "error", name: "ForexCurveInvalidArgsLength", inputs: [] },
+    { type: "error", name: "ForexCurveUnsupportedOracleKind", inputs: [] },
+    { type: "error", name: "ForexCurveInvalidFlags", inputs: [] },
+    { type: "error", name: "ForexCurveInvalidOracle", inputs: [] },
+    { type: "error", name: "ForexCurveInvalidMaxStaleness", inputs: [] },
+    { type: "error", name: "ForexCurveInvalidPriceBand", inputs: [] },
+    { type: "error", name: "ForexCurveInvalidCurve", inputs: [] },
+    { type: "error", name: "ForexCurveInvalidFees", inputs: [] },
+    { type: "error", name: "ForexCurveInvalidRates", inputs: [] },
+    { type: "error", name: "ForexCurveInvalidPair", inputs: [] },
+    { type: "error", name: "ForexCurveUnsupportedDecimals", inputs: [{ name: "decimals", type: "uint8" }] },
+    { type: "error", name: "ForexCurveEmptySide", inputs: [] },
+    { type: "error", name: "ForexCurveBalanceTooLarge", inputs: [] },
+    { type: "error", name: "ForexCurveDrain", inputs: [] },
+    { type: "error", name: "ForexCurveNoConsistentPiece", inputs: [] },
+    { type: "error", name: "ForexCurveUpperHalt", inputs: [] },
+    { type: "error", name: "ForexCurveLowerHalt", inputs: [] },
+    { type: "error", name: "ForexCurveSwapInvariant", inputs: [] }
+  ] as const;
+}
 
 /** FXSwap instruction, FXSwapArgsBuilder and FXSwapMath custom errors (AquaFXSwapVMRouter opcode 34). */
 function fxSwapErrors() {

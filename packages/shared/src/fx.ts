@@ -1,11 +1,11 @@
 /**
  * On-chain flows for the Arc USDC-FX demo through Aqua0 AquaAdapters and 1inch SwapVM routers.
  *
- * Two venues share the Aqua0 vaults and the 1inch Aqua instance, because an AquaAdapter binds one router
- * immutably:
- * - fxswap (default when configured): AquaFXSwapVMRouter, `[FlatFeeAmountIn]?[FXSwap]`, priced from an FX
- *   oracle on every swap;
- * - pegged (fallback): stock AquaSwapVMRouter, `[FlatFeeAmountIn][PeggedSwap]` at a fixed FX price.
+ * Every fill draws on the Aqua0 vaults just in time. The opcode picks the pricing program and the router that runs
+ * it, each with its own AquaAdapter (an adapter binds one router immutably), on the same vaults and Aqua instance:
+ * - forex (default when configured): AquaForexSwapVMRouter, `[Salt]?[ForexCurve]`, the forex curve (Shell v1 / DFX)
+ *   priced from an FX oracle on every swap;
+ * - pegged (fallback): stock AquaSwapVMRouter, `[Salt]?[FlatFeeAmountIn][PeggedSwap]` at a fixed FX price.
  *
  * Flows: create a strategy (class -> vault legs -> backing -> commitments -> ship), deposit with human units,
  * quote/swap against a live strategy with oracle/execution price and spread, read how one USDC deposit backs
@@ -48,19 +48,20 @@ import {
 } from "./redstone.js";
 import {
   ARC_TOKENS,
-  FXSWAP,
+  FOREX,
   FXSWAP_REFERENCE_PRICE_WAD,
   OPERATOR_ROLE,
   SWAPVM,
   VENUE_SETTLER_ROLE,
   assertSupportedChain,
-  buildFxSwapStrategySpec,
+  buildForexStrategySpec,
   buildPeggedStrategySpec,
   buildShipTypedData,
   buildTakerTraitsAndData,
   decodeSwapVMOrder,
   decodeSwapVMProgram,
   describeContractError,
+  forexFxPerUsdcWad,
   formatRate,
   formatTokenAmount,
   inferOpcodeFromParams,
@@ -72,9 +73,9 @@ import {
   type AmountUnit,
   type AmountValue,
   type DecodedInstruction,
+  type ForexArgs,
   type FxFeedQuote,
   type FxPair,
-  type FxSwapArgs,
   type StrategyOpcode,
   type StrategyParamsInput,
   type StrategySpec,
@@ -106,7 +107,7 @@ const FEED_ENV: Readonly<Record<string, string>> = {
 };
 
 export const FX_FEED_RISK =
-  "FXSwap trusts its feed, bounded only by each strategy's price band and staleness window. USDC/BRL strategies read RedStone's BRL feed: prices signed off-chain by RedStone's primary-prod signers (3 of 5 must agree), verified by the adapter contract and pushed on-chain by whoever swaps (the swap tool pushes one first). USDC/ARS strategies read a ManualFxOracle that only its owner sets by hand, because RedStone has no ARS feed: treat that one as a demo oracle.";
+  "A forex strategy trusts its feed, bounded only by its price band and staleness window. USDC/BRL strategies read RedStone's BRL feed: prices signed off-chain by RedStone's primary-prod signers (3 of 5 must agree), verified by the adapter contract and pushed on-chain by whoever swaps (the swap tool pushes one first). USDC/ARS strategies read a ManualFxOracle that only its owner sets by hand, because RedStone has no ARS feed: treat that one as a demo oracle.";
 
 /** RedStone strategies default to a 1 hour staleness window: the swapper pushes a fresh signed price right before swapping. */
 const REDSTONE_DEFAULT_MAX_STALENESS = 3_600;
@@ -124,7 +125,7 @@ export type AquaVenue = {
   router: Lowercase<string>;
 };
 
-/** An FX feed FXSwap reads with `latestRoundData`, and where its price comes from. */
+/** An FX feed the forex curve reads with `latestRoundData`, and where its price comes from. */
 export type FxFeed = {
   address: Lowercase<string>;
   /** `manual`: owner-set ManualFxOracle. `redstone`: AquaRedStonePriceFeed over signed RedStone data. */
@@ -133,13 +134,17 @@ export type FxFeed = {
   redstone?: { feedId: string; adapter: Lowercase<string> };
 };
 
-export type FxSwapVenue = AquaVenue & {
-  opcode: "fxswap";
+/** The forex venue: AquaForexSwapVMRouter (ForexCurve, opcode 34) and the AquaAdapter bound to it. */
+export type ForexVenue = AquaVenue & {
+  opcode: "forex";
   /** Feed address per FX token symbol (ARGt, BRAt). */
   oracles: Partial<Record<string, Lowercase<string>>>;
   /** The same feeds with their source and orientation. */
   feeds: Partial<Record<string, FxFeed>>;
 };
+
+/** @deprecated The FX venue now runs the forex curve; use `ForexVenue`. */
+export type FxSwapVenue = ForexVenue;
 
 export type SwapVMVenue = {
   chainId: number;
@@ -150,7 +155,7 @@ export type SwapVMVenue = {
   adapter: Lowercase<string>;
   router: Lowercase<string>;
   pegged: AquaVenue;
-  fxswap?: FxSwapVenue;
+  forex?: ForexVenue;
 };
 
 /** Venue addresses: env overrides first, Arc Testnet deployment defaults otherwise. */
@@ -168,10 +173,10 @@ export function resolveSwapVMVenue(config: WriteConfig): SwapVMVenue {
     adapter: normalizeAddress(config.aquaAdapterAddress ?? contracts.aquaAdapter),
     router: normalizeAddress(config.aquaSwapVMRouterAddress ?? contracts.aquaSwapVMRouter)
   };
-  const fxswap = resolveFxSwapVenue(config);
-  if (fxswap && fxswap.adapter === pegged.adapter) {
+  const forex = resolveFxSwapVenue(config);
+  if (forex && forex.adapter === pegged.adapter) {
     throw new Error(
-      `The FXSwap venue adapter ${fxswap.adapter} is the pegged AquaAdapter; FXSWAP_AQUA_ADAPTER_ADDRESS must be the adapter bound to the FXSwap router`
+      `The forex venue adapter ${forex.adapter} is the pegged AquaAdapter; FXSWAP_AQUA_ADAPTER_ADDRESS must be the adapter bound to AquaForexSwapVMRouter`
     );
   }
   return {
@@ -182,16 +187,17 @@ export function resolveSwapVMVenue(config: WriteConfig): SwapVMVenue {
     adapter: pegged.adapter,
     router: pegged.router,
     pegged,
-    ...(fxswap ? { fxswap } : {})
+    ...(forex ? { forex } : {})
   };
 }
 
 /**
- * FXSwap venue from env overrides, then the Arc deployment; undefined until both router and adapter are known.
- * USDC/ARS reads the ARS/USD ManualFxOracle. USDC/BRL reads RedStone's BRL feed (USD per 1 BRL) unless
+ * The forex venue (AquaForexSwapVMRouter and its AquaAdapter) from env overrides (FXSWAP_ROUTER_ADDRESS,
+ * FXSWAP_AQUA_ADAPTER_ADDRESS), then the Arc deployment's `fxVenue`; undefined until both router and adapter are
+ * known. USDC/ARS reads the ARS/USD ManualFxOracle. USDC/BRL reads RedStone's BRL feed (USD per 1 BRL) unless
  * FX_ORACLE_BRL_USD points at another, BRL-per-USD feed.
  */
-export function resolveFxSwapVenue(config: WriteConfig): FxSwapVenue | undefined {
+export function resolveFxSwapVenue(config: WriteConfig): ForexVenue | undefined {
   const deployed = ARC_TESTNET_DEPLOYMENT.fxVenue;
   const router = config.fxswapRouterAddress ?? deployed.fxswapRouter;
   const adapter = config.fxswapAquaAdapterAddress ?? deployed.fxAquaAdapter;
@@ -211,8 +217,8 @@ export function resolveFxSwapVenue(config: WriteConfig): FxSwapVenue | undefined
     feeds.BRAt = brl;
   }
   return {
-    opcode: "fxswap",
-    name: "FXSwap venue (AquaFXSwapVMRouter)",
+    opcode: "forex",
+    name: "forex venue (AquaForexSwapVMRouter)",
     adapter: normalizeAddress(adapter),
     router: normalizeAddress(router),
     oracles: Object.fromEntries(Object.entries(feeds).map(([symbol, feed]) => [symbol, feed?.address])),
@@ -266,17 +272,33 @@ export function parseStrategyOpcode(opcode: string | undefined): StrategyOpcode 
   if (["pegged", "peg", "peggedswap", "stable", "stableswap", "fixed", "fixedrate", "fixedprice"].includes(value)) {
     return "pegged";
   }
-  if (["fxswap", "fx", "oracle", "oraclefx", "dynamic", "dynamicfx", "floating", "floatingfx"].includes(value)) {
-    return "fxswap";
+  const forexAliases = [
+    "forex",
+    "forexcurve",
+    "fxswap",
+    "fx",
+    "fxcurve",
+    "oracle",
+    "oraclefx",
+    "dfx",
+    "shell",
+    "shellv1",
+    "dynamic",
+    "dynamicfx",
+    "floating",
+    "floatingfx"
+  ];
+  if (forexAliases.includes(value)) {
+    return "forex";
   }
   throw new Error(
-    `Unknown opcode "${opcode}". Supported: "fxswap" (oracle-anchored FXSwap, the default when its venue is configured) and "pegged" (fixed-price PeggedSwap fallback)`
+    `Unknown opcode "${opcode}". Supported: "forex" (the oracle-priced forex curve, Shell v1 / DFX, the default when its venue is configured) and "pegged" (fixed-price PeggedSwap fallback)`
   );
 }
 
 /**
- * Opcode before on-chain checks: explicit opcode, else what opcode-specific params imply, else "fxswap" when
- * the FXSwap venue is configured, else "pegged". Throws when "fxswap" is requested but not configured.
+ * Opcode before on-chain checks: explicit opcode, else what opcode-specific params imply, else "forex" when
+ * the forex venue is configured, else "pegged". Throws when "forex" is requested but not configured.
  */
 export function resolveStrategyOpcode(
   opcode: string | undefined,
@@ -284,13 +306,13 @@ export function resolveStrategyOpcode(
   params?: StrategyParamsInput
 ): StrategyOpcode {
   const requested = parseStrategyOpcode(opcode) ?? inferOpcodeFromParams(params);
-  const fxConfigured = resolveFxSwapVenue(config) !== undefined;
-  if (requested === "fxswap" && !fxConfigured) {
+  const forexConfigured = resolveFxSwapVenue(config) !== undefined;
+  if (requested === "forex" && !forexConfigured) {
     throw new Error(
-      'FXSwap venue not configured: set FXSWAP_ROUTER_ADDRESS and FXSWAP_AQUA_ADAPTER_ADDRESS (and FX_ORACLE_ARS_USD / FX_ORACLE_BRL_USD). Meanwhile use opcode "pegged".'
+      'Forex venue not configured: set FXSWAP_ROUTER_ADDRESS and FXSWAP_AQUA_ADAPTER_ADDRESS to AquaForexSwapVMRouter and its AquaAdapter (and FX_ORACLE_ARS_USD / FX_ORACLE_BRL_USD). Meanwhile use opcode "pegged".'
     );
   }
-  return requested ?? (fxConfigured ? "fxswap" : "pegged");
+  return requested ?? (forexConfigured ? "forex" : "pegged");
 }
 
 type OpcodeChoice = {
@@ -368,7 +390,7 @@ export async function executeCreateFxStrategy(
       `In execute mode the strategist is the configured signer ${ctx.signer}; got ${input.strategist}. Omit strategist, or use dryRun to prepare for another address.`
     );
   }
-  const fxShipper = venue.fxswap ? await resolveShipper(ctx, venue.fxswap.adapter) : undefined;
+  const fxShipper = venue.forex ? await resolveShipper(ctx, venue.forex.adapter) : undefined;
   const choice = await chooseCreateOpcode(client, venue, input, pair, fxShipper?.writer.address ?? ctx.signer);
   const { spec, aquaVenue, oracle } = await buildStrategySpec(
     client,
@@ -808,7 +830,7 @@ export async function executeFxDeposit(config: WriteConfig, input: FxDepositInpu
 export type FxSwapInput = {
   pair?: string | undefined;
   strategyId?: string | undefined;
-  /** "fxswap" or "pegged" to pick the venue; default tries FXSwap first when configured, then pegged. */
+  /** "forex" or "pegged" to pick the pricing program; default tries forex first when configured, then pegged. */
   opcode?: string | undefined;
   /** Same params used at creation; defaults reproduce the default strategy. */
   params?: StrategyParamsInput | undefined;
@@ -1290,7 +1312,7 @@ export async function readFxPrices(config: WriteConfig, input: FxPricesInput = {
   const block = await client.getBlock();
   const feeds = await Promise.all(
     pairs.map(async (pair) => {
-      const feed = venue.fxswap?.feeds[pair.fx.symbol];
+      const feed = venue.forex?.feeds[pair.fx.symbol];
       if (!feed) {
         return {
           pair: pair.name,
@@ -1342,7 +1364,7 @@ export async function readFxPrices(config: WriteConfig, input: FxPricesInput = {
       };
     })
   );
-  const usedFeeds = new Set(Object.values(venue.fxswap?.feeds ?? {}).map((feed) => feed?.address));
+  const usedFeeds = new Set(Object.values(venue.forex?.feeds ?? {}).map((feed) => feed?.address));
   const otherRedstoneFeeds = input.pair
     ? []
     : await Promise.all(
@@ -1368,8 +1390,8 @@ export async function readFxPrices(config: WriteConfig, input: FxPricesInput = {
     chainId: venue.chainId,
     blockNumber: block.number.toString(),
     blockTimestamp: block.timestamp.toString(),
-    fxswapVenue: venue.fxswap
-      ? { router: venue.fxswap.router, adapter: venue.fxswap.adapter }
+    forexVenue: venue.forex
+      ? { router: venue.forex.router, adapter: venue.forex.adapter }
       : null,
     feeds,
     ...(otherRedstoneFeeds.length > 0 ? { otherRedstoneFeeds } : {}),
@@ -1379,7 +1401,7 @@ export async function readFxPrices(config: WriteConfig, input: FxPricesInput = {
 
 export type SetFxPriceInput = {
   pair?: string | undefined;
-  /** Feed address; must be one of the configured FXSwap feeds. Alternative to pair. */
+  /** Feed address; must be one of the configured forex feeds. Alternative to pair. */
   feed?: string | undefined;
   /** New absolute price, FX units per 1 USD (e.g. 5.6 for BRL). */
   price?: AmountValue | undefined;
@@ -1452,7 +1474,7 @@ export async function executeSetFxPrice(config: WriteConfig, input: SetFxPriceIn
     after: describeOracle(after),
     change: formatChange(before.answer, after.answer),
     steps: ctx.steps,
-    next: `FXSwap strategies reading this feed now price ${pair.name} at ${formatWad(after.feedPriceWad)} ${pair.fx.fiat} per USD on their next quote or swap; pegged strategies do not move.`,
+    next: `Forex strategies reading this feed now price ${pair.name} at ${formatWad(after.feedPriceWad)} ${pair.fx.fiat} per USD on their next quote or swap; pegged strategies do not move.`,
     ...(warnings.length > 0 ? { warnings } : {}),
     risk: FX_FEED_RISK
   };
@@ -1782,7 +1804,7 @@ function prepareStep(
 }
 
 function listVenues(venue: SwapVMVenue): AquaVenue[] {
-  return venue.fxswap ? [venue.fxswap, venue.pegged] : [venue.pegged];
+  return venue.forex ? [venue.forex, venue.pegged] : [venue.pegged];
 }
 
 function venueTarget(venue: SwapVMVenue, aquaVenue: AquaVenue) {
@@ -1790,25 +1812,25 @@ function venueTarget(venue: SwapVMVenue, aquaVenue: AquaVenue) {
 }
 
 function routerContractName(aquaVenue: AquaVenue): string {
-  return aquaVenue.opcode === "fxswap" ? "AquaFXSwapVMRouter" : "AquaSwapVMRouter";
+  return aquaVenue.opcode === "forex" ? "AquaForexSwapVMRouter" : "AquaSwapVMRouter";
 }
 
-function requireFxSwapFeed(
+function requireForexFeed(
   venue: SwapVMVenue,
   pair: FxPair
-): { fxVenue: FxSwapVenue; feed: Lowercase<string>; info: FxFeed } {
-  if (!venue.fxswap) {
+): { forexVenue: ForexVenue; feed: Lowercase<string>; info: FxFeed } {
+  if (!venue.forex) {
     throw new Error(
-      'FXSwap venue not configured: set FXSWAP_ROUTER_ADDRESS and FXSWAP_AQUA_ADAPTER_ADDRESS. Meanwhile use opcode "pegged".'
+      'Forex venue not configured: set FXSWAP_ROUTER_ADDRESS and FXSWAP_AQUA_ADAPTER_ADDRESS to AquaForexSwapVMRouter and its AquaAdapter. Meanwhile use opcode "pegged".'
     );
   }
-  const info = venue.fxswap.feeds[pair.fx.symbol];
+  const info = venue.forex.feeds[pair.fx.symbol];
   if (!info) {
     throw new Error(
-      `No ${pair.fx.fiat}/USD feed configured for FXSwap ${pair.name}: set ${FEED_ENV[pair.fx.symbol] ?? "its feed env var"}`
+      `No ${pair.fx.fiat}/USD feed configured for forex ${pair.name}: set ${FEED_ENV[pair.fx.symbol] ?? "its feed env var"}`
     );
   }
-  return { fxVenue: venue.fxswap, feed: info.address, info };
+  return { forexVenue: venue.forex, feed: info.address, info };
 }
 
 /** Program salt for a strategist's class (strategist, chain, pair, label), so its strategy id is its own. */
@@ -1822,17 +1844,17 @@ function manualFeed(address: string): FxFeed {
   return { address: normalizeAddress(address), source: "manual", quote: "fxPerUsd" };
 }
 
-/** The feed an FXSwap program reads: a configured feed, a deployed RedStone feed, or else an FX-per-USD feed. */
+/** The feed a ForexCurve program reads: a configured feed, a deployed RedStone feed, or else an FX-per-USD feed. */
 function feedForAddress(venue: SwapVMVenue, address: string): FxFeed {
   const wanted = normalizeAddress(address);
-  const known = [...Object.values(venue.fxswap?.feeds ?? {}), ...deployedRedstoneFeeds()].find(
+  const known = [...Object.values(venue.forex?.feeds ?? {}), ...deployedRedstoneFeeds()].find(
     (feed) => feed?.address === wanted
   );
   return known ?? manualFeed(wanted);
 }
 
 /** Program params with the feed's defaults: RedStone strategies get a 1 hour staleness window unless one is given. */
-function fxSwapParamsForFeed(feed: FxFeed, params: StrategyParamsInput): StrategyParamsInput {
+function forexParamsForFeed(feed: FxFeed, params: StrategyParamsInput): StrategyParamsInput {
   return feed.source === "redstone" && params.maxStaleness === undefined
     ? { ...params, maxStaleness: REDSTONE_DEFAULT_MAX_STALENESS }
     : params;
@@ -1940,10 +1962,10 @@ function redstoneUpdateStep(redstone: RedstoneQuoteOverride): PreparedStep {
   };
 }
 
-/** Before swapping on a RedStone-priced FXSwap strategy, push the latest signed price on-chain. Returns whether it did. */
+/** Before swapping on a RedStone-priced forex strategy, push the latest signed price on-chain. Returns whether it did. */
 async function pushRedstonePrice(ctx: ExecContext, venue: SwapVMVenue, strategy: LiveStrategy): Promise<boolean> {
   for (const instruction of strategy.instructions) {
-    if (instruction.name !== "FXSwap") {
+    if (instruction.name !== "ForexCurve") {
       continue;
     }
     const feed = feedForAddress(venue, instruction.args.oracle);
@@ -1972,7 +1994,7 @@ function errorText(error: unknown): string {
 }
 
 /**
- * Explicit opcode, then opcode-specific params, then the default: FXSwap when its venue is configured, has a feed
+ * Explicit opcode, then opcode-specific params, then the default: forex when its venue is configured, has a feed
  * for the pair, is wired into Aqua0 core and (in execute mode) the signer may ship on it; otherwise the pegged
  * venue, with a note saying why.
  */
@@ -1985,37 +2007,37 @@ async function chooseCreateOpcode(
 ): Promise<OpcodeChoice> {
   const explicit = parseStrategyOpcode(input.opcode);
   if (explicit) {
-    if (explicit === "fxswap") {
-      requireFxSwapFeed(venue, pair);
+    if (explicit === "forex") {
+      requireForexFeed(venue, pair);
     }
     return { opcode: explicit, source: "explicit" };
   }
   const inferred = inferOpcodeFromParams(input.params);
   if (inferred) {
-    if (inferred === "fxswap") {
-      requireFxSwapFeed(venue, pair);
+    if (inferred === "forex") {
+      requireForexFeed(venue, pair);
     }
     return { opcode: inferred, source: "params" };
   }
-  if (!venue.fxswap) {
-    return { opcode: "pegged", source: "default", note: "FXSwap venue not configured; used the pegged (fixed-price) venue." };
+  if (!venue.forex) {
+    return { opcode: "pegged", source: "default", note: "Forex venue not configured; used the pegged (fixed-price) program." };
   }
   const fallback = (reason: string): OpcodeChoice => ({
     opcode: "pegged",
     source: "fallback",
-    note: `FXSwap is the default opcode, but ${reason} So this used the pegged (fixed-price) venue; pass opcode "fxswap" to insist once that is fixed.`
+    note: `The forex curve is the default opcode, but ${reason} So this used the pegged (fixed-price) program; pass opcode "forex" to insist once that is fixed.`
   });
-  if (!venue.fxswap.oracles[pair.fx.symbol]) {
+  if (!venue.forex.oracles[pair.fx.symbol]) {
     return fallback(`no ${pair.fx.fiat}/USD feed is configured (${FEED_ENV[pair.fx.symbol] ?? "feed env var"}).`);
   }
-  const readiness = await readVenueReadiness(client, venueTarget(venue, venue.fxswap), [pair.usdc, pair.fx], signer);
+  const readiness = await readVenueReadiness(client, venueTarget(venue, venue.forex), [pair.usdc, pair.fx], signer);
   if (readiness.hint) {
     return fallback(readiness.hint);
   }
   if (readiness.operatorHint) {
     return fallback(readiness.operatorHint);
   }
-  return { opcode: "fxswap", source: "default" };
+  return { opcode: "forex", source: "default" };
 }
 
 async function buildStrategySpec(
@@ -2031,28 +2053,28 @@ async function buildStrategySpec(
     const salt = strategySaltFor(venue.chainId, strategist, pair, unsalted.label);
     return { spec: buildPeggedStrategySpec(venue.pegged.adapter, pair, params, { salt }), aquaVenue: venue.pegged };
   }
-  const { fxVenue, feed, info } = requireFxSwapFeed(venue, pair);
+  const { forexVenue, feed, info } = requireForexFeed(venue, pair);
   const { reading: oracle } = await readLiveFeed(client, info, pair);
   if (oracle.answer <= 0n) {
     throw new Error(`The ${pair.fx.fiat}/USD feed ${feed} reports a non-positive answer (${oracle.answer})`);
   }
-  const fxParams = fxSwapParamsForFeed(info, params);
+  const forexParams = forexParamsForFeed(info, params);
   const context = { oraclePriceWad: oracle.feedPriceWad, feedQuote: info.quote };
-  const label = buildFxSwapStrategySpec(fxVenue.adapter, pair, feed, fxParams, context).label;
-  const spec = buildFxSwapStrategySpec(fxVenue.adapter, pair, feed, fxParams, {
+  const label = buildForexStrategySpec(forexVenue.adapter, pair, feed, forexParams, context).label;
+  const spec = buildForexStrategySpec(forexVenue.adapter, pair, feed, forexParams, {
     ...context,
     salt: strategySaltFor(venue.chainId, strategist, pair, label)
   });
   if (oracle.feedPriceWad < spec.band.minPrice || oracle.feedPriceWad > spec.band.maxPrice) {
     const unit = feedUnit(pair.fx.fiat, info.quote);
     throw new Error(
-      `The ${pair.fx.fiat}/USD feed is at ${formatWad(oracle.feedPriceWad)} ${unit}, outside this strategy's price band ${formatWad(spec.band.minPrice)}..${formatWad(spec.band.maxPrice)} ${unit}: every swap would revert (FXSwapOraclePriceOutOfBand). Adjust minPrice/maxPrice or use bandPercent.`
+      `The ${pair.fx.fiat}/USD feed is at ${formatWad(oracle.feedPriceWad)} ${unit}, outside this strategy's price band ${formatWad(spec.band.minPrice)}..${formatWad(spec.band.maxPrice)} ${unit}: every swap would revert on the band check. Adjust minPrice/maxPrice or use bandPercent.`
     );
   }
-  return { spec, aquaVenue: fxVenue, oracle };
+  return { spec, aquaVenue: forexVenue, oracle };
 }
 
-/** Best-effort spec used to recognise a strategy from params (no RPC; FXSwap amounts use the reference price). */
+/** Best-effort spec used to recognise a strategy from params (no RPC; forex amounts use the reference price). */
 function specForRecognition(
   venue: SwapVMVenue,
   aquaVenue: AquaVenue,
@@ -2063,11 +2085,11 @@ function specForRecognition(
     if (aquaVenue.opcode === "pegged") {
       return buildPeggedStrategySpec(aquaVenue.adapter, pair, params);
     }
-    const feed = venue.fxswap?.feeds[pair.fx.symbol];
+    const feed = venue.forex?.feeds[pair.fx.symbol];
     if (!feed || params.bandPercent !== undefined) {
       return undefined;
     }
-    return buildFxSwapStrategySpec(aquaVenue.adapter, pair, feed.address, fxSwapParamsForFeed(feed, params), {
+    return buildForexStrategySpec(aquaVenue.adapter, pair, feed.address, forexParamsForFeed(feed, params), {
       oraclePriceWad: referenceFeedPriceWad(pair, feed.quote) ?? WAD,
       feedQuote: feed.quote
     });
@@ -2079,7 +2101,7 @@ function specForRecognition(
 /** Params that do not change the program bytes, so a strategy may be found by event scan instead. */
 function paramsPinProgram(opcode: StrategyOpcode, params: StrategyParamsInput | undefined): boolean {
   const free =
-    opcode === "fxswap"
+    opcode === "forex"
       ? ["label", "amountUnit", "usdcAmount", "fxAmount", "bandPercent"]
       : ["label", "amountUnit"];
   return Object.entries(params ?? {}).some(([key, value]) => value !== undefined && !free.includes(key));
@@ -2243,7 +2265,7 @@ async function approveIfNeeded(
 }
 
 /**
- * Find the live strategy a quote/swap targets. Venues are tried in order (the requested opcode only, or FXSwap
+ * Find the live strategy a quote/swap targets. Venues are tried in order (the requested opcode only, or forex
  * then pegged): first the strategy id rebuilt from pair + params, then, when the params do not pin the program
  * bytes (e.g. none were given, or bandPercent), the newest live strategy for the pair in Aqua Shipped events,
  * preferring one whose class belongs to `preferStrategist`.
@@ -2256,11 +2278,13 @@ async function resolveLiveStrategy(
 ): Promise<LiveStrategy> {
   const requested = parseStrategyOpcode(input.opcode) ?? inferOpcodeFromParams(input.params);
   let ordered: AquaVenue[];
-  if (requested === "fxswap") {
-    if (!venue.fxswap) {
-      throw new Error('FXSwap venue not configured: set FXSWAP_ROUTER_ADDRESS and FXSWAP_AQUA_ADAPTER_ADDRESS, or use opcode "pegged"');
+  if (requested === "forex") {
+    if (!venue.forex) {
+      throw new Error(
+        'Forex venue not configured: set FXSWAP_ROUTER_ADDRESS and FXSWAP_AQUA_ADAPTER_ADDRESS to AquaForexSwapVMRouter and its AquaAdapter, or use opcode "pegged"'
+      );
     }
-    ordered = [venue.fxswap];
+    ordered = [venue.forex];
   } else if (requested === "pegged") {
     ordered = [venue.pegged];
   } else {
@@ -2309,13 +2333,13 @@ async function resolveLiveStrategy(
       if (aquaVenue.opcode === "pegged") {
         build = (salt) => buildPeggedStrategySpec(aquaVenue.adapter, pair, params, salt ? { salt } : {});
       } else {
-        const { feed, info } = requireFxSwapFeed(venue, pair);
+        const { feed, info } = requireForexFeed(venue, pair);
         const oraclePriceWad =
           params.bandPercent === undefined
             ? (referenceFeedPriceWad(pair, info.quote) ?? WAD)
             : (await readLiveFeed(client, info, pair)).reading.feedPriceWad;
         build = (salt) =>
-          buildFxSwapStrategySpec(aquaVenue.adapter, pair, feed, fxSwapParamsForFeed(info, params), {
+          buildForexStrategySpec(aquaVenue.adapter, pair, feed, forexParamsForFeed(info, params), {
             oraclePriceWad,
             feedQuote: info.quote,
             ...(salt ? { salt } : {})
@@ -2405,7 +2429,7 @@ async function findLiveStrategyForPair(
   preferStrategist: string | undefined
 ): Promise<{ strategy?: { strategyId: Hex; order: SwapVMOrder }; error?: string }> {
   const scan = await scanShippedStrategies(client, venue, [aquaVenue.adapter]);
-  const wantedInstruction = aquaVenue.opcode === "fxswap" ? "FXSwap" : "PeggedSwap";
+  const wantedInstruction = aquaVenue.opcode === "forex" ? "ForexCurve" : "PeggedSwap";
   const wantedTokens = [pair.usdc.address, pair.fx.address].sort().join();
   let first: { strategyId: Hex; order: SwapVMOrder } | undefined;
   const preferred = preferStrategist ? normalizeAddress(preferStrategist) : undefined;
@@ -2630,7 +2654,7 @@ function describeOracle(
   };
 }
 
-/** The price a strategy is anchored to: the FXSwap feed (read exactly as FXSwap reads it) or the pegged price. */
+/** The price a strategy is anchored to: the forex curve's feed (read exactly as ForexCurve reads it) or the pegged price. */
 async function readReferencePrice(
   client: ReadClient,
   venue: SwapVMVenue,
@@ -2642,8 +2666,8 @@ async function readReferencePrice(
   const usdcIsLt = BigInt(pair.usdc.address) < BigInt(pair.fx.address);
   const gap = 10n ** BigInt(pair.fx.decimals - pair.usdc.decimals);
   for (const instruction of strategy.instructions) {
-    if (instruction.name === "FXSwap") {
-      const args: FxSwapArgs = instruction.args;
+    if (instruction.name === "ForexCurve") {
+      const args: ForexArgs = instruction.args;
       const feed = feedForAddress(venue, args.oracle);
       // Read-only calls price RedStone feeds with the latest signed payload; after a push, read the chain.
       const live = options.onChainFeed
@@ -2653,21 +2677,20 @@ async function readReferencePrice(
       const redstone = "redstone" in live ? live.redstone : undefined;
       const decimals = args.oracleDecimals === 0 ? reading.decimals : args.oracleDecimals;
       const feedWad = reading.answer > 0n ? scaleToWad(reading.answer, decimals) : 0n;
-      const priceGtPerLt =
-        (args.flags & FXSWAP.flagInvertPrice) === 0 ? feedWad : feedWad === 0n ? 0n : (WAD * WAD) / feedWad;
-      const fxPerUsdcWad = usdcIsLt ? priceGtPerLt : priceGtPerLt === 0n ? 0n : (WAD * WAD) / priceGtPerLt;
+      // The curve prices p = USDC per FX unit from the program's flags; FX per USDC is its inverse.
+      const fxPerUsdcWad = forexFxPerUsdcWad(args, feedWad, pair);
       const oracle = describeOracle({ ...reading, feedPriceWad: feedWad }, args);
       const warnings = [
         ...(oracle.fresh === false
           ? [
               feed.source === "redstone"
-                ? `The on-chain RedStone ${pair.fx.fiat} price is ${oracle.ageSeconds}s old, beyond this strategy's ${args.maxStaleness}s staleness window: swaps revert (FXSwapOracleStale) until a fresh signed payload is pushed (swap pushes one first)`
-                : `The ${pair.fx.fiat}/USD feed answer is ${oracle.ageSeconds}s old, beyond this strategy's ${args.maxStaleness}s staleness window: swaps revert (FXSwapOracleStale) until the feed owner refreshes it (set_fx_price)`
+                ? `The on-chain RedStone ${pair.fx.fiat} price is ${oracle.ageSeconds}s old, beyond this strategy's ${args.maxStaleness}s staleness window: swaps revert (ForexCurveOracleStale) until a fresh signed payload is pushed (swap pushes one first)`
+                : `The ${pair.fx.fiat}/USD feed answer is ${oracle.ageSeconds}s old, beyond this strategy's ${args.maxStaleness}s staleness window: swaps revert (ForexCurveOracleStale) until the feed owner refreshes it (set_fx_price)`
             ]
           : []),
         ...(oracle.strategyBand?.inBand === false
           ? [
-              `The ${pair.fx.fiat}/USD feed (${oracle.price}) is outside this strategy's band ${oracle.strategyBand.min}..${oracle.strategyBand.max}: swaps revert (FXSwapOraclePriceOutOfBand)`
+              `The ${pair.fx.fiat}/USD feed (${oracle.price}) is outside this strategy's band ${oracle.strategyBand.min}..${oracle.strategyBand.max}: swaps revert (ForexCurveOraclePriceOutOfBand)`
             ]
           : [])
       ];
@@ -2726,7 +2749,7 @@ function pricingSummary(
     effectiveSpreadBps: formatSignedHundredths(spreadHundredthsBps),
     spreadNote:
       reference.source === "oracle"
-        ? "Shortfall versus trading the whole amount at the oracle price: FXSwap dynamic fee, any flat fee and curve slippage. Negative means better than the oracle (a rebalancing trade)."
+        ? "Shortfall versus trading the whole amount at the oracle price. The forex curve (Shell v1 / DFX) is flat at the oracle price while the book stays within beta of an even split, charges an inventory fee (slope delta, capped at maxFee) on the part of a trade past that band, and takes its proportional fee epsilon on every swap. Negative means better than the oracle: a trade that rebalances the book gets a share lambda of the fee back."
         : "Shortfall versus the pegged program price: flat fee plus curve slippage."
   };
 }
@@ -2792,9 +2815,8 @@ function strategyIdentity(
   return {
     ...common,
     program: {
-      instructions: `${spec.salt ? "Salt (opcode 20) -> " : ""}${
-        spec.flatFeePpb > 0 ? "FlatFeeAmountIn (opcode 21) -> FXSwap (opcode 34)" : "FXSwap (opcode 34)"
-      }`,
+      instructions: `${spec.salt ? "Salt (opcode 20) -> " : ""}ForexCurve (opcode 34)`,
+      curve: "the forex curve (Shell v1 / DFX): oracle price inside the flat band, inventory fee outside it, halt past the halt band",
       priceSource: `oracle ${spec.oracle} (${feedUnit(fiat, spec.feedQuote)}), read on every swap`,
       priceBand: {
         min: `${formatWad(spec.band.minPrice)} ${feedUnit(fiat, spec.feedQuote)}`,
@@ -2803,16 +2825,17 @@ function strategyIdentity(
       },
       maxStalenessSeconds: args.maxStaleness,
       oracleDecimals: args.oracleDecimals === 0 ? "read from the feed on every swap" : args.oracleDecimals,
-      A: formatUnits(args.a, 4),
-      gamma: formatUnits(args.gamma, 18),
-      midFeeBps: formatUnits(args.midFee, 14),
-      outFeeBps: formatUnits(args.outFee, 14),
-      feeGamma: formatUnits(args.feeGamma, 18),
-      flatFeeBps: formatUnits(BigInt(spec.flatFeePpb), 5),
+      alpha: formatUnits(args.alpha, 18),
+      beta: formatUnits(args.beta, 18),
+      delta: formatUnits(args.delta, 18),
+      maxFee: formatUnits(args.maxFee, 18),
+      lambda: formatUnits(args.lambda, 18),
+      epsilonBps: formatUnits(args.epsilon, 14),
       declaredFeePpb: spec.feePpb,
       declaredFeeNote:
-        "feePpb declared to shipStrategyWithFee: the mid fee (the least the curve charges, at balance) composed with any flat fee. The AquaAdapter does not read opcodes; the declaration never overstates the fee.",
-      invertPrice: (args.flags & FXSWAP.flagInvertPrice) !== 0,
+        "feePpb declared to shipStrategyWithFee: epsilon, the proportional fee every swap pays. The AquaAdapter does not read opcodes; the inventory fee outside the flat band comes on top, and a rebalancing trade can get part of it back.",
+      invertPrice: (args.flags & FOREX.flagInvertPrice) !== 0,
+      quoteIsGt: (args.flags & FOREX.flagQuoteIsGt) !== 0,
       rateLt: args.rateLt.toString(),
       rateGt: args.rateGt.toString(),
       usdcShip: formatTokenAmount(spec.usdcShip, spec.pair.usdc),
@@ -2842,6 +2865,8 @@ function summarizeInstructions(instructions: readonly DecodedInstruction[]): str
           return `FlatFeeAmountIn ${formatUnits(BigInt(instruction.feePpb), 5)} bps`;
         case "PeggedSwap":
           return "PeggedSwap (fixed price)";
+        case "ForexCurve":
+          return `ForexCurve, the forex curve (oracle ${normalizeAddress(instruction.args.oracle)}, flat band ${formatUnits(instruction.args.beta, 18)}, fee ${formatUnits(instruction.args.epsilon, 14)} bps)`;
         case "FXSwap":
           return `FXSwap (oracle ${normalizeAddress(instruction.args.oracle)}, A ${formatUnits(instruction.args.a, 4)}, mid fee ${formatUnits(instruction.args.midFee, 14)} bps)`;
         default:
@@ -2861,7 +2886,7 @@ function safeDecodeProgram(program: Hex): DecodedInstruction[] {
 
 function resolveFeedTarget(venue: SwapVMVenue, input: SetFxPriceInput): { pair: FxPair; feed: Lowercase<string> } {
   const target = findFeedTarget(venue, input);
-  if (venue.fxswap?.feeds[target.pair.fx.symbol]?.source === "redstone") {
+  if (venue.forex?.feeds[target.pair.fx.symbol]?.source === "redstone") {
     throw new Error(
       `The ${target.pair.fx.fiat} feed ${target.feed} carries RedStone's signed market price, so nobody can set it by hand. quote_swap already prices with the latest signed RedStone payload and swap pushes it on-chain first. Only the USDC/ARS demo feed (ManualFxOracle) can be moved by hand.`
     );
@@ -2870,15 +2895,15 @@ function resolveFeedTarget(venue: SwapVMVenue, input: SetFxPriceInput): { pair: 
 }
 
 function findFeedTarget(venue: SwapVMVenue, input: SetFxPriceInput): { pair: FxPair; feed: Lowercase<string> } {
-  if (!venue.fxswap) {
-    throw new Error("FXSwap venue not configured, so there are no FX feeds to set");
+  if (!venue.forex) {
+    throw new Error("Forex venue not configured, so there are no FX feeds to set");
   }
-  const oracles = venue.fxswap.oracles;
+  const oracles = venue.forex.oracles;
   if (input.feed) {
     const feed = normalizeAddress(input.feed);
     const symbol = Object.keys(oracles).find((key) => oracles[key] === feed);
     if (!symbol) {
-      throw new Error(`Feed ${feed} is not one of the configured FXSwap feeds (${Object.values(oracles).join(", ")})`);
+      throw new Error(`Feed ${feed} is not one of the configured forex feeds (${Object.values(oracles).join(", ")})`);
     }
     const pair = resolvePair(symbol);
     if (input.pair && resolvePair(input.pair).name !== pair.name) {
@@ -2890,7 +2915,7 @@ function findFeedTarget(venue: SwapVMVenue, input: SetFxPriceInput): { pair: FxP
     throw new Error('Pass pair (e.g. "ARS" or "USDC/BRL") or feed to choose the FX feed');
   }
   const pair = resolvePair(input.pair);
-  return { pair, feed: requireFxSwapFeed(venue, pair).feed };
+  return { pair, feed: requireForexFeed(venue, pair).feed };
 }
 
 function computeNewAnswer(reading: FxOracleReading, input: SetFxPriceInput): bigint {
@@ -2929,7 +2954,7 @@ function feedMoveWarnings(pair: FxPair, reading: FxOracleReading, newAnswer: big
   const newWad = scaleToWad(newAnswer, reading.decimals);
   return newWad < reference / 2n || newWad > reference * 2n
     ? [
-        `${formatWad(newWad)} ${pair.fx.fiat} per USD is outside the default FXSwap band ${formatWad(reference / 2n)}..${formatWad(reference * 2n)}: strategies created with the default band will revert swaps until the price is back inside`
+        `${formatWad(newWad)} ${pair.fx.fiat} per USD is outside the default forex band ${formatWad(reference / 2n)}..${formatWad(reference * 2n)}: strategies created with the default band will revert swaps until the price is back inside`
       ]
     : [];
 }

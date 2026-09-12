@@ -880,7 +880,7 @@ export class Aqua0Service {
     return readSharedBacking(this.#config, input);
   }
 
-  /** Price, freshness and owner of each FXSwap feed (ARS/USD, BRL/USD). Read-only. */
+  /** Price, freshness and owner of each forex feed (ARS/USD, BRL/USD). Read-only. */
   getFxPrices(input: FxPricesInput = {}) {
     return readFxPrices(this.#config, input);
   }
