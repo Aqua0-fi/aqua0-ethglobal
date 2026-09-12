@@ -9,7 +9,7 @@ The demo is a conversation in an agentic terminal (Claude Code, Codex or any MCP
 | Forex flow on Arc Testnet: two forex strategies by default on one USDC, one swap each with a RedStone price push, shared-backing read | **Live** |
 | Forex curve regimes: inventory fee past the flat band, halt band, `set_fx_price` → `quote_swap` on ARS | **Fork-proven** |
 | Graph reads from Subgraph Studio, including Aqua strategies and fills for both venues | **Live** |
-| Public MCP endpoint and dashboard | **Live** on the earlier 12-tool prepare-only build |
+| Public MCP endpoint and dashboard | **Live** on the current prepare-only build (23 public tools, no signer), including `create_strategy`, `quote_swap` and `benchmark_fx_strategy` |
 
 ## Setup
 

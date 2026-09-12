@@ -26,11 +26,12 @@ This repository separates that pre-existing work from what was built during ETHG
 | Both-venue Aqua indexing: `AquaStrategy`, `AquaOrder`, `AquaFill` with a `venue` label, per-LP fill stats and fees | `packages/subgraph` | **Live** on Subgraph Studio |
 | Arc RPC topic-splitting and rate-pacing proxy for a self-hosted Graph Node | `infra/arc-rpc-proxy` | Development fallback |
 | Graph-backed typed service: analytics, strategy keys, SwapVM programs (pegged and forex curve), calldata, execution guard | `packages/shared` | **Live** |
-| MCP server (stdio + Streamable HTTP) and public deployment | `apps/mcp`, `deploy/aws` | **Live**; public endpoint on the earlier prepare-only build |
+| MCP server (stdio + Streamable HTTP) and public deployment | `apps/mcp`, `deploy/aws` | **Live**; public endpoint is the current prepare-only build (23 tools, no signer) |
 | MCP SwapVM tools: `create_strategy`, `deposit`, `quote_swap`, `swap`, `get_shared_backing` | `packages/shared`, `apps/mcp`, `apps/cli` | **Live** on Arc (pegged and forex venues, via the CLI) |
 | MCP forex tools: `opcode:"forex"` (the default), `get_fx_prices`, `set_fx_price`, oracle and spread pricing, RedStone payload push and quote state override | `packages/shared`, `apps/mcp`, `apps/cli` | **Live** on Arc; `set_fx_price` **Fork-proven** |
 | CLI with MCP parity | `apps/cli` | **Live** |
 | Agent skill | `skills/aqua0/SKILL.md` | **Live** |
+| Graph-standardized FX benchmark (`benchmark_fx_strategy`): Aqua0 Arc subgraph + Messari DEX AMM subgraphs through The Graph Network gateway | `packages/shared/src/graph-benchmark.ts`, `apps/mcp` | **Live** on the public MCP |
 | Judge dashboard (web MVP) | `apps/dashboard` | **Live** |
 | Arc Testnet deployment of the Aqua0 vault core and USDC/ARGt/BRAt vaults | `deployments/arc-testnet.json` | **Live** |
 | 1inch Aqua 0.1.0 + AquaSwapVMRouter (swap-vm v1.0.2) + AquaAdapter on Arc, wired | `packages/contracts` | **Live** |

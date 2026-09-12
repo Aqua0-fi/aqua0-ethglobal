@@ -29,7 +29,7 @@ The Arc Testnet subgraph is **Live** on Subgraph Studio, deployed by Rithik. The
 - Query endpoint (always the latest version): `https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/version/latest`
 - Network: `arc-testnet` (`5042002`)
 - `_meta.hasIndexingErrors = false`
-- The public MCP (`https://ethglobal-mcp.18-207-103-187.nip.io/mcp`, earlier prepare-only build) and the judge dashboard read from this endpoint.
+- The public MCP (`https://ethglobal-mcp.18-207-103-187.nip.io/mcp`, current prepare-only build with 23 public tools) and the judge dashboard read from this endpoint. `benchmark_fx_strategy` also queries standardized DEX subgraphs through The Graph Network gateway.
 
 A smoke test through the public MCP used `health`, `protocol_snapshot`, `list_opportunities`, raw `graph_query` and `prepare_create_strategy`. The provider returned live Arc vault, strategy and strategy-vault state.
 
