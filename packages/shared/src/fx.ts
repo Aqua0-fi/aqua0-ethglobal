@@ -49,7 +49,7 @@ import {
 import {
   ARC_TOKENS,
   FOREX,
-  FXSWAP_REFERENCE_PRICE_WAD,
+  FX_REFERENCE_PRICE_WAD,
   OPERATOR_ROLE,
   SWAPVM,
   VENUE_SETTLER_ROLE,
@@ -1895,7 +1895,7 @@ function feedUnit(fiat: string, quote: FxFeedQuote): string {
 
 /** The default-band reference price (1400 ARS / 5.5 BRL per USD) in the feed's orientation. */
 function referenceFeedPriceWad(pair: FxPair, quote: FxFeedQuote): bigint | undefined {
-  const fxPerUsd = FXSWAP_REFERENCE_PRICE_WAD[pair.fx.symbol];
+  const fxPerUsd = FX_REFERENCE_PRICE_WAD[pair.fx.symbol];
   return fxPerUsd === undefined || quote === "fxPerUsd" ? fxPerUsd : (WAD * WAD) / fxPerUsd;
 }
 
@@ -2896,8 +2896,6 @@ function summarizeInstructions(instructions: readonly DecodedInstruction[]): str
           return "PeggedSwap (fixed price)";
         case "ForexCurve":
           return `ForexCurve, the forex curve (oracle ${normalizeAddress(instruction.args.oracle)}, flat band ${formatUnits(instruction.args.beta, 18)}, fee ${formatUnits(instruction.args.epsilon, 14)} bps)`;
-        case "FXSwap":
-          return `FXSwap (oracle ${normalizeAddress(instruction.args.oracle)}, A ${formatUnits(instruction.args.a, 4)}, mid fee ${formatUnits(instruction.args.midFee, 14)} bps)`;
         default:
           return `opcode ${instruction.opcode}`;
       }
@@ -2976,7 +2974,7 @@ function computeNewAnswer(reading: FxOracleReading, input: SetFxPriceInput): big
 }
 
 function feedMoveWarnings(pair: FxPair, reading: FxOracleReading, newAnswer: bigint): string[] {
-  const reference = FXSWAP_REFERENCE_PRICE_WAD[pair.fx.symbol];
+  const reference = FX_REFERENCE_PRICE_WAD[pair.fx.symbol];
   if (reference === undefined) {
     return [];
   }

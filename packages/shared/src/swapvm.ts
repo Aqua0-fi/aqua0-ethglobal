@@ -436,26 +436,6 @@ export type StrategyParamsInput = {
   label?: string | undefined;
 };
 
-type ForexCurveParamKey = "alpha" | "beta" | "delta" | "maxFee" | "maxFeePercent" | "lambda";
-
-/** Params of the FXSwap (CryptoSwap-style) library builder `buildFxSwapStrategySpec`. No MCP venue uses it. */
-export type FxSwapParamsInput = Omit<StrategyParamsInput, ForexCurveParamKey> & {
-  /** CryptoSwap amplification A in whitepaper units (default 100). */
-  a?: AmountValue | undefined;
-  /** CryptoSwap gamma as a decimal (default 0.1). */
-  gamma?: AmountValue | undefined;
-  /** Fee far from balance (default 1%, never below the mid fee). `feeBps` etc. set the mid fee. */
-  outFeeBps?: AmountValue | undefined;
-  outFeePercent?: AmountValue | undefined;
-  outFeePpb?: AmountValue | undefined;
-  /** Fee transition width as a decimal (default 0.03). */
-  feeGamma?: AmountValue | undefined;
-  /** Optional FlatFeeAmountIn input fee in front of the curve (default none). */
-  flatFeeBps?: AmountValue | undefined;
-  flatFeePercent?: AmountValue | undefined;
-  flatFeePpb?: AmountValue | undefined;
-};
-
 export type PeggedStrategySpec = {
   opcode: "pegged";
   pair: FxPair;
@@ -540,263 +520,18 @@ export function buildPeggedStrategySpec(
   };
 }
 
-// ---------------------------------------------------------------------------------------------
-// FXSwap: oracle-anchored CryptoSwap instruction, AquaFXSwapVMRouter opcode 34.
-// Mirrors packages/contracts/src/instructions/FXSwap.sol (FXSwapArgsBuilder); byte-equality is pinned by
-// test/fixtures/fxswap-args-vectors.json, generated from the Solidity builder.
-
-export const FXSWAP = {
-  opcode: 34,
-  argsLength: 115,
-  oracleKindChainlink: 0,
-  flagInvertPrice: 0x01,
-  wad: 10n ** 18n,
-  /** A is encoded as whitepaper A x 1e4. */
-  aPrecision: 10_000n,
-  maxA: 1_000_000n * 10_000n,
-  minGamma: 10n ** 10n,
-  maxGamma: 10n ** 18n,
-  /** 50% in WAD. */
-  maxFee: 5n * 10n ** 17n,
-  routerDomain: { name: "AquaSwapVMRouter", version: "1.0.2-fx" }
-} as const;
-
-/**
- * Demo defaults for FXSwap strategies:
- * - A = 100 (the FXSwap test suite's value), gamma = 0.1. The test suite's gamma 0.01 was tuned on a 100k USD pool
- *   with 0.1% trades. At demo depth (1 USDC shipped, 0.1 USDC trades, i.e. 10% of a side) gamma 0.01 leaves the
- *   near-flat zone after a single trade: FXSwapPricing gives a 415 bps spread on the second 0.1 USDC trade and a +5%
- *   oracle move lifts that quote only +2.5%. gamma 0.1 keeps the curve flat around the oracle over those imbalances
- *   (95 bps, +4.8%), while the dynamic fee below still widens as inventory drains.
- * - midFee 10 bps at balance, outFee 1% far from balance, feeGamma 0.03: a tight quote for a balanced pool that
- *   widens as one side is drained, which is what protects the LP when the feed lags the market.
- * - maxStaleness 7 days: the demo feeds are ManualFxOracle answers set by hand (no heartbeat), so a short window
- *   would brick quotes between updates. A Chainlink FX feed (24h heartbeat) should use ~25h instead.
- * - oracleDecimals 0: read decimals() from the feed on every swap, so the program stays correct for any feed.
- * - Price band 0.5x to 2x of a per-pair reference price (700..2800 ARS, 2.75..11 BRL per USD): a circuit
- *   breaker against a broken or mis-scaled feed, not a trading limit, and deterministic so the default strategy id
- *   can be recomputed from the pair alone. `bandPercent` tightens it around the live price at creation.
- */
-export const FXSWAP_DEFAULTS = {
-  a: 1_000_000n,
-  gamma: 10n ** 17n,
-  midFee: 10n ** 15n,
-  outFee: 10n ** 16n,
-  feeGamma: 3n * 10n ** 16n,
-  maxStaleness: 604_800,
-  oracleDecimals: 0
-} as const;
-
 /** What an FX feed answer means: FX units per 1 USD, or USD per 1 FX unit. */
 export type FxFeedQuote = "fxPerUsd" | "usdPerFx";
 
 /** FX units per 1 USD (WAD) the default price band is built around. */
-export const FXSWAP_REFERENCE_PRICE_WAD: Readonly<Record<string, bigint>> = {
+export const FX_REFERENCE_PRICE_WAD: Readonly<Record<string, bigint>> = {
   ARGt: 1_400n * 10n ** 18n,
   BRAt: 55n * 10n ** 17n
-};
-
-/** FXSwapArgsBuilder.Args. Prices are feed answers scaled to WAD in the feed's orientation. */
-export type FxSwapArgs = {
-  oracleKind: number;
-  flags: number;
-  oracle: string;
-  oracleDecimals: number;
-  maxStaleness: number;
-  minPrice: bigint;
-  maxPrice: bigint;
-  a: bigint;
-  gamma: bigint;
-  midFee: bigint;
-  outFee: bigint;
-  feeGamma: bigint;
-  rateLt: bigint;
-  rateGt: bigint;
 };
 
 const UINT32_MAX = 4_294_967_295;
 const UINT64_MAX = (1n << 64n) - 1n;
 const UINT128_MAX = (1n << 128n) - 1n;
-
-/** Same checks, in the same order, as FXSwapArgsBuilder.validate, plus field-width checks. */
-export function validateFxSwapArgs(args: FxSwapArgs): void {
-  assertIntInRange(args.oracleKind, 255, "oracleKind");
-  assertIntInRange(args.flags, 255, "flags");
-  assertIntInRange(args.oracleDecimals, 255, "oracleDecimals");
-  assertIntInRange(args.maxStaleness, UINT32_MAX, "maxStaleness");
-  const wide: Array<[string, bigint, bigint]> = [
-    ["minPrice", args.minPrice, UINT128_MAX],
-    ["maxPrice", args.maxPrice, UINT128_MAX],
-    ["a", args.a, UINT64_MAX],
-    ["gamma", args.gamma, UINT64_MAX],
-    ["midFee", args.midFee, UINT64_MAX],
-    ["outFee", args.outFee, UINT64_MAX],
-    ["feeGamma", args.feeGamma, UINT64_MAX],
-    ["rateLt", args.rateLt, UINT64_MAX],
-    ["rateGt", args.rateGt, UINT64_MAX]
-  ];
-  for (const [name, value, max] of wide) {
-    if (value < 0n || value > max) {
-      throw new Error(`FXSwap ${name} ${value} does not fit its ${max === UINT128_MAX ? "uint128" : "uint64"} field`);
-    }
-  }
-  if (args.oracleKind !== FXSWAP.oracleKindChainlink) {
-    throw new Error(
-      `FXSwapUnsupportedOracleKind(${args.oracleKind}): only oracleKind 0 (Chainlink-style latestRoundData) is supported; 1 (Pyth) is reserved`
-    );
-  }
-  if ((args.flags & ~FXSWAP.flagInvertPrice) !== 0) {
-    throw new Error(`FXSwapInvalidFlags(${args.flags}): only bit 0 (invert price) may be set`);
-  }
-  if (!/^0x[0-9a-fA-F]{40}$/.test(args.oracle) || BigInt(args.oracle) === 0n) {
-    throw new Error(`FXSwapInvalidOracle(): oracle "${args.oracle}" must be a non-zero address`);
-  }
-  if (args.maxStaleness === 0) {
-    throw new Error("FXSwapInvalidMaxStaleness(): maxStaleness must be greater than zero seconds");
-  }
-  if (args.minPrice === 0n || args.minPrice > args.maxPrice) {
-    throw new Error(
-      `FXSwapInvalidPriceBand(${args.minPrice}, ${args.maxPrice}): need 0 < minPrice <= maxPrice`
-    );
-  }
-  if (args.a > FXSWAP.maxA || args.gamma < FXSWAP.minGamma || args.gamma > FXSWAP.maxGamma) {
-    throw new Error(
-      `FXSwapInvalidCurve(${args.a}, ${args.gamma}): need A <= 1,000,000 and 1e-8 <= gamma <= 1`
-    );
-  }
-  if (
-    !(
-      args.midFee <= args.outFee &&
-      args.outFee <= FXSWAP.maxFee &&
-      args.feeGamma <= FXSWAP.wad &&
-      (args.feeGamma !== 0n || args.midFee === args.outFee)
-    )
-  ) {
-    throw new Error(
-      `FXSwapInvalidFees(${args.midFee}, ${args.outFee}, ${args.feeGamma}): need midFee <= outFee <= 50%, feeGamma <= 1, and feeGamma > 0 unless midFee == outFee`
-    );
-  }
-  if (args.rateLt === 0n || args.rateGt === 0n) {
-    throw new Error(`FXSwapInvalidRates(${args.rateLt}, ${args.rateGt}): rates must be non-zero`);
-  }
-}
-
-/** FXSwapArgsBuilder.build: validate, then pack the 115-byte big-endian layout. */
-export function encodeFxSwapArgs(args: FxSwapArgs): Hex {
-  validateFxSwapArgs(args);
-  return encodePacked(
-    [
-      "uint8",
-      "uint8",
-      "address",
-      "uint8",
-      "uint32",
-      "uint128",
-      "uint128",
-      "uint64",
-      "uint64",
-      "uint64",
-      "uint64",
-      "uint64",
-      "uint64",
-      "uint64"
-    ],
-    [
-      args.oracleKind,
-      args.flags,
-      getAddress(args.oracle),
-      args.oracleDecimals,
-      args.maxStaleness,
-      args.minPrice,
-      args.maxPrice,
-      args.a,
-      args.gamma,
-      args.midFee,
-      args.outFee,
-      args.feeGamma,
-      args.rateLt,
-      args.rateGt
-    ]
-  );
-}
-
-/** FXSwapArgsBuilder.parse: decode the 115-byte layout, then validate. */
-export function decodeFxSwapArgs(data: Hex): FxSwapArgs {
-  const hex = data.startsWith("0x") ? data.slice(2) : data;
-  if (!/^[0-9a-fA-F]*$/.test(hex) || hex.length % 2 !== 0) {
-    throw new Error("FXSwap args must be hex bytes");
-  }
-  if (hex.length / 2 !== FXSWAP.argsLength) {
-    throw new Error(`FXSwapInvalidArgsLength(${hex.length / 2}): FXSwap args are ${FXSWAP.argsLength} bytes`);
-  }
-  const field = (offset: number, size: number) => BigInt(`0x${hex.slice(offset * 2, (offset + size) * 2)}`);
-  const args: FxSwapArgs = {
-    oracleKind: Number(field(0, 1)),
-    flags: Number(field(1, 1)),
-    oracle: getAddress(`0x${hex.slice(4, 44)}`),
-    oracleDecimals: Number(field(22, 1)),
-    maxStaleness: Number(field(23, 4)),
-    minPrice: field(27, 16),
-    maxPrice: field(43, 16),
-    a: field(59, 8),
-    gamma: field(67, 8),
-    midFee: field(75, 8),
-    outFee: field(83, 8),
-    feeGamma: field(91, 8),
-    rateLt: field(99, 8),
-    rateGt: field(107, 8)
-  };
-  validateFxSwapArgs(args);
-  return args;
-}
-
-/**
- * FXSwapArgsBuilder.orientation for a feed quoting `quote` units per 1 `base`: whether the invert flag is needed
- * and the decimals multipliers (10^(18 - decimals)) of the lower- and greater-address tokens.
- */
-export function fxSwapOrientation(
-  base: string,
-  baseDecimals: number,
-  quote: string,
-  quoteDecimals: number
-): { invertPrice: boolean; rateLt: bigint; rateGt: bigint } {
-  if (normalizeAddress(base) === normalizeAddress(quote)) {
-    throw new Error("FXSwapInvalidPair(): base and quote must differ");
-  }
-  for (const decimals of [baseDecimals, quoteDecimals]) {
-    if (!Number.isInteger(decimals) || decimals < 0 || decimals > 18) {
-      throw new Error(`FXSwapUnsupportedDecimals(${decimals}): token decimals must be 0..18`);
-    }
-  }
-  const baseRate = 10n ** BigInt(18 - baseDecimals);
-  const quoteRate = 10n ** BigInt(18 - quoteDecimals);
-  return BigInt(base) < BigInt(quote)
-    ? { invertPrice: false, rateLt: baseRate, rateGt: quoteRate }
-    : { invertPrice: true, rateLt: quoteRate, rateGt: baseRate };
-}
-
-/** `[FlatFeeAmountIn(flatFeePpb)]` (only when flatFeePpb > 0) followed by `[FXSwap(args)]`. */
-export function buildFxSwapProgram(input: {
-  args: FxSwapArgs;
-  flatFeePpb?: number | undefined;
-  /** Optional `[Salt]` prefix (see `buildSaltInstruction`). */
-  salt?: Hex | undefined;
-}): Hex {
-  const fxSwap = encodePacked(
-    ["uint8", "uint8", "bytes"],
-    [FXSWAP.opcode, FXSWAP.argsLength, encodeFxSwapArgs(input.args)]
-  );
-  const flatFeePpb = input.flatFeePpb ?? 0;
-  if (!Number.isInteger(flatFeePpb) || flatFeePpb < 0 || flatFeePpb >= SWAPVM.feeDenominatorPpb) {
-    throw new Error(`flat fee of ${flatFeePpb} ppb must be an integer below 1,000,000,000 ppb (100%)`);
-  }
-  const parts: Hex[] = [
-    ...(input.salt ? [buildSaltInstruction(input.salt)] : []),
-    ...(flatFeePpb === 0 ? [] : [encodePacked(["uint8", "uint8", "uint32"], [SWAPVM.opcodeFlatFeeIn, 4, flatFeePpb])]),
-    fxSwap
-  ];
-  return parts.length === 1 ? fxSwap : concat(parts);
-}
 
 export type DecodedInstruction =
   | { opcode: 20; name: "Salt"; salt: Hex }
@@ -810,13 +545,12 @@ export type DecodedInstruction =
       rateLt: bigint;
       rateGt: bigint;
     }
-  | { opcode: 34; name: "FXSwap"; args: FxSwapArgs }
   | { opcode: 34; name: "ForexCurve"; args: ForexArgs }
   | { opcode: number; name: "unknown"; args: Hex };
 
 /**
  * Split a SwapVM program into `[opcode][length][args]` instructions and decode the ones Aqua0 ships. Opcode 34 is
- * ForexCurve on AquaForexSwapVMRouter and FXSwap on AquaFXSwapVMRouter; the args length (123 vs 115) tells them apart.
+ * ForexCurve on AquaForexSwapVMRouter (123-byte args).
  */
 export function decodeSwapVMProgram(program: Hex): DecodedInstruction[] {
   const hex = program.startsWith("0x") ? program.slice(2) : program;
@@ -846,8 +580,6 @@ export function decodeSwapVMProgram(program: Hex): DecodedInstruction[] {
       instructions.push({ opcode, name: "PeggedSwap", x0, y0, linearWidth, rateLt, rateGt });
     } else if (opcode === FOREX.opcode && length === FOREX.argsLength) {
       instructions.push({ opcode, name: "ForexCurve", args: decodeForexArgs(args) });
-    } else if (opcode === FXSWAP.opcode && length === FXSWAP.argsLength) {
-      instructions.push({ opcode, name: "FXSwap", args: decodeFxSwapArgs(args) });
     } else {
       instructions.push({ opcode, name: "unknown", args });
     }
@@ -868,13 +600,13 @@ const FOREX_ONLY_PARAMS = [
   "maxStaleness",
   "oracleDecimals"
 ] as const;
-/** FXSwap builder params that no venue opcode accepts. */
-const FXSWAP_CURVE_PARAMS = ["a", "gamma", "outFeeBps", "outFeePercent", "outFeePpb", "feeGamma"] as const;
+/** Params of the retired CryptoSwap-style FXSwap curve. No venue opcode accepts them. */
+const LEGACY_CRYPTOSWAP_PARAMS = ["a", "gamma", "outFeeBps", "outFeePercent", "outFeePpb", "feeGamma"] as const;
 const FLAT_FEE_PARAMS = ["flatFeeBps", "flatFeePercent", "flatFeePpb"] as const;
 
 /** Opcode implied by opcode-specific params, or undefined when only shared params (or none) are set. */
 export function inferOpcodeFromParams(params: StrategyParamsInput = {}): StrategyOpcode | undefined {
-  assertNoFxSwapParams(params);
+  assertNoLegacyParams(params);
   const pegged = PEGGED_ONLY_PARAMS.filter((key) => params[key] !== undefined);
   const forex = FOREX_ONLY_PARAMS.filter((key) => params[key] !== undefined);
   if (pegged.length > 0 && forex.length > 0) {
@@ -886,7 +618,7 @@ export function inferOpcodeFromParams(params: StrategyParamsInput = {}): Strateg
 }
 
 function assertParamsFor(opcode: StrategyOpcode, params: StrategyParamsInput): void {
-  assertNoFxSwapParams(params);
+  assertNoLegacyParams(params);
   const foreign = (opcode === "pegged" ? FOREX_ONLY_PARAMS : PEGGED_ONLY_PARAMS).filter(
     (key) => params[key] !== undefined
   );
@@ -901,10 +633,11 @@ function assertParamsFor(opcode: StrategyOpcode, params: StrategyParamsInput): v
 }
 
 /**
- * Rejects FXSwap-only params, which callers outside TypeScript (MCP JSON, CLI flags, older scripts) can still send:
+ * Rejects params of the retired FXSwap curve, which callers outside TypeScript (MCP JSON, CLI flags, older scripts)
+ * can still send:
  * the forex curve takes its own fee and curve params instead.
  */
-function assertNoFxSwapParams(params: object): void {
+function assertNoLegacyParams(params: object): void {
   const given = (keys: readonly string[]) =>
     keys.filter((key) => (params as Record<string, unknown>)[key] !== undefined);
   const flatFee = given(FLAT_FEE_PARAMS);
@@ -913,26 +646,11 @@ function assertNoFxSwapParams(params: object): void {
       `${flatFee.join(", ")} is not accepted: the forex curve (Shell v1 / DFX) charges its own proportional fee epsilon, so no SwapVM flat fee is stacked on it. Pass the fee as feeBps, feePercent or feePpb (epsilon for forex, the flat fee for pegged)`
     );
   }
-  const cryptoSwap = given(FXSWAP_CURVE_PARAMS);
+  const cryptoSwap = given(LEGACY_CRYPTOSWAP_PARAMS);
   if (cryptoSwap.length > 0) {
     throw new Error(
       `${cryptoSwap.join(", ")} belong to the CryptoSwap-style FXSwap curve, which Aqua0 no longer ships. The forex curve (Shell v1 / DFX) takes alpha (halt band), beta (flat band), delta (fee slope), maxFee (fee cap) and lambda (rebate share), with its fee epsilon as feeBps`
     );
-  }
-}
-
-/** FXSwap builder: pegged-only and forex-curve params do not apply. */
-function assertFxSwapBuilderParams(params: FxSwapParamsInput): void {
-  const loose = params as Record<string, unknown>;
-  const pegged = PEGGED_ONLY_PARAMS.filter((key) => loose[key] !== undefined);
-  if (pegged.length > 0) {
-    throw new Error(
-      `${pegged.join(", ")} only apply to opcode "pegged" (fixed price). FXSwap prices every swap from the oracle: move the feed with set_fx_price, bound it with minPrice/maxPrice or bandPercent`
-    );
-  }
-  const forex = FOREX_CURVE_PARAMS.filter((key) => loose[key] !== undefined);
-  if (forex.length > 0) {
-    throw new Error(`${forex.join(", ")} only apply to the forex curve (buildForexStrategySpec), not FXSwap`);
   }
 }
 
@@ -961,142 +679,13 @@ export function parseDurationSeconds(value: AmountValue, field = "maxStaleness")
   return seconds;
 }
 
-export type FxSwapStrategySpec = {
-  opcode: "fxswap";
-  pair: FxPair;
-  label: string;
-  oracle: Lowercase<string>;
-  /** What the feed answer means; `minPrice`/`maxPrice` are in this orientation. */
-  feedQuote: FxFeedQuote;
-  /** Per-strategist program salt, when set. */
-  salt?: Hex;
-  args: FxSwapArgs;
-  band: PriceBand;
-  flatFeePpb: number;
-  /**
-   * Rate declared to AquaAdapter.shipStrategyWithFee: the flat fee composed with the FXSwap mid fee. The adapter
-   * does not read opcodes, so this is a declaration; the mid fee is the minimum the curve charges (at balance),
-   * so the declared rate never overstates what the program takes.
-   */
-  feePpb: number;
-  usdcShip: bigint;
-  fxShip: bigint;
-  program: Hex;
-  order: SwapVMOrder;
-  strategyBytes: Hex;
-  strategyId: Hex;
-  tokens: [Address, Address];
-  amounts: [bigint, bigint];
-};
-
-/** Strategies Aqua0 venues create. `FxSwapStrategySpec` stays a library-only builder. */
+/** Strategies Aqua0 venues create. */
 export type StrategySpec = PeggedStrategySpec | ForexStrategySpec;
 
 /** Accepted feed answers (WAD, feed orientation) and where the bounds came from. */
 export type PriceBand = { source: "default" | "explicit" | "bandPercent"; minPrice: bigint; maxPrice: bigint };
 
-/**
- * `[FlatFeeAmountIn]?[FXSwap]` for a USDC/FX pair. `context.feedQuote` says what the feed answer means: FX units per
- * 1 USD (`fxPerUsd`, the default: the manual feeds, RedStone MXNe) or USD per 1 FX unit (`usdPerFx`: RedStone BRL).
- * `oraclePriceWad` (the live feed answer in WAD, in the feed's orientation) is needed for `bandPercent` and for the
- * default `fxAmount` (value-balanced ship).
- */
-export function buildFxSwapStrategySpec(
-  adapter: string,
-  pair: FxPair,
-  oracle: string,
-  params: FxSwapParamsInput = {},
-  context: { oraclePriceWad?: bigint | undefined; feedQuote?: FxFeedQuote | undefined; salt?: Hex | undefined } = {}
-): FxSwapStrategySpec {
-  assertFxSwapBuilderParams(params);
-  const feedQuote = context.feedQuote ?? "fxPerUsd";
-  const orientation =
-    feedQuote === "usdPerFx"
-      ? fxSwapOrientation(pair.fx.address, pair.fx.decimals, pair.usdc.address, pair.usdc.decimals)
-      : fxSwapOrientation(pair.usdc.address, pair.usdc.decimals, pair.fx.address, pair.fx.decimals);
-  const a =
-    params.a === undefined ? FXSWAP_DEFAULTS.a : parseTokenAmount(params.a, 4, { field: "a (amplification A)" });
-  const gamma =
-    params.gamma === undefined ? FXSWAP_DEFAULTS.gamma : parseTokenAmount(params.gamma, 18, { field: "gamma" });
-  const midFee =
-    parseOptionalRateWad(
-      { ppb: params.feePpb, bps: params.feeBps, percent: params.feePercent },
-      ["feePpb", "feeBps", "feePercent"]
-    ) ?? FXSWAP_DEFAULTS.midFee;
-  const outFee =
-    parseOptionalRateWad(
-      { ppb: params.outFeePpb, bps: params.outFeeBps, percent: params.outFeePercent },
-      ["outFeePpb", "outFeeBps", "outFeePercent"]
-    ) ?? (midFee > FXSWAP_DEFAULTS.outFee ? midFee : FXSWAP_DEFAULTS.outFee);
-  const feeGamma =
-    params.feeGamma === undefined
-      ? FXSWAP_DEFAULTS.feeGamma
-      : parseTokenAmount(params.feeGamma, 18, { field: "feeGamma" });
-  const flatFeeWad = parseOptionalRateWad(
-    { ppb: params.flatFeePpb, bps: params.flatFeeBps, percent: params.flatFeePercent },
-    ["flatFeePpb", "flatFeeBps", "flatFeePercent"]
-  );
-  if (flatFeeWad !== undefined && flatFeeWad % 10n ** 9n !== 0n) {
-    throw new Error("flat fee is finer than 1 ppb (0.0000001%)");
-  }
-  const flatFeePpb = flatFeeWad === undefined ? 0 : Number(flatFeeWad / 10n ** 9n);
-  const band = resolvePriceBand(pair, params, context.oraclePriceWad, feedQuote);
-  const maxStaleness =
-    params.maxStaleness === undefined
-      ? FXSWAP_DEFAULTS.maxStaleness
-      : parseDurationSeconds(params.maxStaleness);
-  const oracleDecimals =
-    params.oracleDecimals === undefined
-      ? FXSWAP_DEFAULTS.oracleDecimals
-      : Number(parseIntegerLike(params.oracleDecimals, "oracleDecimals"));
-
-  const args: FxSwapArgs = {
-    oracleKind: FXSWAP.oracleKindChainlink,
-    flags: orientation.invertPrice ? FXSWAP.flagInvertPrice : 0,
-    oracle: getAddress(oracle),
-    oracleDecimals,
-    maxStaleness,
-    minPrice: band.minPrice,
-    maxPrice: band.maxPrice,
-    a,
-    gamma,
-    midFee,
-    outFee,
-    feeGamma,
-    rateLt: orientation.rateLt,
-    rateGt: orientation.rateGt
-  };
-  const program = buildFxSwapProgram({ args, flatFeePpb, salt: context.salt });
-  const { usdcShip, fxShip } = resolveOracleShip(pair, params, context.oraclePriceWad, feedQuote);
-  const label = (params.label ?? `FXSwap oracle ${pair.fx.fiat}`).trim();
-  if (label.length === 0) {
-    throw new Error("label must not be empty");
-  }
-  const order = buildAquaOrder(adapter, program);
-  const strategyBytes = encodeSwapVMOrder(order);
-  return {
-    opcode: "fxswap",
-    pair,
-    label,
-    oracle: normalizeAddress(oracle),
-    feedQuote,
-    ...(context.salt ? { salt: context.salt } : {}),
-    args,
-    band,
-    flatFeePpb,
-    feePpb: composeFeePpb(flatFeePpb, Number(midFee / 10n ** 9n)),
-    usdcShip,
-    fxShip,
-    program,
-    order,
-    strategyBytes,
-    strategyId: keccak256(strategyBytes),
-    tokens: [getAddress(pair.usdc.address), getAddress(pair.fx.address)],
-    amounts: [usdcShip, fxShip]
-  };
-}
-
-/** The accepted feed band of an oracle-priced program (forex curve or FXSwap), in the feed's orientation. */
+/** The accepted feed band of an oracle-priced forex program, in the feed's orientation. */
 function resolvePriceBand(
   pair: FxPair,
   params: Pick<StrategyParamsInput, "bandPercent" | "minPrice" | "maxPrice">,
@@ -1112,20 +701,20 @@ function resolvePriceBand(
       throw new Error("bandPercent is measured around the live oracle price; read the feed first");
     }
     const fraction = parseTokenAmount(params.bandPercent, 16, { field: "bandPercent" });
-    if (fraction <= 0n || fraction >= FXSWAP.wad) {
+    if (fraction <= 0n || fraction >= FOREX.wad) {
       throw new Error("bandPercent must be above 0 and below 100");
     }
     return {
       source: "bandPercent",
-      minPrice: (oraclePriceWad * (FXSWAP.wad - fraction)) / FXSWAP.wad,
-      maxPrice: (oraclePriceWad * (FXSWAP.wad + fraction)) / FXSWAP.wad
+      minPrice: (oraclePriceWad * (FOREX.wad - fraction)) / FOREX.wad,
+      maxPrice: (oraclePriceWad * (FOREX.wad + fraction)) / FOREX.wad
     };
   }
   const usdPerFx = feedQuote === "usdPerFx";
   // The default band is half to double the reference price, expressed in the feed's orientation.
-  const fxPerUsdReference = FXSWAP_REFERENCE_PRICE_WAD[pair.fx.symbol];
+  const fxPerUsdReference = FX_REFERENCE_PRICE_WAD[pair.fx.symbol];
   const reference =
-    fxPerUsdReference === undefined || !usdPerFx ? fxPerUsdReference : (FXSWAP.wad * FXSWAP.wad) / fxPerUsdReference;
+    fxPerUsdReference === undefined || !usdPerFx ? fxPerUsdReference : (FOREX.wad * FOREX.wad) / fxPerUsdReference;
   const unitLabel = usdPerFx ? `USD per ${pair.fx.fiat}` : `${pair.fx.fiat} per USD`;
   const field = usdPerFx ? `(USD per 1 ${pair.fx.fiat})` : `(${pair.fx.fiat} per 1 USD)`;
   const minPrice =
@@ -1172,16 +761,7 @@ function parseOptionalRateWad(
   return undefined;
 }
 
-/** Combined rate of an input fee followed by an output fee, in ppb. */
-function composeFeePpb(firstPpb: number, secondPpb: number): number {
-  const denominator = BigInt(SWAPVM.feeDenominatorPpb);
-  const first = BigInt(firstPpb);
-  const second = BigInt(secondPpb);
-  const combined = first + second - (first * second) / denominator;
-  return Number(combined > denominator ? denominator : combined);
-}
-
-function assertIntInRange(value: number, max: number, field: string, instruction = "FXSwap"): void {
+function assertIntInRange(value: number, max: number, field: string, instruction: string): void {
   if (!Number.isInteger(value) || value < 0 || value > max) {
     throw new Error(`${instruction} ${field} ${value} must be an integer between 0 and ${max}`);
   }
@@ -1206,8 +786,8 @@ function resolveOracleShip(
   if (params.fxAmount !== undefined) {
     fxShip = parseTokenAmount(params.fxAmount, pair.fx.decimals, { unit, field: "fxAmount" });
   } else if (oraclePriceWad !== undefined && oraclePriceWad > 0n) {
-    const fxPerUsdWad = feedQuote === "usdPerFx" ? (FXSWAP.wad * FXSWAP.wad) / oraclePriceWad : oraclePriceWad;
-    fxShip = (usdcShip * decimalScale(pair) * fxPerUsdWad) / FXSWAP.wad;
+    const fxPerUsdWad = feedQuote === "usdPerFx" ? (FOREX.wad * FOREX.wad) / oraclePriceWad : oraclePriceWad;
+    fxShip = (usdcShip * decimalScale(pair) * fxPerUsdWad) / FOREX.wad;
   } else {
     throw new Error("fxAmount defaults to usdcAmount x the live oracle price; read the feed first or pass fxAmount");
   }
@@ -1249,7 +829,7 @@ export const FOREX = {
  *   capped at 25%.
  * - lambda 0.3: a trade that lowers that fee (rebalances the book) gets 30% of the reduction back.
  * - epsilon 30 bps: proportional fee on every swap, declared as the strategy's feePpb.
- * - maxStaleness 7 days and oracleDecimals 0, as for FXSwap: the manual demo feeds have no heartbeat, and reading
+ * - maxStaleness 7 days and oracleDecimals 0: the manual demo feeds have no heartbeat, and reading
  *   decimals() on every swap keeps the program right for any feed.
  */
 export const FOREX_DEFAULTS = {
@@ -1467,7 +1047,6 @@ export function forexOrientation(
 /**
  * Flags of a USDC-quoted forex program. The curve prices p = USDC per 1 FX unit, so a USD-per-FX feed (`usdPerFx`,
  * RedStone BRL) is read as is and an FX-per-USD feed (`fxPerUsd`, the manual ARS feed) needs FLAG_INVERT_PRICE.
- * That is the opposite of FXSwap's invert flag, which oriented prices as greater-address per lower-address token.
  */
 export function forexFlags(feedQuote: FxFeedQuote, quoteIsGt: boolean): number {
   return (feedQuote === "fxPerUsd" ? FOREX.flagInvertPrice : 0) | (quoteIsGt ? FOREX.flagQuoteIsGt : 0);
