@@ -9,15 +9,27 @@ For the ETHGlobal submission, use a live Graph provider endpoint (Subgraph Studi
 The provider deployment target for this hackathon is the live **Arc Testnet Shape-C deployment**. The Graph now lists Arc Testnet (`arc-testnet`, chain ID `5042002`) as a supported network, so the judge-facing provider subgraph should index the same Arc contracts used by the Arc + FXSwap demo.
 
 1. In Subgraph Studio, create a subgraph and copy its slug and deploy key.
-2. Run:
+2. From the repo root, put them in the project-local secret file:
 
 ```bash
-GRAPH_STUDIO_SLUG=<studio-slug> \
-GRAPH_STUDIO_DEPLOY_KEY=<secret-deploy-key> \
+mkdir -p .secrets
+chmod 700 .secrets
+cat > .secrets/graph-studio.env <<'EOF'
+GRAPH_STUDIO_SLUG=<studio-slug>
+GRAPH_STUDIO_DEPLOY_KEY=<secret-deploy-key>
+EOF
+chmod 600 .secrets/graph-studio.env
+```
+
+`.secrets/` is gitignored. Do not use `graph auth` for this project; the deploy script passes the deploy key directly, so no ETHGlobal credential needs to be written to `~/.graph-cli.json`.
+
+3. Deploy with:
+
+```bash
 ./scripts/deploy-graph-studio.sh
 ```
 
-3. Copy the resulting Studio query endpoint into `GRAPH_ENDPOINT` for the MCP service. Keep the query/deploy API keys out of git.
+4. Copy the resulting Studio query endpoint into `GRAPH_ENDPOINT` for the MCP service. Keep the query/deploy API keys out of git.
 4. Run `health`, `protocol_snapshot`, and an agent query through the MCP to demonstrate that the provider endpoint is actually load-bearing.
 
 The deploy script intentionally deploys `packages/subgraph/subgraph.arc.yaml`. The self-hosted AWS Graph Node remains useful as a development/fallback indexer, but the hackathon provider deployment should use The Graph's native Arc Testnet support rather than the old Base-provider workaround.
