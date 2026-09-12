@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Deploys the 1inch Aqua + AquaSwapVMRouter venue (swap-vm v1.0.2) and the Aqua0 AquaAdapter on Arc Testnet,
-# then wires the adapter into the live Shape-C core: registry allowlist + VENUE_SETTLER_ROLE on every vault.
+# then wires the adapter into the live Aqua0 vault core: registry allowlist + VENUE_SETTLER_ROLE on every vault.
 #
 #   MODE=fork  deploy and wire against a local anvil fork of Arc, impersonating the core admin
 #   MODE=arc   deploy with a keystore signer, then print the admin-only wiring calldata

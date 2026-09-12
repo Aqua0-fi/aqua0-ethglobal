@@ -1,6 +1,6 @@
 # @aqua0/contracts
 
-Foundry package that puts 1inch Aqua + SwapVM on Arc Testnet and connects them to the live Aqua0 Shape-C core
+Foundry package that puts 1inch Aqua + SwapVM on Arc Testnet and connects them to the live Aqua0 vault core
 recorded in [`deployments/arc-testnet.json`](../../deployments/arc-testnet.json).
 
 - `lib/swap-vm` — 1inch swap-vm **v1.0.2** (git submodule). Pinned because it is the build 1inch's own router

@@ -3,7 +3,7 @@
 Aqua0 is a shared-liquidity protocol. A liquidity provider deposits once, and the same capital backs many trading strategies at the same time without being split between them. For ETHGlobal we brought Aqua0 to **Arc** and made it agent-native. From Claude Code, Codex or any MCP client you can read Aqua0's state from **The Graph**, then set up **1inch SwapVM** strategies that pair one USDC deposit with Argentine peso and Brazilian real stablecoin stand-ins, shipped through **1inch Aqua**. Tokens stay in Aqua0 vaults until a swap pulls them just in time. **FXSwap**, a new SwapVM instruction, prices every swap off an oracle instead of a fixed peg, because FX rates float.
 
 **Status as of 2026-09-12.**
-**Live:** Shape-C core and three vaults on Arc Testnet; the Graph-backed MCP server (prepare-only) and judge dashboard.
+**Live:** Aqua0 vault core and three vaults on Arc Testnet; the Graph-backed MCP server (prepare-only) and judge dashboard.
 **Deployed, awaiting admin wiring:** 1inch Aqua, AquaSwapVMRouter and the Aqua0 AquaAdapter on Arc.
 **Fork-proven:** one USDC deposit backing two FX strategies, both filled through the router on a fork of Arc.
 **In progress:** the FXSwap instruction, MCP SwapVM strategy tools, AquaAdapter indexing on Arc, and Subgraph Studio publishing.
@@ -69,7 +69,7 @@ The quoted numbers come from the Arc-fork run described below. What works today,
 
 **What to notice**
 
-- **The same number twice is correct.** Shape-C commitments are *non-subtractive*: each committed class sees the LP's full principal as backing. Real outflow is still bounded at swap time, because `settleVenueOut` debits the class's own idle balance and the vault enforces an outflow limit. Shared backing never lets a vault pay out more than it holds.
+- **The same number twice is correct.** Aqua0 vault commitments are *non-subtractive*: each committed class sees the LP's full principal as backing. Real outflow is still bounded at swap time, because `settleVenueOut` debits the class's own idle balance and the vault enforces an outflow limit. Shared backing never lets a vault pay out more than it holds.
 - **No tokens move when a strategy is created.** Aqua records virtual balances for the AquaAdapter (the maker). The vault releases tokens only inside a swap, through the maker hooks.
 - **The Graph is the read model.** Every analytics answer comes from indexed entities, with no silent RPC fallback. RPC is used only to read `classForStrategy` so the agent never guesses a class id, and to send writes.
 - **Official 1inch contracts, unmodified,** are deployed on Arc: aqua 0.1.0 and swap-vm v1.0.2.
@@ -81,7 +81,7 @@ The quoted numbers come from the Arc-fork run described below. What works today,
 
 ### One deposit, many strategies
 
-In a conventional AMM, capital is locked per pool. An LP who wants to make markets in USDC/ARS and USDC/BRL has to split the USDC between them, and each pool sits idle most of the time. In Aqua0's Shape-C architecture, an LP deposits once into a per-asset `AssetVault` and commits that principal to many strategy classes. Committing to strategy A does not reduce what strategy B can use. Capital is consumed only when a swap actually settles, and settlement is atomic and bounded by the vault. The vault serves both strategies as long as they are not both drained at once.
+In a conventional AMM, capital is locked per pool. An LP who wants to make markets in USDC/ARS and USDC/BRL has to split the USDC between them, and each pool sits idle most of the time. In Aqua0's shared-vault architecture, an LP deposits once into a per-asset `AssetVault` and commits that principal to many strategy classes. Committing to strategy A does not reduce what strategy B can use. Capital is consumed only when a swap actually settles, and settlement is atomic and bounded by the vault. The vault serves both strategies as long as they are not both drained at once.
 
 ### FX stablecoins on Arc
 
@@ -134,14 +134,14 @@ flowchart TB
   end
 
   subgraph READM["Read model - The Graph"]
-    SG["packages/subgraph: Shape-C subgraph"]
+    SG["packages/subgraph: Aqua0 vault subgraph"]
     GN["Self-hosted Graph Node on AWS - live"]
     STU["Subgraph Studio - in progress"]
     PX["infra/arc-rpc-proxy"]
   end
 
   subgraph ARC["Arc Testnet - chain 5042002"]
-    subgraph CORE["Shape-C core - live"]
+    subgraph CORE["Aqua0 vault core - live"]
       REG["VaultRegistry"]
       VU["USDC AssetVault"]
       VA["ARGt AssetVault"]
@@ -187,8 +187,8 @@ flowchart TB
 ```
 
 - **Agent layer (built at ETHGlobal).** `packages/shared` is the single typed service. The MCP server, CLI and dashboard are thin shells over it, so every client gets the same reads and the same guarded writes.
-- **Read model.** The Shape-C subgraph indexes vaults, LP positions, strategy classes, commitments, fees and venue settlement. Arc's public RPC limits topic-OR lists in `eth_getLogs`, so the Graph Node indexes through a small splitting proxy.
-- **Write model.** The Shape-C core holds capital and accounting. The AquaAdapter is the Aqua *maker* for every Aqua0 strategy: it ships SwapVM programs into Aqua and settles swaps against the vaults through maker hooks.
+- **Read model.** The Aqua0 vault subgraph indexes vaults, LP positions, strategy classes, commitments, fees and venue settlement. Arc's public RPC limits topic-OR lists in `eth_getLogs`, so the Graph Node indexes through a small splitting proxy.
+- **Write model.** The Aqua0 vault core holds capital and accounting. The AquaAdapter is the Aqua *maker* for every Aqua0 strategy: it ships SwapVM programs into Aqua and settles swaps against the vaults through maker hooks.
 
 More detail: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -323,7 +323,7 @@ flowchart TD
 | The Graph is load-bearing | Every analytics tool (`get_balance`, `get_strategies`, `get_fees`, `list_opportunities`, `protocol_snapshot`, `health`, `graph_query`) reads subgraph entities. A Graph failure surfaces as an error, with no RPC fallback. | [`packages/shared/src/service.ts`](packages/shared/src/service.ts), [`packages/shared/src/graph.ts`](packages/shared/src/graph.ts), [`packages/subgraph`](packages/subgraph) | **Live** |
 | Live data from a Graph provider | Today the Arc subgraph is served by the team's self-hosted Graph Node, which does not meet this requirement on its own. Publishing the Arc subgraph to Subgraph Studio and pointing the public MCP at it is underway. | [`docs/THE_GRAPH_TRACK.md`](docs/THE_GRAPH_TRACK.md), [`scripts/deploy-graph-studio.sh`](scripts/deploy-graph-studio.sh) | **In progress** |
 | Meaningful work with the data | The agent answers capital questions in natural language and decides whether a strategy class already exists (strategy key plus `classForStrategy`). It stages multi-transaction strategy setup and explains indexed state changes after mining. The shared-backing read and quote reasoning land with the SwapVM tools. | [`apps/mcp/src/index.ts`](apps/mcp/src/index.ts), [`packages/shared/src/write.ts`](packages/shared/src/write.ts) | **Live** for reads and prepare; SwapVM tools **in progress** |
-| Reusable infrastructure | Any MCP client can use the server over stdio or Streamable HTTP. The typed service is a standalone package with a CLI on top. The Arc manifest is generated from the canonical manifest for any Shape-C deployment. The Arc RPC proxy works for any Graph Node on Arc. | [`apps/mcp`](apps/mcp), [`apps/cli`](apps/cli), [`packages/subgraph/scripts/generate-arc-manifest.mjs`](packages/subgraph/scripts/generate-arc-manifest.mjs), [`infra/arc-rpc-proxy`](infra/arc-rpc-proxy) | **Live** |
+| Reusable infrastructure | Any MCP client can use the server over stdio or Streamable HTTP. The typed service is a standalone package with a CLI on top. The Arc manifest is generated from the canonical manifest for any Aqua0 vault deployment. The Arc RPC proxy works for any Graph Node on Arc. | [`apps/mcp`](apps/mcp), [`apps/cli`](apps/cli), [`packages/subgraph/scripts/generate-arc-manifest.mjs`](packages/subgraph/scripts/generate-arc-manifest.mjs), [`infra/arc-rpc-proxy`](infra/arc-rpc-proxy) | **Live** |
 | Open source, runnable from docs | This README ([Run it](#run-it)), `docs/`, `.env.example`, `pnpm check-env`, and CI that builds the Arc manifest | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | **Live**. A SKILL.md is **planned**. |
 | Public repo + 2–4 min video | Public GitHub repo; video link added at submission | — | Video pending |
 | Continuity documentation | Pre-existing vs event work is listed below and in [`docs/CONTINUITY.md`](docs/CONTINUITY.md) | Git history from 2026-09-05 | **Done** |
@@ -347,7 +347,7 @@ flowchart TD
 | Criterion | What Aqua0 does | Evidence | Status |
 | --- | --- | --- | --- |
 | Stablecoin-native DeFi on Arc | USDC-quoted FX liquidity: one USDC vault backs USDC/ARS and USDC/BRL strategies simultaneously | [Deployments](#deployments-and-live-endpoints), [`docs/ARC_DEPLOYMENT.md`](docs/ARC_DEPLOYMENT.md) | Core **live**; venue **deployed, awaiting wiring** |
-| Meaningful use of Arc and USDC | Arc's native USDC is the shared quote asset held by the Shape-C vault; all contracts are on Arc Testnet | [`deployments/arc-testnet.json`](deployments/arc-testnet.json) | **Live** |
+| Meaningful use of Arc and USDC | Arc's native USDC is the shared quote asset held by the Aqua0 vault; all contracts are on Arc Testnet | [`deployments/arc-testnet.json`](deployments/arc-testnet.json) | **Live** |
 | Advanced programmable money flows | One swap runs a maker program, pulls just-in-time from the vault, pulls from Aqua to the taker, pushes the taker's input into Aqua, sweeps it into the counter vault, credits the LPs that sold, and books the spread as fees, all atomically. FXSwap adds an oracle-conditional fill: no fill on a stale price. | [Swap sequence](#a-swap-through-the-maker-hooks), [`ArcFxStrategies.s.sol`](packages/contracts/script/ArcFxStrategies.s.sol) | **Fork-proven**; FXSwap **in progress** |
 | Why stablecoin-native changes things | On Arc the LP's principal, fees and gas are all USDC. FX strategies quote local stablecoins directly against it, and one balance can make several FX markets. That is safe only because settlement is atomic and each outflow is bounded by the vault at swap time. | [Why this matters](#why-this-matters) | Design |
 | App Kits, Circle Wallets, Circle Contracts, CCTP, Gateway, StableFX | Not integrated | [`docs/ARC_TRACK.md`](docs/ARC_TRACK.md) | **Planned** |
@@ -374,7 +374,7 @@ We do not claim Agent Stack usage. Next steps are in [`docs/ARC_TRACK.md`](docs/
 
 ### Circle / Arc: Best DeFi or Agentic Application (Continuity)
 
-**Prize:** $3,000, of which $2,000 is mainnet-conditional. This is either of the two Arc applications above, registered in the Continuity track. Aqua0's entry is the DeFi application. The pre-existing Shape-C contracts and AquaAdapter are separated from the work done at the event: the Arc deployments, venue, strategy scripts, FXSwap, subgraph, MCP, CLI, dashboard and RPC proxy. See [Continuity](#continuity-pre-existing-vs-built-at-ethglobal).
+**Prize:** $3,000, of which $2,000 is mainnet-conditional. This is either of the two Arc applications above, registered in the Continuity track. Aqua0's entry is the DeFi application. The pre-existing Aqua0 vault contracts and AquaAdapter are separated from the work done at the event: the Arc deployments, venue, strategy scripts, FXSwap, subgraph, MCP, CLI, dashboard and RPC proxy. See [Continuity](#continuity-pre-existing-vs-built-at-ethglobal).
 
 ### 1inch: Build an Aqua App, and Build an Aqua App (Continuity)
 
@@ -392,7 +392,7 @@ We do not claim Agent Stack usage. Next steps are in [`docs/ARC_TRACK.md`](docs/
 | Onchain token transfers in the demo | Arc-fork run: the router pulls ARGt and BRAt from Aqua to the taker and pushes the taker's USDC into Aqua, with the adapter hooks moving tokens out of and into the vaults: 0.1 USDC → 139.25 ARGt, 0.1 USDC → 0.547 BRAt | [`run-arc-fx-strategies.sh`](packages/contracts/script/run-arc-fx-strategies.sh) | **Fork-proven**; Arc Testnet after wiring |
 | Positions via test scripts | Foundry script registers classes, deposits, commits, signs, ships and swaps | [`packages/contracts/README.md`](packages/contracts/README.md) | **Fork-proven** |
 | Proper git history | 48 commits from four authors on 2026-09-05, 2026-09-08 and 2026-09-12; the contracts work is in scoped commits (`540e420`, `c1115fc`, `9b910ef`, `c338e16`, `e1c1a95`) | `git log` | **Done** |
-| Continuity split | AquaAdapter and Shape-C vaults are pre-existing. The Arc venue deployment, strategy scripts and FXSwap are event work. | [`docs/CONTINUITY.md`](docs/CONTINUITY.md) | **Done** |
+| Continuity split | AquaAdapter and Aqua0 vaults are pre-existing. The Arc venue deployment, strategy scripts and FXSwap are event work. | [`docs/CONTINUITY.md`](docs/CONTINUITY.md) | **Done** |
 
 **SwapVM wire facts (swap-vm v1.0.2 `AquaSwapVMRouter`)**
 
@@ -408,7 +408,7 @@ We do not claim Agent Stack usage. Next steps are in [`docs/ARC_TRACK.md`](docs/
 
 Arc Testnet, chain id `5042002`. Explorer: `https://testnet.arcscan.app`. Full records: [`deployments/arc-testnet.json`](deployments/arc-testnet.json) and [`docs/ARC_DEPLOYMENT.md`](docs/ARC_DEPLOYMENT.md).
 
-**Shape-C core: Live.** Pre-existing contracts deployed by the team at block `60613306`.
+**Aqua0 vault core: Live.** Pre-existing contracts deployed by the team at block `60613306`.
 
 | Contract | Address |
 | --- | --- |
@@ -461,7 +461,7 @@ apps/
   dashboard/        Judge dashboard: static UI + Node JSON API, prepare-only
 packages/
   shared/           Graph client, analytics service, strategy-key derivation, calldata, execution guard
-  subgraph/         Shape-C subgraph: schema, mappings, Base manifest, Arc manifest generator
+  subgraph/         Aqua0 vault subgraph: schema, mappings, Base manifest, Arc manifest generator
   contracts/        Foundry: 1inch Aqua + SwapVM venue on Arc, AquaAdapter deploy, FX strategy scripts
 deployments/        Public Arc Testnet addresses and strategy records (JSON)
 infra/
@@ -511,7 +511,7 @@ Use the Aqua0 MCP tools. Check health, show the protocol snapshot, and list stra
 ```
 
 ```text
-Prepare an Aqua0 strategy on Arc Testnet for strategist 0x..., pairing Arc USDC (0x3600000000000000000000000000000000000000) with BRAt (0xa9482a878A3784663512f0Bf8d0be17aD6DEA38E), using the USDC and BRAt Shape-C vaults. Do not broadcast anything.
+Prepare an Aqua0 strategy on Arc Testnet for strategist 0x..., pairing Arc USDC (0x3600000000000000000000000000000000000000) with BRAt (0xa9482a878A3784663512f0Bf8d0be17aD6DEA38E), using the USDC and BRAt Aqua0 vaults. Do not broadcast anything.
 ```
 
 ### Local setup
@@ -555,7 +555,7 @@ claude mcp add aqua0-local \
 | `GRAPH_NETWORK` | MCP, CLI, dashboard | Network label reported by health and info, for example `arc-testnet` |
 | `WRITE_RPC_URL` | MCP, CLI, dashboard | RPC for the `classForStrategy` read and, optionally, guarded writes |
 | `WRITE_CHAIN_ID` | MCP, CLI, dashboard | Chain id for strategy-key derivation and the execution guard (`5042002` on Arc) |
-| `VAULT_REGISTRY_ADDRESS` | MCP, CLI, dashboard | Shape-C `VaultRegistry` |
+| `VAULT_REGISTRY_ADDRESS` | MCP, CLI, dashboard | Aqua0 `VaultRegistry` |
 | `MCP_WRITE_MODE` | MCP, CLI | `prepare` (default) or `execute` |
 | `WRITE_PRIVATE_KEY` | MCP, CLI | Secret, needed only for guarded execute mode. Never logged or returned. |
 | `MCP_TRANSPORT` | MCP | `stdio` (default) or `http` |
@@ -675,9 +675,9 @@ Aqua0 existed before the event. Only the right-hand column is submitted for judg
 
 | Pre-existing Aqua0 work | Built during ETHGlobal (this repo, from 2026-09-05) |
 | --- | --- |
-| Shape-C contracts: VaultRegistry, VaultFactory, Composer, FillerRegistry, AssetVault with non-subtractive commitments and venue settlement | Shape-C subgraph with canonical event indexing and a required-events check; Arc manifest generator |
+| Aqua0 vault contracts: VaultRegistry, VaultFactory, Composer, FillerRegistry, AssetVault with non-subtractive commitments and venue settlement | Aqua0 vault subgraph with canonical event indexing and a required-events check; Arc manifest generator |
 | Aqua0 `AquaAdapter` (maker hooks, `shipStrategyWithFee`, EIP-712 strategist signatures) | Graph-backed typed service, MCP server (stdio + HTTP) with public AWS deployment, CLI, judge dashboard |
-| Base mainnet Shape-C deployment | Arc Testnet deployment of the Shape-C core and USDC/ARGt/BRAt vaults |
+| Base mainnet Aqua0 vault deployment | Arc Testnet deployment of the Aqua0 vault core and USDC/ARGt/BRAt vaults |
 | Strategy-key derivation in the Aqua0 web app | Arc RPC topic-splitting proxy for Graph Node |
 | 1inch Aqua and SwapVM (official 1inch sources) | 1inch Aqua 0.1.0 + AquaSwapVMRouter + AquaAdapter deployed on Arc; Arc strategy scripts (fork-proven) |
 | | Base-fork and Arc-fork shared-backing proofs |
@@ -691,7 +691,7 @@ Details and locations: [`docs/CONTINUITY.md`](docs/CONTINUITY.md).
 
 | Item | Status |
 | --- | --- |
-| Shape-C core + USDC/ARGt/BRAt vaults on Arc Testnet | **Live** |
+| Aqua0 vault core + USDC/ARGt/BRAt vaults on Arc Testnet | **Live** |
 | Graph-backed MCP (public, prepare-only), CLI, judge dashboard | **Live** |
 | Arc subgraph on self-hosted Graph Node + Arc RPC proxy | **Live** |
 | 1inch Aqua + AquaSwapVMRouter + Aqua0 AquaAdapter on Arc | **Deployed, awaiting admin wiring** |

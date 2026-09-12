@@ -6,11 +6,11 @@ The pitch, demo, architecture and prize mapping are in the [README](../README.md
 
 | Workstream | Owner | Status |
 | --- | --- | --- |
-| Shape-C subgraph, Arc manifest, Arc RPC proxy | Rithik | Live (self-hosted Graph Node) |
+| Aqua0 vault subgraph, Arc manifest, Arc RPC proxy | Rithik | Live (self-hosted Graph Node) |
 | AquaAdapter + router fill indexing on Arc; Subgraph Studio publishing | Rithik | In progress |
 | MCP server, CLI, dashboard, public AWS deployment | Rithik | Live (prepare-only) |
 | MCP SwapVM strategy tools: create strategy, deposit, quote, swap, shared-backing read | Rithik | In progress |
-| Arc deployment of the Shape-C core | Tomás | Live |
+| Arc deployment of the Aqua0 vault core | Tomás | Live |
 | Aqua + AquaSwapVMRouter + AquaAdapter on Arc | Yudhishthra | Deployed, awaiting admin wiring |
 | Two FX strategies on one USDC deposit (Arc strategy scripts) | Yudhishthra | Fork-proven |
 | FXSwap SwapVM instruction and FX formulas | Yudhishthra, Tomás | In progress |

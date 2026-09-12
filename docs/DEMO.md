@@ -62,7 +62,7 @@ Closing line: *"One capital, Argentine pesos and Brazilian reais, both live, all
 
 - **FXSwap not ready:** run the same flow with the pegged/stable program (`FlatFeeAmountIn` opcode 21, `PeggedSwap` opcode 31). Say explicitly that this curve sits at a fixed price and does not track a moving FX rate.
 - **Venue wiring not landed:** run `run-arc-fx-strategies.sh` with `MODE=fork` against a local fork of Arc and present it as fork-proven, not as an Arc transaction.
-- **Show non-zero USDC on Arc through the existing core only:** `./scripts/prepare-arc-usdc-demo.sh` prints, but never sends, a USDC approval, a 1 USDC Shape-C deposit, and a commitment to class 1. Sign them with the demo wallet, wait for indexing, then re-query.
+- **Show non-zero USDC on Arc through the existing core only:** `./scripts/prepare-arc-usdc-demo.sh` prints, but never sends, a USDC approval, a 1 USDC vault deposit, and a commitment to class 1. Sign them with the demo wallet, wait for indexing, then re-query.
 
 ## Close the loop
 

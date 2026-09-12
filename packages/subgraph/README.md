@@ -1,6 +1,6 @@
-# Aqua0 Shape-C Subgraph
+# Aqua0 Vault Subgraph
 
-This package indexes the current Aqua0 Shape-C shared-capital `AssetVault` fleet.
+This package indexes the current Aqua0 shared-capital `AssetVault` fleet.
 
 ## Base Mainnet
 
@@ -21,7 +21,7 @@ It indexes:
 
 The mappings are event-sourced for history rows and refresh current state through safe `try_` calls where the current vault ABI exposes getters. If a getter reverts, indexing continues and the previous snapshot value is retained.
 
-The canonical library-scoped Shape-C accounting events come from `abis/Events.json`. `test:required-events` guards the required event set so an ABI-generation change cannot silently drop accounting/fronting history.
+The canonical library-scoped vault accounting events come from `abis/Events.json`. `test:required-events` guards the required event set so an ABI-generation change cannot silently drop accounting/fronting history.
 
 ## Arc Testnet
 

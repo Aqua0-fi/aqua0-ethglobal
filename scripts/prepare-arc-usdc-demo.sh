@@ -26,7 +26,7 @@ Arc Testnet demo transaction plan (PREPARE ONLY; nothing broadcast)
 1. USDC approve
    to:   $USDC
    data: $approve_data
-2. Shape-C deposit
+2. Vault deposit
    to:   $USDC_VAULT
    data: $deposit_data
 3. Commit the same principal to ARS class $STRATEGY_ID

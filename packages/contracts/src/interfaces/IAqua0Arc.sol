@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
-/// @notice Minimal views of the pre-existing Aqua0 Shape-C contracts deployed on Arc Testnet.
+/// @notice Minimal views of the pre-existing Aqua0 vault contracts deployed on Arc Testnet.
 /// @dev Only the members this package calls. Signatures match the Arc deployment (Aqua0 contracts @ 8a9f1c2).
 
 interface IVaultRegistry {

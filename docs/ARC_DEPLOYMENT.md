@@ -2,9 +2,9 @@
 
 Arc Testnet, chain id `5042002`, RPC `https://rpc.testnet.arc.network`, explorer `https://testnet.arcscan.app`. Public addresses are committed in [`deployments/arc-testnet.json`](../deployments/arc-testnet.json).
 
-## 1. Shape-C core: Live
+## 1. Aqua0 vault core: Live
 
-The team deployed the pre-existing Aqua0 Shape-C contracts (source commit `8a9f1c2`) at start block `60613306`.
+The team deployed the pre-existing Aqua0 vault contracts (source commit `8a9f1c2`) at start block `60613306`.
 
 | Contract | Address |
 | --- | --- |
@@ -97,4 +97,4 @@ PUBLIC_ARC_START_BLOCK=60613306 \
 pnpm --filter @aqua0/subgraph generate:arc
 ```
 
-The live self-hosted Arc subgraph indexes the Shape-C core: VaultFactory, VaultRegistry, Composer, FillerRegistry, plus the AssetVault template. **In progress:** venue data sources set through `PUBLIC_ARC_AQUA_ADAPTER` (`0xbF72D34b804636496c3308796908152b82624Ca5`, start block `61679229`) and `PUBLIC_ARC_AQUA_SWAPVM_ROUTER` (`0xb20bc70b485eC1352C190d26fCaB1959d219F763`, start block `61679223`, router `Swapped` fills), and publishing the Arc subgraph to Subgraph Studio. See [`packages/subgraph/README.md`](../packages/subgraph/README.md) for the venue entities. See [`THE_GRAPH_TRACK.md`](THE_GRAPH_TRACK.md).
+The live self-hosted Arc subgraph indexes the Aqua0 vault core: VaultFactory, VaultRegistry, Composer, FillerRegistry, plus the AssetVault template. **In progress:** venue data sources set through `PUBLIC_ARC_AQUA_ADAPTER` (`0xbF72D34b804636496c3308796908152b82624Ca5`, start block `61679229`) and `PUBLIC_ARC_AQUA_SWAPVM_ROUTER` (`0xb20bc70b485eC1352C190d26fCaB1959d219F763`, start block `61679223`, router `Swapped` fills), and publishing the Arc subgraph to Subgraph Studio. See [`packages/subgraph/README.md`](../packages/subgraph/README.md) for the venue entities. See [`THE_GRAPH_TRACK.md`](THE_GRAPH_TRACK.md).

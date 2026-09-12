@@ -6,7 +6,7 @@ For prize-by-prize criteria and how Aqua0 addresses each, see [README: Prize tra
 
 | Circle / Arc product | Used? | How |
 | --- | --- | --- |
-| Arc (chain `5042002`) | Yes, **Live** | Shape-C core and three AssetVaults live; 1inch Aqua + AquaSwapVMRouter + Aqua0 AquaAdapter deployed and awaiting admin wiring. See [`ARC_DEPLOYMENT.md`](ARC_DEPLOYMENT.md). |
+| Arc (chain `5042002`) | Yes, **Live** | Aqua0 vault core and three AssetVaults live; 1inch Aqua + AquaSwapVMRouter + Aqua0 AquaAdapter deployed and awaiting admin wiring. See [`ARC_DEPLOYMENT.md`](ARC_DEPLOYMENT.md). |
 | USDC | Yes, **Live** | Arc's native USDC (ERC-20 interface `0x3600…0000`, 6 dp) is the shared quote asset. One USDC deposit backs several FX strategies at once. |
 | App Kits, Circle Wallets, Circle Contracts, CCTP, Gateway, StableFX | Not yet | Planned, see below. |
 | Agent Stack, Nanopayments, Paymaster | Not yet | Planned, see below. |
@@ -31,8 +31,8 @@ For prize-by-prize criteria and how Aqua0 addresses each, see [README: Prize tra
 flowchart LR
   D["Judge browser dashboard"] --> API["TypeScript Node HTTP API"]
   API --> S["@aqua0/shared service"]
-  S -->|"GraphQL analytics"| G["The Graph: Arc Shape-C subgraph"]
-  G --> A["Arc Testnet Shape-C contracts"]
+  S -->|"GraphQL analytics"| G["The Graph: Arc Aqua0 vault subgraph"]
+  G --> A["Arc Testnet Aqua0 vault contracts"]
   API -->|"prepare-only: classForStrategy read and calldata"| R["Arc Testnet RPC"]
   R --> A
 ```

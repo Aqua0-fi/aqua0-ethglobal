@@ -141,4 +141,4 @@ if (missingFromAbi.length > 0 || missingFromManifest.length > 0 || !assetVaultTe
   process.exit(1);
 }
 
-console.log(`Required Shape-C and Aqua venue events present: ${requiredEvents.length}`);
+console.log(`Required vault and Aqua venue events present: ${requiredEvents.length}`);

@@ -23,14 +23,14 @@ flowchart TB
   end
 
   subgraph READM["Read model - The Graph"]
-    SG["packages/subgraph: Shape-C subgraph"]
+    SG["packages/subgraph: Aqua0 vault subgraph"]
     GN["Self-hosted Graph Node on AWS - live"]
     STU["Subgraph Studio - in progress"]
     PX["infra/arc-rpc-proxy"]
   end
 
   subgraph ARC["Arc Testnet - chain 5042002"]
-    subgraph CORE["Shape-C core - live"]
+    subgraph CORE["Aqua0 vault core - live"]
       REG["VaultRegistry"]
       VU["USDC AssetVault"]
       VA["ARGt AssetVault"]
@@ -84,11 +84,11 @@ flowchart TB
 | Agent interface | CLI | [`apps/cli`](../apps/cli) | Live (local) |
 | Web MVP | Judge dashboard + JSON API | [`apps/dashboard`](../apps/dashboard) | Live |
 | Service | Typed Graph client, analytics, strategy-key derivation, calldata, execution guard | [`packages/shared`](../packages/shared) | Live |
-| Read model | Shape-C subgraph (Base manifest + generated Arc manifest) | [`packages/subgraph`](../packages/subgraph) | Live on a self-hosted Graph Node for the Arc core |
+| Read model | Aqua0 vault subgraph (Base manifest + generated Arc manifest) | [`packages/subgraph`](../packages/subgraph) | Live on a self-hosted Graph Node for the Arc core |
 | Read model | AquaAdapter + router fill indexing on Arc | `packages/subgraph` | In progress |
 | Read model | Subgraph Studio (Graph provider) deployment for Arc | `packages/subgraph`, `scripts/deploy-graph-studio.sh` | In progress |
 | Indexing infra | Arc RPC topic-splitting proxy | [`infra/arc-rpc-proxy`](../infra/arc-rpc-proxy) | Live |
-| Contracts | Shape-C core: registry, factory, composer, filler registry, three AssetVaults | Pre-existing Aqua0 source, deployed on Arc | Live |
+| Contracts | Aqua0 vault core: registry, factory, composer, filler registry, three AssetVaults | Pre-existing Aqua0 source, deployed on Arc | Live |
 | Contracts | 1inch Aqua 0.1.0 + AquaSwapVMRouter (swap-vm v1.0.2, unmodified) + Aqua0 AquaAdapter | [`packages/contracts`](../packages/contracts) | Deployed, awaiting admin wiring |
 | Contracts | Two FX strategies on one USDC deposit, shipped and filled | [`packages/contracts/script/ArcFxStrategies.s.sol`](../packages/contracts/script/ArcFxStrategies.s.sol) | Fork-proven |
 | Contracts | FXSwap SwapVM instruction (oracle-anchored CryptoSwap-style curve) | `packages/contracts` | In progress |
@@ -96,7 +96,7 @@ flowchart TB
 ## Separation of concerns
 
 - **The Graph is the read model.** Balance, strategy, fee, opportunity and snapshot tools read indexed subgraph entities. They never quietly fall back to RPC when a Graph query fails. The one RPC read in the write path is `VaultRegistry.classForStrategy`, which exists so a class id is never guessed.
-- **Shape-C and the 1inch venue are the write model.** Typed tools prepare exact contract calls. Guarded execution is limited to Arc Testnet (`5042002`) or a local Anvil URL. The public AWS MCP runs prepare-only and holds no signing key.
+- **The Aqua0 vaults and the 1inch venue are the write model.** Typed tools prepare exact contract calls. Guarded execution is limited to Arc Testnet (`5042002`) or a local Anvil URL. The public AWS MCP runs prepare-only and holds no signing key.
 - **MCP is the natural-language boundary.** The LLM interprets intent and calls typed tools. Aqua0 ships no custom text parser.
 - **The Arc RPC proxy is indexing infrastructure only.** Arc's public RPC rejects large topic-OR lists in `eth_getLogs`, so the proxy splits those requests to keep full canonical event coverage. It passes every other method through unchanged, and it neither fabricates nor caches chain data.
 - **Secrets stay out of the repository.** Graph keys and signing keys come from environment variables and are never returned by `info`.

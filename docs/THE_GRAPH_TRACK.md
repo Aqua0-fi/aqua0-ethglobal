@@ -10,9 +10,9 @@ Every analytics tool in the MCP server, CLI and dashboard reads indexed subgraph
 
 | Scope | Manifest | Status |
 | --- | --- | --- |
-| Arc Testnet Shape-C core: VaultFactory, VaultRegistry, Composer, FillerRegistry, AssetVault template | `subgraph.arc.yaml` generated from `subgraph.base.yaml` by `pnpm --filter @aqua0/subgraph generate:arc` | Live on a self-hosted Graph Node (AWS) |
+| Arc Testnet Aqua0 vault core: VaultFactory, VaultRegistry, Composer, FillerRegistry, AssetVault template | `subgraph.arc.yaml` generated from `subgraph.base.yaml` by `pnpm --filter @aqua0/subgraph generate:arc` | Live on a self-hosted Graph Node (AWS) |
 | Arc Testnet AquaAdapter lifecycle events and AquaSwapVMRouter fills | Arc manifest | In progress |
-| Base Shape-C deployment, including AquaAdapter and V4Adapter (pre-existing Aqua0 deployment) | `subgraph.base.yaml` | Provider-ready manifest |
+| Base Aqua0 vault deployment, including AquaAdapter and V4Adapter (pre-existing Aqua0 deployment) | `subgraph.base.yaml` | Provider-ready manifest |
 
 The schema ([`packages/subgraph/schema.graphql`](../packages/subgraph/schema.graphql)) covers vaults, LP vault positions, strategies, strategy-vault legs, LP strategy positions, fee accrual, capital sourced and returned, principal sold, class lifecycle, venue settlement, fronting, Aqua strategy ship/dock/reship/reconcile, and V4 settlement. `pnpm --filter @aqua0/subgraph test:required-events` guards the canonical accounting event set, so an ABI change cannot silently drop history.
 

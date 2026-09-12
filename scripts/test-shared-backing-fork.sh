@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Proves the ETHGlobal demo's core Shape-C invariant on a LOCAL Base mainnet fork:
+# Proves the ETHGlobal demo's core shared-backing invariant on a LOCAL Base mainnet fork:
 # one USDC principal deposit can consent to/back both an ARS and a BRL strategy
 # without splitting the principal between them.
 #
@@ -119,7 +119,7 @@ expected_principal=$((principal_before + DEPOSIT))
 [[ "$brl_available" == "$principal" ]] || { echo "BRL available mismatch: $brl_available vs principal $principal" >&2; exit 1; }
 
 cat <<OUT
-Shape-C shared backing proof: PASS
+Shared backing proof: PASS
 LP: $LP
 USDC principal deposited: $principal
 ARS strategyId: $ars_id | backing: $ars_backing | available: $ars_available
