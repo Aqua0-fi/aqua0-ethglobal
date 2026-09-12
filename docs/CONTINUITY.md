@@ -22,7 +22,7 @@ This repository separates that pre-existing work from what was built during ETHG
 | --- | --- | --- |
 | Aqua0 vault subgraph schema and mappings, canonical event indexing, required-events check | `packages/subgraph` | **Live** on Subgraph Studio |
 | Arc manifest generation from the canonical Base manifest | `packages/subgraph/scripts/generate-arc-manifest.mjs` | **Live** |
-| Subgraph Studio deployment for Arc | `scripts/deploy-graph-studio.sh`, `deployments/graph-studio-arc-testnet.json` | **Live** (version `ethglobal-arc-d179c59`) |
+| Subgraph Studio deployment for Arc | `scripts/deploy-graph-studio.sh`, `deployments/graph-studio-arc-testnet.json` | **Live** (version `ethglobal-arc-3d0b9ef`) |
 | Both-venue Aqua indexing: `AquaStrategy`, `AquaOrder`, `AquaFill` with a `venue` label, per-LP fill stats and fees | `packages/subgraph` | **Live** on Subgraph Studio |
 | Arc RPC topic-splitting and rate-pacing proxy for a self-hosted Graph Node | `infra/arc-rpc-proxy` | Development fallback |
 | Graph-backed typed service: analytics, strategy keys, SwapVM programs (pegged and forex curve), calldata, execution guard | `packages/shared` | **Live** |

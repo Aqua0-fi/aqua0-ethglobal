@@ -21,7 +21,7 @@ The SwapVM and FX tools add explicitly labelled on-chain reads. `quote_swap` is 
 
 ## Live provider: Subgraph Studio
 
-The Arc Testnet subgraph is **Live** on Subgraph Studio, deployed by Rithik. The current version, `ethglobal-arc-d179c59` (deployment `QmVbx7DnfVxAZVXpETz2YQ4LD9b8fSyFnAaCexaoKVLmDy`), indexes the vault core and both Aqua venues and is synced to the Arc head; `/version/latest` serves it. Public metadata is in [`deployments/graph-studio-arc-testnet.json`](../deployments/graph-studio-arc-testnet.json).
+The Arc Testnet subgraph is **Live** on Subgraph Studio, deployed by Rithik. The current version, `ethglobal-arc-3d0b9ef` (deployment `QmWSmaVSWJ1hG8L5ShPj3n7z8fwpExj7mAVYXGfGtZ7gk9`), indexes the vault core and both Aqua venues, including the current forex adapter and router with both live forex fills, and is synced to the Arc head; `/version/latest` serves it. Public metadata is in [`deployments/graph-studio-arc-testnet.json`](../deployments/graph-studio-arc-testnet.json).
 
 - Studio project: `https://thegraph.com/studio/subgraph/aqua-0-ethglobal-arc-testnet`
 - Query endpoint (always the latest version): `https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/version/latest`
@@ -37,7 +37,7 @@ A smoke test through the public MCP used `health`, `protocol_snapshot`, `list_op
 | --- | --- | --- |
 | Arc Testnet Aqua0 vault core: VaultFactory, VaultRegistry, Composer, FillerRegistry, AssetVault template | `subgraph.arc.yaml`, generated from `subgraph.base.yaml` by `pnpm --filter @aqua0/subgraph generate:arc` | **Live** on Subgraph Studio |
 | Pegged AquaAdapter lifecycle events: `AquaStrategyShippedEvent`, `AquaStrategyDockedEvent`, `AquaStrategyReshippedEvent`, `AquaStrategyReconciledEvent` | Arc manifest | **Live** on Subgraph Studio, including both strategies shipped on Arc on 2026-09-12 |
-| Both Arc Aqua venues: the pegged AquaAdapter + AquaSwapVMRouter and the forex AquaAdapter + AquaForexSwapVMRouter, as `AquaVenueAdapter`, `AquaStrategy`, `AquaOrder`, `AquaFill` (each with a `venue` label, `pegged` or `fxswap`), `AquaLPFillStats`, `AquaLPVaultFillStats` (fees per LP) | Arc manifest; router data sources are Arc-only | **Live** on Subgraph Studio (version `ethglobal-arc-d179c59`) |
+| Both Arc Aqua venues: the pegged AquaAdapter + AquaSwapVMRouter and the forex AquaAdapter + AquaForexSwapVMRouter, as `AquaVenueAdapter`, `AquaStrategy`, `AquaOrder`, `AquaFill` (each with a `venue` label, `pegged` or `fxswap`), `AquaLPFillStats`, `AquaLPVaultFillStats` (fees per LP) | Arc manifest; router data sources are Arc-only | **Live** on Subgraph Studio (version `ethglobal-arc-3d0b9ef`) |
 | Base Aqua0 vault deployment, including AquaAdapter and V4Adapter (pre-existing Aqua0 deployment) | `subgraph.base.yaml` | Provider-ready manifest |
 
 [`packages/subgraph/schema.graphql`](../packages/subgraph/schema.graphql) covers:
