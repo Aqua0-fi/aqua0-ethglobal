@@ -1,35 +1,33 @@
 # Build plan
 
-The pitch, demo, architecture and prize mapping are in the [README](../README.md). This page tracks the workstreams and the engineering boundaries they share.
+The pitch, demo, architecture and prize mapping are in the [README](../README.md). This page tracks workstreams and the engineering boundaries they share.
 
 ## Workstreams
 
 | Workstream | Owner | Status |
 | --- | --- | --- |
-| Aqua0 vault subgraph, Arc manifest, Arc RPC proxy | Rithik | Live (self-hosted Graph Node) |
-| AquaAdapter + router fill indexing on Arc; Subgraph Studio publishing | Rithik | In progress |
-| MCP server, CLI, dashboard, public AWS deployment | Rithik | Live (prepare-only) |
-| MCP SwapVM strategy tools: create strategy, deposit, quote, swap, shared-backing read | Rithik | In progress |
-| Arc deployment of the Aqua0 vault core | Tomás | Live |
-| Aqua + AquaSwapVMRouter + AquaAdapter on Arc | Yudhishthra | Deployed, awaiting admin wiring |
-| Two FX strategies on one USDC deposit (Arc strategy scripts) | Yudhishthra | Fork-proven |
-| FXSwap SwapVM instruction and FX formulas | Yudhishthra, Tomás | In progress |
-
-<!-- TODO(coordinator): confirm workstream owners for the MCP SwapVM tools and FXSwap formulas, and update statuses as work lands. -->
+| Aqua0 vault subgraph, Arc manifest, Arc RPC proxy | Rithik | **Live** (self-hosted Graph Node) |
+| Subgraph Studio publishing | Rithik | **In progress** (needs the team's Studio key) |
+| MCP server, CLI, dashboard, public AWS deployment | Rithik | **Live** (public endpoint on the earlier prepare-only build) |
+| Arc deployment of the Aqua0 vault core | Tomás | **Live** |
+| Aqua + AquaSwapVMRouter + AquaAdapter on Arc | Yudhishthra | **Deployed, awaiting wiring** |
+| Arc SwapVM integration: strategy scripts, MCP SwapVM tools, Aqua venue indexing | Yudhishthra | **Fork-proven** (scripts, tools); indexing **Built, not yet deployed** |
+| FXSwap opcode and `AquaFXSwapVMRouter` | Yudhishthra | **Built, not yet deployed** |
+| FX formulas and FXSwap reference vectors | Tomás | **In progress** |
 
 ## Operational checklist
 
-1. Configure `GRAPH_ENDPOINT`. For the Graph prize, use the Subgraph Studio query endpoint.
-2. Configure `WRITE_RPC_URL`, `WRITE_CHAIN_ID` and `VAULT_REGISTRY_ADDRESS` for write preparation.
+1. Set `GRAPH_ENDPOINT`. For the Graph prize, use the Subgraph Studio query endpoint.
+2. Set `WRITE_RPC_URL` and `WRITE_CHAIN_ID`; the Arc venue addresses default from `deployments/arc-testnet.json`.
 3. Leave `MCP_WRITE_MODE=prepare` unless deliberately testing guarded execution.
 4. For HTTP deployments, run with `MCP_TRANSPORT=http`, route `/mcp`, and use `/health` for Graph-backed reachability.
 5. Run `pnpm typecheck`, `pnpm build`, `pnpm lint` and `pnpm test` before release.
 
 ## Boundaries
 
-- Analytics tools read The Graph only.
-- Raw units are returned as integer strings. Token decimals are never invented.
-- `create_strategy` executes only after the guard passes, and re-reads class ids after mining.
-- Deposit and withdraw are preparation-only in the MCP.
-- Secrets come from environment variables and are omitted from `info` and normal logs.
+- Analytics tools read The Graph only. On-chain reads (`classForStrategy`, quotes, `get_shared_backing`) are labelled as such.
+- Write tools send only with `MCP_WRITE_MODE=execute` on Arc Testnet or a local fork, and `dryRun: true` always prepares. `prepare_withdraw` is preparation-only.
+- `create_strategy` is idempotent: finished steps are reported as skipped.
+- `swap` always quotes first and enforces a minimum output on-chain.
+- Secrets come from environment variables and are omitted from `info` and logs.
 - Documentation never claims something is live before it is on Arc Testnet or the public endpoints.

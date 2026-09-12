@@ -1,29 +1,31 @@
 # Circle / Arc track notes
 
-For prize-by-prize criteria and how Aqua0 addresses each, see [README: Prize tracks](../README.md#prize-tracks). This page is the Arc-specific checklist and a short guide to the web MVP.
+For prize-by-prize criteria and checklists, see [README: Prize tracks](../README.md#prize-tracks). This page is the Arc-specific product inventory and a short guide to the web MVP.
+
+<!-- TODO: add demo video link -->
 
 ## What Aqua0 uses on Arc today
 
 | Circle / Arc product | Used? | How |
 | --- | --- | --- |
-| Arc (chain `5042002`) | Yes, **Live** | Aqua0 vault core and three AssetVaults live; 1inch Aqua + AquaSwapVMRouter + Aqua0 AquaAdapter deployed and awaiting admin wiring. See [`ARC_DEPLOYMENT.md`](ARC_DEPLOYMENT.md). |
-| USDC | Yes, **Live** | Arc's native USDC (ERC-20 interface `0x3600…0000`, 6 dp) is the shared quote asset. One USDC deposit backs several FX strategies at once. |
-| App Kits, Circle Wallets, Circle Contracts, CCTP, Gateway, StableFX | Not yet | Planned, see below. |
-| Agent Stack, Nanopayments, Paymaster | Not yet | Planned, see below. |
+| Arc (chain `5042002`) | Yes | Aqua0 vault core and three AssetVaults **Live**. 1inch Aqua, AquaSwapVMRouter and the Aqua0 AquaAdapter **Deployed, awaiting wiring**. See [`ARC_DEPLOYMENT.md`](ARC_DEPLOYMENT.md). |
+| USDC | Yes | Arc's native USDC (ERC-20 interface `0x3600…0000`, 6 dp) is the shared quote asset. One USDC deposit backs several FX strategies at once: **Fork-proven**. |
+| App Kits, Circle Wallets, Circle Contracts, CCTP, Gateway, StableFX | Not yet | **Planned**, see below |
+| Agent Stack, Nanopayments, Paymaster | Not yet | **Planned**, see below |
+
+Arc is testnet-only for Aqua0 today.
 
 ## Arc prize requirements checklist
 
 | Requirement | Evidence | Status |
 | --- | --- | --- |
-| Functional MVP: frontend | Judge dashboard at `https://ethglobal-demo.18-207-103-187.nip.io/` ([`apps/dashboard`](../apps/dashboard)). Shows Arc vault cards, live Graph health, raw indexed data, strategy classes, ARS/BRL presets, and prepare-only strategy calldata. The primary interface is the agentic terminal via MCP. | Live |
-| Functional MVP: backend | Dashboard Node API, MCP server ([`apps/mcp`](../apps/mcp)), typed service ([`packages/shared`](../packages/shared)), subgraph, and the Arc contracts | Live (venue awaiting wiring) |
-| Architecture diagram | [README: How it works](../README.md#how-it-works), [`ARCHITECTURE.md`](ARCHITECTURE.md) | Done |
-| Video demo of core functions and use of Circle developer tools | Link added at submission | Pending |
-| Detailed documentation | README + `docs/` | Done |
-| GitHub repository | `https://github.com/Aqua0-fi/aqua0-ethglobal` | Done |
-| Arc Mainnet deployment (mainnet-conditional share of each prize) | Not deployed | Planned |
-
-<!-- TODO(coordinator): add the demo video link and confirm the public repository URL. -->
+| Functional MVP: frontend | Judge dashboard at `https://ethglobal-demo.18-207-103-187.nip.io/` ([`apps/dashboard`](../apps/dashboard)): Arc vault cards, live Graph health, indexed data, strategy classes, ARS/BRL presets, prepare-only strategy calldata. The primary interface is the agentic terminal via MCP. | **Live** (read-only and prepare-only) |
+| Functional MVP: backend | Dashboard Node API, MCP server ([`apps/mcp`](../apps/mcp)), typed service ([`packages/shared`](../packages/shared)), subgraph, Arc contracts | **Live**; venue **Deployed, awaiting wiring** |
+| Architecture diagram | [README: How it works](../README.md#how-it-works), [`ARCHITECTURE.md`](ARCHITECTURE.md) | **Live** |
+| Video demo of core functions and use of Circle developer tools | Link added at submission | **In progress** |
+| Detailed documentation | README and `docs/` | **Live** |
+| GitHub repository | `https://github.com/Aqua0-fi/aqua0-ethglobal` | **Live** |
+| Arc Mainnet deployment (mainnet-conditional share of each prize) | Not deployed | **Planned** |
 
 ## Web MVP architecture
 
@@ -50,11 +52,17 @@ Dashboard routes:
 | `/api/prepare-strategy` | POST, prepare-only `prepareCreateStrategy` |
 | `/docs/ARCHITECTURE.md`, `/docs/ARC_DEPLOYMENT.md`, `/docs/THE_GRAPH_TRACK.md` | Raw docs |
 
-The backend has no execute endpoint and never reads `WRITE_PRIVATE_KEY`.
+The dashboard backend has no execute endpoint and never reads `WRITE_PRIVATE_KEY`.
+
+## Agent transactions on Arc
+
+A local MCP started with `MCP_WRITE_MODE=execute` sends `deposit`, `create_strategy` and `swap` transactions itself. This is limited to Arc Testnet or a local fork, and the path is **Fork-proven** by [`scripts/test-arc-fork-strategies.sh`](../scripts/test-arc-fork-strategies.sh).
+
+- The signer is a locally configured key (`WRITE_PRIVATE_KEY`), not a Circle wallet.
+- The agent acts on user instructions; it is not an autonomous agent.
+- The public endpoint is prepare-only and holds no key.
 
 ## Run
-
-Local:
 
 ```bash
 GRAPH_ENDPOINT=https://your-subgraph-endpoint \
@@ -64,13 +72,13 @@ VAULT_REGISTRY_ADDRESS=0x9E094b21C4263e0BE5BEffa0f8296B3fd982fFFf \
 pnpm --filter @aqua0/dashboard dev
 ```
 
-AWS loopback compose: `docker compose -f deploy/aws/dashboard.compose.yml up -d --build` binds `127.0.0.1:8400->3000`, attaches `graph-node_default`, and pins `MCP_WRITE_MODE=prepare`.
+AWS loopback compose: `docker compose -f deploy/aws/dashboard.compose.yml up -d --build`. It binds `127.0.0.1:8400->3000`, attaches `graph-node_default`, and pins `MCP_WRITE_MODE=prepare`.
 
 ## Next steps toward the Circle stack (Planned, not built)
 
-- **Circle Wallets / Agent Stack:** give the agent its own wallet so it can sign the strategy, deposit and swap transactions it prepares today. Keep policy limits (chain, tokens, max notional) in the wallet layer, not in the prompt.
-- **Nanopayments / x402-style metering:** charge per quote or per strategy-management action in USDC.
+- **Circle Wallets / Agent Stack:** give the agent its own wallet to sign the strategy, deposit and swap transactions it already builds. Keep policy limits (chain, tokens, max notional) in the wallet layer, not in the prompt.
+- **Nanopayments:** charge per quote or per strategy-management action in USDC.
 - **Paymaster:** sponsor strategist and LP transactions.
 - **StableFX:** evaluate it as an FX price source for FXSwap, or as a comparison venue.
 - **CCTP / Gateway:** bring USDC in from other chains before depositing into the shared vault.
-- **Arc Mainnet:** deploy once the contracts and FXSwap are reviewed.
+- **Arc Mainnet:** deploy after a security review of the contracts and FXSwap.
