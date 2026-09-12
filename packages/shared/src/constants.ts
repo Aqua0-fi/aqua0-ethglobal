@@ -33,8 +33,8 @@ export const ARC_TESTNET_DEPLOYMENT = {
    * 1 BRL, `MXNe` quotes MXN per 1 USD; both have 8 decimals and are refreshed by pushing a signed payload.
    */
   fxVenue: {
-    forexRouter: "0x0661435C2684Dcf62c547bA75a3300f928701E3d",
-    forexAquaAdapter: "0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80",
+    forexRouter: "0x475d0E487779743Fb52c8E7729A1718934D4187e",
+    forexAquaAdapter: "0xc9cD056FCF2EF46116259fb094BD897c7E7C0EfB",
     fxOracles: {
       arsUsd: "0xc05A3Fb016f973C82b0232EF50336d4C0466E70C",
       brlUsd: "0x1AE6542b9da89Ed2AEf00600710Bba75DbFF5e71",

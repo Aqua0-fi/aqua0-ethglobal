@@ -183,9 +183,9 @@ dataSources:
         type: String
         data: fxswap
     source:
-      address: "0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80"
+      address: "0xc9cD056FCF2EF46116259fb094BD897c7E7C0EfB"
       abi: AquaAdapter
-      startBlock: 61762924
+      startBlock: 61773163
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -227,9 +227,9 @@ dataSources:
         type: String
         data: fxswap
     source:
-      address: "0x0661435C2684Dcf62c547bA75a3300f928701E3d"
+      address: "0x475d0E487779743Fb52c8E7729A1718934D4187e"
       abi: AquaSwapVMRouter
-      startBlock: 61762912
+      startBlock: 61773156
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9

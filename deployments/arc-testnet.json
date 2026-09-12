@@ -39,8 +39,8 @@
       "deployer": "0x7E61A5EbCCd26d9D91690C6037d7224F5384730D",
       "firstUpdateTx": "0x3ec11cc0830567cb25a5d9b9b1f36c8caa5d966216c552b8a3098fee75d44ecf"
     },
-    "forexRouter": "0x0661435C2684Dcf62c547bA75a3300f928701E3d",
-    "forexAquaAdapter": "0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80"
+    "forexRouter": "0x475d0E487779743Fb52c8E7729A1718934D4187e",
+    "forexAquaAdapter": "0xc9cD056FCF2EF46116259fb094BD897c7E7C0EfB"
   },
   "assets": {
     "usdc": "0x3600000000000000000000000000000000000000",
@@ -124,16 +124,28 @@
           "url": "https://testnet.arcscan.app/address/0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5#code"
         },
         "0x0661435C2684Dcf62c547bA75a3300f928701E3d": {
-          "name": "AquaForexSwapVMRouter",
+          "name": "AquaForexSwapVMRouter (superseded, forexVenueV1)",
           "status": "verified",
           "match": "full",
           "url": "https://testnet.arcscan.app/address/0x0661435C2684Dcf62c547bA75a3300f928701E3d#code"
         },
         "0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80": {
-          "name": "AquaAdapter (forex venue)",
+          "name": "AquaAdapter (forex venue) (superseded, forexVenueV1)",
           "status": "verified",
           "match": "partial (compiled with cbor_metadata=false, so no metadata hash to match)",
           "url": "https://testnet.arcscan.app/address/0x7b426DbbD15Aa6a62077feCb463B731a2bd8fE80#code"
+        },
+        "0x475d0E487779743Fb52c8E7729A1718934D4187e": {
+          "name": "AquaForexSwapVMRouter (maxFee < 0.5)",
+          "status": "verified",
+          "match": "full",
+          "url": "https://testnet.arcscan.app/address/0x475d0E487779743Fb52c8E7729A1718934D4187e#code"
+        },
+        "0xc9cD056FCF2EF46116259fb094BD897c7E7C0EfB": {
+          "name": "AquaAdapter (forex venue)",
+          "status": "verified",
+          "match": "partial (compiled with cbor_metadata=false, so no metadata hash to match)",
+          "url": "https://testnet.arcscan.app/address/0xc9cD056FCF2EF46116259fb094BD897c7E7C0EfB#code"
         }
       },
       "vaultCore": {
@@ -186,6 +198,54 @@
     }
   },
   "forexVenue": {
+    "note": "ForexCurve (opcode 34, the Shell v1 / DFX forex curve) venue. maxFee must be below 0.5 for any alpha. Supersedes forexVenueV1 and the FXSwap venue.",
+    "router": {
+      "address": "0x475d0E487779743Fb52c8E7729A1718934D4187e",
+      "deployTx": "0x6697a9364a485b1f3d09c99d12b929275d1bb564dcf5a656adb463bf885e2809",
+      "block": 61773156,
+      "runtimeBytes": 24418
+    },
+    "adapter": {
+      "address": "0xc9cD056FCF2EF46116259fb094BD897c7E7C0EfB",
+      "admin": "0x7E61A5EbCCd26d9D91690C6037d7224F5384730D",
+      "operatorRole": [
+        "0xcdbd43edb8292def7e8ac99c77860a689cc6d404"
+      ],
+      "oneStrategyPerToken": false,
+      "deployTx": "0x9c77d0cda621deef452e315b885661024c1402b008cf878f9e1f8aa0d7842ff0",
+      "block": 61773163,
+      "setOneStrategyPerTokenTx": "0xd507ad489dbb007b2defae02112f2ab602c736fe0d553e0fb74c5fd32f8a4a59",
+      "operatorRoleGrantTx": "0x7e5e646d0254e31b4bc198c892ad46505f0b522c23803afb8f2930998eca63a8"
+    },
+    "coreWiring": {
+      "status": "wired",
+      "date": "2026-09-12",
+      "sentBy": "0x7E61A5EbCCd26d9D91690C6037d7224F5384730D (team key, holding the roles the core admin granted: see forexVenueV1.coreWiring.rolesGrantedToTeamKey)",
+      "transactions": [
+        {
+          "call": "VaultRegistry.setAdapterAllowed(forexAquaAdapter, true)",
+          "hash": "0xbc5aa29ed8d56c84d2d376a131b4f772ec3ed0002d9a38f3bedf7a6af43ad57a"
+        },
+        {
+          "call": "AssetVault usdc grantRole(VENUE_SETTLER_ROLE, forexAquaAdapter)",
+          "hash": "0x7d81d8e29ec9d4d50daf0cb3742157340b85f9e431dacd8cac32878d3d65660f"
+        },
+        {
+          "call": "AssetVault argt grantRole(VENUE_SETTLER_ROLE, forexAquaAdapter)",
+          "hash": "0xf311a04452791477e4d36d10e5ffd02f075fe1ff6b6f15eb74ace4cdc1eb11a6"
+        },
+        {
+          "call": "AssetVault brat grantRole(VENUE_SETTLER_ROLE, forexAquaAdapter)",
+          "hash": "0xe8c96205abe87a026516be364e1887d9bf6d27e157f49d5dcb6910d848c4464b"
+        }
+      ],
+      "verified": {
+        "isAllowedAdapter": true,
+        "venueSettlerRoleOnAllVaults": true
+      }
+    }
+  },
+  "forexVenueV1": {
     "note": "ForexCurve (opcode 34, the Shell v1 / DFX forex curve) venue. Supersedes the FXSwap venue (contracts.fxswapRouter), which was never wired.",
     "router": {
       "address": "0x0661435C2684Dcf62c547bA75a3300f928701E3d",
@@ -255,6 +315,8 @@
         "isAllowedAdapter": true,
         "venueSettlerRoleOnAllVaults": true
       }
-    }
+    },
+    "status": "superseded 2026-09-12: its maxFee check (maxFee < min(1/2, (1 - alpha)/(2 alpha))) was stricter than Tomás's spec and rejected his no_flat_zone set",
+    "retirement": "pending: still allowlisted with VENUE_SETTLER_ROLE; forex classes 6 and 7 were first shipped here"
   }
 }
