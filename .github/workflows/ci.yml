@@ -17,6 +17,10 @@ jobs:
       PUBLIC_ARC_COMPOSER: "0x656F28021a624aDfA0d92dDFdBb20577674aFEC7"
       PUBLIC_ARC_FILLER_REGISTRY: "0xa8e08346DD7b6809C47A920c365bCC987Ea91297"
       PUBLIC_ARC_START_BLOCK: "60613306"
+      PUBLIC_ARC_AQUA_ADAPTER: "0xbF72D34b804636496c3308796908152b82624Ca5"
+      PUBLIC_ARC_AQUA_ADAPTER_START_BLOCK: "61679229"
+      PUBLIC_ARC_AQUA_SWAPVM_ROUTER: "0xb20bc70b485eC1352C190d26fCaB1959d219F763"
+      PUBLIC_ARC_AQUA_SWAPVM_ROUTER_START_BLOCK: "61679223"
 
     steps:
       - uses: actions/checkout@v4
@@ -37,4 +41,5 @@ jobs:
       - run: pnpm lint
       - run: pnpm --filter @aqua0/subgraph test:required-events
       - run: pnpm --filter @aqua0/subgraph generate:arc
+      - run: pnpm --filter @aqua0/subgraph exec graph codegen subgraph.arc.yaml
       - run: pnpm --filter @aqua0/subgraph exec graph build subgraph.arc.yaml

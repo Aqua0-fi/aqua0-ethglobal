@@ -73,6 +73,37 @@ const assetVaultTemplateHasEventsAbi =
     manifest
   );
 
+// Aqua venue: adapter strategy lifecycle and router fills must stay wired to their own ABIs.
+const venueRequirements = [
+  {
+    abiFile: "AquaAdapter.json",
+    events: [
+      "AdapterStrategyShipped",
+      "AdapterStrategyDocked",
+      "AdapterStrategyEmergencyDocked",
+      "AdapterStrategyReshipped",
+      "AdapterStrategyReconciled",
+      "AdapterStrategyForceCleared",
+      "AdapterOneStrategyPerTokenSet"
+    ]
+  },
+  { abiFile: "AquaSwapVMRouter.json", events: ["Swapped"] }
+];
+for (const { abiFile, events } of venueRequirements) {
+  const venueAbi = JSON.parse(fs.readFileSync(path.join(subgraphDir, "abis", abiFile), "utf8"));
+  const venueEvents = new Map(venueAbi.filter((item) => item.type === "event").map((event) => [event.name, event]));
+  for (const name of events) {
+    const event = venueEvents.get(name);
+    if (!event) {
+      missingFromAbi.push(`${abiFile}:${name}`);
+      continue;
+    }
+    const signature = eventSignature(event);
+    if (!manifest.includes(`- event: ${signature}`)) missingFromManifest.push(signature);
+  }
+  requiredEvents.push(...events);
+}
+
 if (missingFromAbi.length > 0 || missingFromManifest.length > 0 || !assetVaultTemplateHasEventsAbi) {
   if (missingFromAbi.length > 0) {
     console.error(`Missing required events from Events.json: ${missingFromAbi.join(", ")}`);
@@ -89,4 +120,4 @@ if (missingFromAbi.length > 0 || missingFromManifest.length > 0 || !assetVaultTe
   process.exit(1);
 }
 
-console.log(`Required Shape-C events present: ${requiredEvents.length}`);
+console.log(`Required Shape-C and Aqua venue events present: ${requiredEvents.length}`);

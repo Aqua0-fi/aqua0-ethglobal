@@ -1,61 +1,69 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
-const required = [
-  ["PUBLIC_ARC_VAULT_FACTORY", "VaultFactory"],
-  ["PUBLIC_ARC_VAULT_REGISTRY", "VaultRegistry"],
-  ["PUBLIC_ARC_COMPOSER", "Composer"],
-  ["PUBLIC_ARC_FILLER_REGISTRY", "FillerRegistry"],
-  ["PUBLIC_ARC_START_BLOCK", "start block"]
-];
-const optional = [
-  ["PUBLIC_ARC_AQUA_ADAPTER", "AquaAdapter"],
-  ["PUBLIC_ARC_V4_ADAPTER", "V4Adapter"]
+// Generates subgraph.arc.yaml from the canonical Base manifest.
+//
+// Core sources (required): VaultFactory, VaultRegistry, Composer, FillerRegistry + PUBLIC_ARC_START_BLOCK.
+// Optional sources are dropped when their address env is unset.
+// Every source may override its start block with `<ADDRESS_ENV>_START_BLOCK`; otherwise PUBLIC_ARC_START_BLOCK applies.
+const sources = [
+  { name: "VaultFactory", env: "PUBLIC_ARC_VAULT_FACTORY", required: true },
+  { name: "VaultRegistry", env: "PUBLIC_ARC_VAULT_REGISTRY", required: true },
+  { name: "Composer", env: "PUBLIC_ARC_COMPOSER", required: true },
+  { name: "FillerRegistry", env: "PUBLIC_ARC_FILLER_REGISTRY", required: true },
+  { name: "AquaAdapter", env: "PUBLIC_ARC_AQUA_ADAPTER", required: false },
+  { name: "AquaSwapVMRouter", env: "PUBLIC_ARC_AQUA_SWAPVM_ROUTER", required: false },
+  { name: "V4Adapter", env: "PUBLIC_ARC_V4_ADAPTER", required: false }
 ];
 
-const values = new Map();
-const missing = [];
-for (const [envName] of required) {
-  const value = process.env[envName]?.trim();
-  if (!value) missing.push(envName);
-  else values.set(envName, value);
-}
-for (const [envName] of optional) {
-  const value = process.env[envName]?.trim();
-  if (value) values.set(envName, value);
-}
-
-if (missing.length > 0) {
-  console.error(
-    `Missing Arc manifest environment variables: ${missing.join(", ")}.\n` +
-      "Set the public Arc core deployment addresses and PUBLIC_ARC_START_BLOCK; adapter addresses are optional until those deployments exist."
-  );
+const env = (name) => process.env[name]?.trim() || undefined;
+const fail = (message) => {
+  console.error(message);
   process.exit(1);
+};
+
+const missing = [...sources.filter((s) => s.required).map((s) => s.env), "PUBLIC_ARC_START_BLOCK"].filter(
+  (name) => !env(name)
+);
+if (missing.length > 0) {
+  fail(
+    `Missing Arc manifest environment variables: ${missing.join(", ")}.\n` +
+      "Set the public Arc core deployment addresses and PUBLIC_ARC_START_BLOCK; adapter and router addresses are optional."
+  );
 }
 
 const addressPattern = /^0x[a-fA-F0-9]{40}$/;
-for (const [envName, label] of [...required.slice(0, 4), ...optional]) {
-  const value = values.get(envName);
-  if (value && !addressPattern.test(value)) {
-    console.error(`${envName} for ${label} must be a 20-byte EVM address, received: ${value}`);
-    process.exit(1);
-  }
+const blockPattern = /^[0-9]+$/;
+
+const coreStartBlock = env("PUBLIC_ARC_START_BLOCK");
+if (!blockPattern.test(coreStartBlock)) {
+  fail(`PUBLIC_ARC_START_BLOCK must be a non-negative integer, received: ${coreStartBlock}`);
 }
-const startBlock = values.get("PUBLIC_ARC_START_BLOCK");
-if (!/^[0-9]+$/.test(startBlock)) {
-  console.error(`PUBLIC_ARC_START_BLOCK must be a non-negative integer, received: ${startBlock}`);
-  process.exit(1);
+
+const resolved = new Map();
+for (const source of sources) {
+  const address = env(source.env);
+  const startEnv = `${source.env}_START_BLOCK`;
+  const startOverride = env(startEnv);
+  if (!address) {
+    if (startOverride) console.warn(`Ignoring ${startEnv}: ${source.env} is not set.`);
+    continue;
+  }
+  if (!addressPattern.test(address)) {
+    fail(`${source.env} for ${source.name} must be a 20-byte EVM address, received: ${address}`);
+  }
+  if (startOverride && !blockPattern.test(startOverride)) {
+    fail(`${startEnv} must be a non-negative integer, received: ${startOverride}`);
+  }
+  resolved.set(source.name, { address, startBlock: startOverride ?? coreStartBlock });
+}
+
+if (resolved.has("AquaSwapVMRouter") && !resolved.has("AquaAdapter")) {
+  console.warn(
+    "PUBLIC_ARC_AQUA_SWAPVM_ROUTER is set without PUBLIC_ARC_AQUA_ADAPTER: fills will be indexed but never linked to Aqua0 strategies."
+  );
 }
 
 let manifest = readFileSync(new URL("../subgraph.base.yaml", import.meta.url), "utf8");
-
-const sources = [
-  ["VaultFactory", "PUBLIC_ARC_VAULT_FACTORY"],
-  ["VaultRegistry", "PUBLIC_ARC_VAULT_REGISTRY"],
-  ["Composer", "PUBLIC_ARC_COMPOSER"],
-  ["FillerRegistry", "PUBLIC_ARC_FILLER_REGISTRY"],
-  ["AquaAdapter", "PUBLIC_ARC_AQUA_ADAPTER"],
-  ["V4Adapter", "PUBLIC_ARC_V4_ADAPTER"]
-];
 
 function sourceBlockRegex(name) {
   return new RegExp(
@@ -63,22 +71,20 @@ function sourceBlockRegex(name) {
   );
 }
 
-for (const [name, envName] of sources) {
-  const re = sourceBlockRegex(name);
+for (const source of sources) {
+  const re = sourceBlockRegex(source.name);
   const match = manifest.match(re);
-  if (!match) {
-    console.error(`Could not find ${name} data source in subgraph.base.yaml`);
-    process.exit(1);
-  }
-  const address = values.get(envName);
-  if (!address) {
+  if (!match) fail(`Could not find ${source.name} data source in subgraph.base.yaml`);
+
+  const target = resolved.get(source.name);
+  if (!target) {
     manifest = manifest.replace(re, "");
     continue;
   }
-  let block = match[0];
-  block = block.replace(/network: base/g, "network: arc-testnet");
-  block = block.replace(/address: "0x[a-fA-F0-9]{40}"/, `address: "${address}"`);
-  block = block.replace(/startBlock: [0-9]+/, `startBlock: ${startBlock}`);
+  const block = match[0]
+    .replace(/network: base/g, "network: arc-testnet")
+    .replace(/address: "0x[a-fA-F0-9]{40}"/, `address: "${target.address}"`)
+    .replace(/startBlock: [0-9]+/, `startBlock: ${target.startBlock}`);
   manifest = manifest.replace(re, block);
 }
 
@@ -88,8 +94,10 @@ manifest = manifest.replace(/network: base/g, "network: arc-testnet");
 manifest = manifest.replace("  prune: auto", "  prune: never");
 writeFileSync(new URL("../subgraph.arc.yaml", import.meta.url), manifest);
 
-const skipped = optional.filter(([envName]) => !values.has(envName)).map(([, label]) => label);
+const summary = [...resolved].map(([name, { address, startBlock }]) => `  ${name} ${address} @ ${startBlock}`);
+const skipped = sources.filter((s) => !resolved.has(s.name)).map((s) => s.name);
 console.log(
-  `Wrote packages/subgraph/subgraph.arc.yaml for Arc testnet (chainId 5042002).` +
-    (skipped.length ? ` Skipped undeployed optional data sources: ${skipped.join(", ")}.` : "")
+  "Wrote packages/subgraph/subgraph.arc.yaml for Arc testnet (network arc-testnet, chainId 5042002):\n" +
+    summary.join("\n") +
+    (skipped.length ? `\nSkipped undeployed optional data sources: ${skipped.join(", ")}.` : "")
 );

@@ -33,10 +33,20 @@ PUBLIC_ARC_VAULT_REGISTRY=0x9E094b21C4263e0BE5BEffa0f8296B3fd982fFFf \
 PUBLIC_ARC_COMPOSER=0x656F28021a624aDfA0d92dDFdBb20577674aFEC7 \
 PUBLIC_ARC_FILLER_REGISTRY=0xa8e08346DD7b6809C47A920c365bCC987Ea91297 \
 PUBLIC_ARC_START_BLOCK=60613306 \
+PUBLIC_ARC_AQUA_ADAPTER=0xbF72D34b804636496c3308796908152b82624Ca5 \
+PUBLIC_ARC_AQUA_ADAPTER_START_BLOCK=61679229 \
+PUBLIC_ARC_AQUA_SWAPVM_ROUTER=0xb20bc70b485eC1352C190d26fCaB1959d219F763 \
+PUBLIC_ARC_AQUA_SWAPVM_ROUTER_START_BLOCK=61679223 \
 pnpm --filter @aqua0/subgraph generate:arc
 ```
 
-`PUBLIC_ARC_AQUA_ADAPTER` and `PUBLIC_ARC_V4_ADAPTER` are optional and are omitted until real adapter deployments exist. The generated manifest uses Graph network `arc-testnet`; Arc chain id is `5042002`.
+`PUBLIC_ARC_AQUA_ADAPTER`, `PUBLIC_ARC_AQUA_SWAPVM_ROUTER` and `PUBLIC_ARC_V4_ADAPTER` are optional; unset sources are dropped (V4Adapter is not deployed on Arc). Any source can override its start block with `<ADDRESS_ENV>_START_BLOCK`; otherwise `PUBLIC_ARC_START_BLOCK` applies. The generated manifest uses Graph network `arc-testnet`; Arc chain id is `5042002`.
+
+### Aqua venue entities
+
+- `AquaVenueAdapter`, `AquaStrategy` (`<adapter>-<strategyId>`, with `classId`/`strategy` and `status`), `AquaOrder` (`<maker>-<orderHash>`; a fresh ship's hash is the strategy id, a reship activates `newAquaHash`).
+- `AquaFill` from the address-scoped router `Swapped` event. Fills whose maker is an indexed adapter and whose order hash maps to a shipped strategy link the strategy, class, `vaultIn`/`vaultOut`, the `ClassVenueSettledEvent`s the maker hooks booked, and the per-LP `StrategyPrincipalSoldEvent`s / `StrategyFeeAccruedEvent`s that served the swap (`lps`, `principalSold` in tokenOut units, `feesCredited` in tokenIn units).
+- `AquaLPFillStats` (per LP) and `AquaLPVaultFillStats` (per vault+LP, asset units) aggregate fills and swap fees.
 
 Arc's public RPC limits large topic-OR `eth_getLogs` requests. The AWS Graph Node therefore uses the compatibility shim in `../../infra/arc-rpc-proxy`, which splits only oversized log-filter topic lists and otherwise passes JSON-RPC through unchanged.
 
@@ -65,5 +75,7 @@ GRAPH_STUDIO_SLUG=<studio-slug> \
 GRAPH_STUDIO_DEPLOY_KEY=<secret-deploy-key> \
 ./scripts/deploy-graph-studio.sh
 ```
+
+`NETWORK=arc` deploys `subgraph.arc.yaml` (regenerated first when `PUBLIC_ARC_*` is set); Base stays the default. `DRY_RUN=1` builds and prints the deploy command without a key.
 
 The deploy key stays outside git. After deployment, set the MCP's `GRAPH_ENDPOINT` to the provider query endpoint and rerun the public MCP smoke. See `../../docs/THE_GRAPH_TRACK.md`.
