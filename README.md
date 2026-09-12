@@ -553,43 +553,50 @@ Aqua0 is registered in the **Continuity** track. We target Arc, 1inch and The Gr
 
 ## Try it
 
-Requirements: Node 22 and pnpm 9. Foundry (`forge`, `anvil`, `cast`) is needed for the contracts and fork proofs. Agents can load the [Aqua0 agent skill](skills/aqua0/SKILL.md) for the tool map, examples and safety rules.
+Agents can load the [Aqua0 agent skill](skills/aqua0/SKILL.md) for the tool map, examples and safety rules. Installing needs only Claude Code or Codex, plus Node 20 or newer for the local server. Building from source needs Node 22 and pnpm 9, and Foundry (`forge`, `anvil`, `cast`) for the contracts and fork proofs.
 
 ### Connect the MCP
 
-**Public endpoint (no install):**
+Pick one of two one-step installs.
 
-```bash
-claude mcp add --transport http aqua0 https://ethglobal-mcp.18-207-103-187.nip.io/mcp
+**1. Claude Code plugin: hosted, prepare-only, instant.** Installs the Aqua0 skill and connects the hosted MCP server:
+
+```text
+/plugin marketplace add Aqua0-fi/aqua0-ethglobal
+/plugin install aqua0@aqua0
 ```
+
+From a shell: `claude plugin marketplace add Aqua0-fi/aqua0-ethglobal`, then `claude plugin install aqua0@aqua0`. For the hosted server without the skill (or from another client): `claude mcp add --transport http aqua0 https://ethglobal-mcp.18-207-103-187.nip.io/mcp`.
 
 > [!NOTE]
-> The public endpoint is **Live** and reads from Subgraph Studio, but it still runs the earlier prepare-only build: 12 tools (reads plus `prepare_*`) and no signer. The strategy, swap and FX tools run locally today; a hosted redeploy is **Planned**.
+> The hosted server is **Live**, reads from Subgraph Studio and holds no key. It still runs the earlier prepare-only build: reads plus `prepare_*`. The strategy, swap and FX tools run locally today; a hosted redeploy is **Planned**.
 
-**Local stdio build (19 tools)**, for Claude Code or Codex:
+**2. Local stdio server: the full tool set.** Runs on your machine through npx, with no clone or build:
 
 ```bash
-pnpm install && pnpm build
-
-claude mcp add aqua0 \
-  -e GRAPH_ENDPOINT=https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/version/latest \
-  -e WRITE_RPC_URL=https://rpc.testnet.arc.network \
-  -e WRITE_CHAIN_ID=5042002 \
-  -e MCP_WRITE_MODE=prepare \
-  -e FXSWAP_ROUTER_ADDRESS=0x475d0E487779743Fb52c8E7729A1718934D4187e \
-  -e FXSWAP_AQUA_ADAPTER_ADDRESS=0xc9cD056FCF2EF46116259fb094BD897c7E7C0EfB \
-  -e FX_ORACLE_ARS_USD=0xc05A3Fb016f973C82b0232EF50336d4C0466E70C \
-  -- node <repo>/apps/mcp/dist/index.js
-
-codex mcp add aqua0 \
-  --env GRAPH_ENDPOINT=https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/version/latest \
-  --env WRITE_RPC_URL=https://rpc.testnet.arc.network \
-  --env WRITE_CHAIN_ID=5042002 \
-  --env MCP_WRITE_MODE=prepare \
-  -- node <repo>/apps/mcp/dist/index.js
+claude mcp add aqua0 -- npx -y @aqua0/mcp
+codex mcp add aqua0 -- npx -y @aqua0/mcp
 ```
 
-The FX variables are optional on Arc: the addresses above are the built-in defaults, shown for clarity. `FXSWAP_ROUTER_ADDRESS` and `FXSWAP_AQUA_ADAPTER_ADDRESS` keep their names but point at the forex router and its adapter. Leave `FX_ORACLE_BRL_USD` unset so BRL prices from RedStone. In prepare mode every write tool returns ordered calldata and EIP-712 typed data for a wallet to sign. Then try:
+It starts in prepare mode on Arc Testnet and reads the public Studio subgraph, so no variables are needed. In prepare mode every write tool returns ordered calldata and EIP-712 typed data for a wallet to sign.
+
+> [!NOTE]
+> `@aqua0/mcp` is not on npm yet. Until it is, run it from a clone: `pnpm install && pnpm build`, then use `-- node <repo>/apps/mcp/dist/index.js` in place of `-- npx -y @aqua0/mcp`.
+
+**Execute mode with your own Arc Testnet key.** The local server sends the transactions itself:
+
+```bash
+claude mcp add aqua0 \
+  -e MCP_WRITE_MODE=execute \
+  -e WRITE_PRIVATE_KEY=0x...throwaway-arc-testnet-key \
+  -- npx -y @aqua0/mcp
+```
+
+The key's address needs testnet USDC on Arc, which pays gas. `deposit`, `quote_swap` and `swap` then work. Creating strategies also needs `OPERATOR_ROLE` on the Aqua0 AquaAdapter for that address (or a Circle operator wallet that holds it, below), which only the adapter admin grants. The hosted build holds no key and no role, so it cannot create strategies.
+
+**Privy sign-in with a Circle wallet.** If you have your own Circle developer credentials, the same npx command runs with `SIGNER=circle`, the Circle keys and a Privy app id: see [Sign in with Privy](#sign-in-with-privy-trade-with-a-circle-wallet).
+
+Variables are optional on Arc. `GRAPH_ENDPOINT` defaults to the public Studio query URL, `WRITE_RPC_URL` and `WRITE_CHAIN_ID` to Arc Testnet, and the venue and feed addresses to the Arc deployment. Override them (`GRAPH_ENDPOINT`, `FXSWAP_ROUTER_ADDRESS`, `FXSWAP_AQUA_ADAPTER_ADDRESS`, `FX_ORACLE_ARS_USD`) only for another subgraph or a fork. `FXSWAP_ROUTER_ADDRESS` and `FXSWAP_AQUA_ADAPTER_ADDRESS` keep their names but point at the forex router and its adapter. Leave `FX_ORACLE_BRL_USD` unset so BRL prices from RedStone. Then try:
 
 ```text
 Check Aqua0 health, show the protocol snapshot, and tell me which data came from The Graph.
@@ -613,12 +620,11 @@ A local MCP (or `aqua0 login`) can act for a signed-in person without holding th
 
 ```bash
 claude mcp add aqua0 \
-  -e GRAPH_ENDPOINT=https://api.studio.thegraph.com/query/1760183/aqua-0-ethglobal-arc-testnet/version/latest \
-  -e WRITE_RPC_URL=https://rpc.testnet.arc.network -e WRITE_CHAIN_ID=5042002 -e MCP_WRITE_MODE=execute \
+  -e MCP_WRITE_MODE=execute \
   -e SIGNER=circle -e CIRCLE_API_KEY=... -e CIRCLE_ENTITY_SECRET=... \
   -e CIRCLE_WALLET_SET_ID=... -e CIRCLE_OPERATOR_WALLET_ID=... \
   -e PRIVY_APP_ID=... -e PRIVY_CLIENT_ID=... \
-  -- node <repo>/apps/mcp/dist/index.js
+  -- npx -y @aqua0/mcp
 ```
 
 Then: *"Log me in to Aqua0"* → *"Deposit 2 USDC"* → *"Create a USDC/BRL strategy"* → *"Swap 0.1 USDC to BRL"*. Allow `http://localhost:8787` on the Privy app client you use. `whoami` shows the signed-in user and wallet; `logout` forgets the session.
