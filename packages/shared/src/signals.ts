@@ -203,7 +203,7 @@ export function computeBook(input: {
 export function describeStrategySignal(signal: StrategySignal): string {
   const name = signal.pair.replace("USDC/", "");
   if (!signal.live) {
-    return `${name} not live`;
+    return signal.errors.some((error) => error.startsWith("read failed")) ? `${name} read failed` : `${name} not live`;
   }
   const spread = signal.book?.spreadBps;
   const spreadText = spread === null || spread === undefined ? "spread n/a" : `${spread >= 0 ? "+" : ""}${spread.toFixed(2)}bps`;
@@ -353,20 +353,25 @@ export async function readSignalsSnapshot(
   const [blockNumber, strategySignals, vault] = await Promise.all([
     client.getBlockNumber(),
     include.has("oracle") || include.has("book")
-      ? Promise.all(
-          strategies.map((ref) =>
-            readStrategySignal(cfg, ref).catch(
-              (error: unknown): StrategySignal => ({
-                pair: ref.pair,
-                strategyId: ref.strategyId,
-                live: false,
-                oracle: null,
-                book: null,
-                errors: [errorText(error)]
-              })
-            )
-          )
-        )
+      ? (async () => {
+          // One strategy at a time: the public Arc RPC rate-limits bursts of parallel eth_calls.
+          const rows: StrategySignal[] = [];
+          for (const ref of strategies) {
+            rows.push(
+              await readStrategySignal(cfg, ref).catch(
+                (error: unknown): StrategySignal => ({
+                  pair: ref.pair,
+                  strategyId: ref.strategyId,
+                  live: false,
+                  oracle: null,
+                  book: null,
+                  errors: [`read failed: ${errorText(error)}`]
+                })
+              )
+            );
+          }
+          return rows;
+        })()
       : Promise.resolve([] as StrategySignal[]),
     include.has("vault")
       ? readVaultSignal(cfg, options.vaultAddress).catch((error: unknown) => ({ error: errorText(error) }))
