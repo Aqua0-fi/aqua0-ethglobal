@@ -16,7 +16,14 @@
     "aquaAdapter": "0xbF72D34b804636496c3308796908152b82624Ca5",
     "v4Adapter": null,
     "aqua": "0x490d2eceD9aCF99e1db6090f820775bFa70020D4",
-    "aquaSwapVMRouter": "0xb20bc70b485eC1352C190d26fCaB1959d219F763"
+    "aquaSwapVMRouter": "0xb20bc70b485eC1352C190d26fCaB1959d219F763",
+    "fxswapRouter": "0xb54AE15d2372F27718f32e9f6990330cdD3edaEB",
+    "fxAquaAdapter": "0x8236cfFDD17D7b41F41c820f5E4b7DA6d5F243D5",
+    "fxOracles": {
+      "arsUsd": "0xc05A3Fb016f973C82b0232EF50336d4C0466E70C",
+      "brlUsd": "0x1AE6542b9da89Ed2AEf00600710Bba75DbFF5e71",
+      "owner": "0xAFF7Da673820fAA38289de8B03984A9cf20fb02c"
+    }
   },
   "assets": {
     "usdc": "0x3600000000000000000000000000000000000000",
