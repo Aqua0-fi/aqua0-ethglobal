@@ -12,7 +12,7 @@ trade (DFX calculateTrade): input a into asset i (signed), output o from asset j
     o = -(a + lambda*(omega - psi'))   otherwise         (fee shrank: taker gets lambda of it)
 with psi' evaluated at the NEW state, so it is a fixed point. DFX iterates 32 times.
 
-closed form: let s = a + o (numerario retained by the pool). then s = c*(psi'(s) - omega), c = 1 or lambda.
+closed form: let s = a + o (numeraire retained by the pool). then s = c*(psi'(s) - omega), c = 1 or lambda.
 new ideal I' = (g+s)/2, m_i(s) linear in s, mu_i*(g+s) quadratic in s  =>  multiply by (g+s): quadratic in s.
 solve per regime (each asset: inside / below-quad / below-cap / above-quad / above-cap), keep the root
 consistent with its regime and with |s| << g (the other root is ~ -g, spurious).
