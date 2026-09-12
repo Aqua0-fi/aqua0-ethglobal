@@ -1,0 +1,33 @@
+{
+  "name": "@aqua0/signals",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "lint": "pnpm --filter @aqua0/shared build && tsc -p tsconfig.json --noEmit",
+    "typecheck": "pnpm --filter @aqua0/shared build && tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@aqua0/shared": "workspace:*",
+    "@circle-fin/x402-batching": "3.4.0",
+    "@x402/core": "2.25.0",
+    "@x402/evm": "2.25.0",
+    "express": "5.2.1",
+    "viem": "^2.56.3"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.6",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

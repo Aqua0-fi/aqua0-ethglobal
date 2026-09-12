@@ -475,12 +475,18 @@ async function readClassForStrategy(config: WriteConfig, strategyKey: Hex): Prom
   });
 }
 
+/**
+ * The public Arc Testnet RPC rate-limits bursts ("rate limit exceeded"); viem retries those, so give it room:
+ * six retries with exponential backoff from 400 ms (about 25 s in total).
+ */
+const RPC_RETRY = { retryCount: 6, retryDelay: 400 } as const;
+
 export function createReadClient(config: WriteConfig): ReadClient {
   const chainId = requireWriteChainId(config);
   const rpcUrl = requireWriteRpcUrl(config);
   return createPublicClient({
     chain: makeChain(chainId, rpcUrl),
-    transport: http(rpcUrl)
+    transport: http(rpcUrl, RPC_RETRY)
   });
 }
 
@@ -490,7 +496,7 @@ export async function createExecutionClients(
   const chainId = requireWriteChainId(config);
   const rpcUrl = requireWriteRpcUrl(config);
   const chain = makeChain(chainId, rpcUrl);
-  const publicClient = createPublicClient({ chain, transport: http(rpcUrl) });
+  const publicClient = createPublicClient({ chain, transport: http(rpcUrl, RPC_RETRY) });
   const actualChainId = await publicClient.getChainId();
   if (actualChainId !== chainId) {
     throw new Error(
@@ -500,7 +506,7 @@ export async function createExecutionClients(
   if (actualChainId === 1 || actualChainId === 8453) {
     throw new Error("Execution refused: mainnet/Base writes are not allowed");
   }
-  const wallet = createWalletClient({ chain, transport: http(rpcUrl) });
+  const wallet = createWalletClient({ chain, transport: http(rpcUrl, RPC_RETRY) });
   const signer = await createWriteSigner(config, wallet);
   return { publicClient, wallet, signer };
 }

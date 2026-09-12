@@ -34,6 +34,8 @@ Usage:
   aqua0 set-fx-price --pair ARS (--price 1470 | --change-percent 5) [--feed <addr>] [--dry-run true]
   aqua0 benchmark-fx --pair EUR [--fee-bps 30] [--flat-band-percent 15] [--trade-sizes 1000,10000,100000]
                      [--lookback-days 7] [--chains ethereum,base,polygon] [--fallback auto|always|never] [--arc-quote false]
+  aqua0 keeper setup|run|demo|status   Autonomous FX book keeper (aqua0 keeper help)
+  aqua0 signals serve|get              Oracle/book/vault signals sold with Circle Nanopayments
 
 Opcodes:
   forex    the forex curve (Shell v1 / DFX), priced from an FX oracle on AquaForexSwapVMRouter
@@ -78,13 +80,24 @@ Environment:
   PRIVY_APP_ID                 Privy app for login (SIGNER=circle with CIRCLE_WALLET_SET_ID; the Privy user id is the refId)
   PRIVY_CLIENT_ID              Optional Privy app client for the sign-in page (e.g. one allowing localhost)
   PRIVY_LOGIN_PORT             Local sign-in page port, default 8787 (allow http://localhost:<port> in Privy)
-  AQUA0_SESSION_FILE           Saved sign-in, default ~/.aqua0/session.json`);
+  AQUA0_SESSION_FILE           Saved sign-in, default ~/.aqua0/session.json
+  KEEPER_CIRCLE_WALLET_ID      Keeper: its Circle wallet (default: refId aqua0-keeper in CIRCLE_WALLET_SET_ID)
+  AQUA0_SIGNALS_URL            Keeper: signals seller, default http://127.0.0.1:8402
+  AQUA0_KEEPER_JOURNAL         Keeper journal, default ~/.aqua0/keeper/journal.jsonl
+  SIGNALS_SELLER_ADDRESS       Signals seller payee (default: the CIRCLE_OPERATOR_WALLET_ID address)
+  OPENAI_API_KEY               Keeper model policy (secret); without it the rules policy decides
+  OPENAI_MODEL                 Keeper model, default gpt-5-nano`);
 }
 
 try {
   if (command === "help" || command === "--help" || command === "-h") {
     printHelp();
     process.exit(0);
+  }
+
+  if (command === "keeper" || command === "signals") {
+    const { runAgentCommand } = await import("./keeper.js");
+    process.exit(await runAgentCommand(command, args));
   }
 
   const aqua0 = createAqua0Service(readCliConfig());
