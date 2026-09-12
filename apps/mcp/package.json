@@ -1,25 +1,43 @@
 {
   "name": "@aqua0/mcp",
   "version": "0.1.0",
-  "private": true,
+  "description": "Aqua0 MCP server: shared-liquidity FX strategies on 1inch Aqua and SwapVM, Arc Testnet, with The Graph reads. Stdio by default, prepare-only unless MCP_WRITE_MODE=execute.",
+  "keywords": ["mcp", "model-context-protocol", "aqua0", "1inch", "swapvm", "arc", "the-graph"],
+  "license": "UNLICENSED",
+  "homepage": "https://github.com/Aqua0-fi/aqua0-ethglobal#connect-the-mcp",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Aqua0-fi/aqua0-ethglobal.git",
+    "directory": "apps/mcp"
+  },
   "type": "module",
   "bin": {
-    "aqua0-mcp": "./dist/index.js"
+    "aqua0-mcp": "./dist/npm/aqua0-mcp.js"
+  },
+  "files": [
+    "dist/npm"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "bundle": "pnpm --filter @aqua0/shared build && node scripts/bundle.mjs",
     "clean": "rm -rf dist",
     "dev": "tsx src/index.ts",
     "lint": "pnpm --filter @aqua0/shared build && tsc -p tsconfig.json --noEmit",
+    "prepack": "pnpm run bundle",
     "typecheck": "pnpm --filter @aqua0/shared build && tsc -p tsconfig.json --noEmit"
   },
-  "dependencies": {
+  "devDependencies": {
     "@aqua0/shared": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.12.1",
-    "zod": "^3.24.1"
-  },
-  "devDependencies": {
+    "esbuild": "^0.25",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "zod": "^3.24.1"
   }
 }
