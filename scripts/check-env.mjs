@@ -9,6 +9,7 @@ const required = ["GRAPH_ENDPOINT"];
 const optional = [
   "GRAPH_NETWORK",
   "GRAPH_AUTH_TOKEN",
+  "GRAPH_GATEWAY_API_KEY",
   "WRITE_RPC_URL",
   "WRITE_CHAIN_ID",
   "VAULT_REGISTRY_ADDRESS",

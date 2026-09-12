@@ -32,6 +32,8 @@ Usage:
   aqua0 shared-backing [address]
   aqua0 fx-prices [--pair ARS]
   aqua0 set-fx-price --pair ARS (--price 1470 | --change-percent 5) [--feed <addr>] [--dry-run true]
+  aqua0 benchmark-fx --pair EUR [--fee-bps 30] [--flat-band-percent 15] [--trade-sizes 1000,10000,100000]
+                     [--lookback-days 7] [--chains ethereum,base,polygon] [--fallback auto|always|never] [--arc-quote false]
 
 Opcodes:
   forex    the forex curve (Shell v1 / DFX), priced from an FX oracle on AquaForexSwapVMRouter
@@ -45,10 +47,13 @@ Strategy params (shared):  --fee-bps --fee-percent --fee-ppb --usdc-amount --fx-
   Pegged:  --price 1400 --price-e2 140000 --linear-width 1e28
 
 set-fx-price moves an owner-set ManualFxOracle feed: only the feed owner can send it (checked before sending).
+benchmark-fx sends one standardized (Messari DEX AMM) query to the standardized DEX subgraphs on The Graph Network
+and compares the market with the Aqua0 subgraph's forex strategies and fills. Read-only; needs GRAPH_GATEWAY_API_KEY.
 
 Environment:
   GRAPH_ENDPOINT               Required Graph endpoint
   GRAPH_AUTH_TOKEN             Optional Graph bearer token
+  GRAPH_GATEWAY_API_KEY        The Graph Network gateway API key (benchmark-fx); a secret, sent only as a bearer header
   WRITE_RPC_URL                RPC used for write preparation/execution reads
   WRITE_CHAIN_ID               Chain id for Aqua0 vault write preparation
   VAULT_REGISTRY_ADDRESS       Aqua0 vault registry address (Arc default for pair commands)
@@ -229,6 +234,24 @@ try {
           price: optionalFlag(parsed, "price"),
           changePercent: optionalFlag(parsed, "change-percent"),
           dryRun: optionalBoolean(parsed, "dry-run")
+        })
+      );
+      break;
+    }
+    case "benchmark-fx": {
+      const parsed = parseFlags(args);
+      const tradeSizes = optionalFlag(parsed, "trade-sizes");
+      const chains = optionalFlag(parsed, "chains");
+      printJson(
+        await aqua0.benchmarkFxStrategy({
+          pair: requireFlag(parsed, "pair"),
+          feeBps: optionalFlag(parsed, "fee-bps"),
+          flatBandPercent: optionalFlag(parsed, "flat-band-percent"),
+          tradeSizesUsd: tradeSizes === undefined ? undefined : tradeSizes.split(",").filter((size) => size.trim() !== ""),
+          lookbackDays: optionalFlag(parsed, "lookback-days"),
+          chains,
+          fallback: optionalFlag(parsed, "fallback"),
+          includeArcQuote: optionalBoolean(parsed, "arc-quote")
         })
       );
       break;
