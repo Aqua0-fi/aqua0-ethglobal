@@ -470,8 +470,12 @@ function strategyOf(decision: { action: string }): Record<string, unknown> {
   };
 }
 
+/** First line of an error plus viem's "Details:" line, without request bodies. */
 function short(error: unknown, max = 200): string {
-  const message = error instanceof Error ? error.message : String(error);
+  const full = error instanceof Error ? error.message : String(error);
+  const lines = full.split("\n").map((line) => line.trim()).filter(Boolean);
+  const details = lines.find((line) => line.startsWith("Details:"));
+  const message = [lines[0] ?? full, details].filter(Boolean).join(" ");
   return message.length > max ? `${message.slice(0, max)}...` : message;
 }
 
