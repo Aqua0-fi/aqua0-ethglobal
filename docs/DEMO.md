@@ -13,7 +13,7 @@ The demo is a conversation in an agentic terminal (Claude Code, Codex or any MCP
 
 ## Setup
 
-### Local MCP (24 tools)
+### Local MCP (26 tools)
 
 ```bash
 pnpm install && pnpm build
