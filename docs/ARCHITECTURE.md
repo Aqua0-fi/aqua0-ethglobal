@@ -87,7 +87,7 @@ flowchart TB
   AD -->|"ship and dock"| AQ
   TAKER -->|"swap"| RT
   TAKER -.->|"swap with FXSwap"| FXR
-  RT -->|"pull and push balances"| AQ
+  RT -->|"fill accounting: tokens pass through, none held"| AQ
   RT -->|"maker hooks"| AD
   FXR -.->|"reads BRL price"| RSA
   FXR -.->|"reads ARS price"| MFX

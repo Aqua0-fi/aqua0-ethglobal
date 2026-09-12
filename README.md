@@ -152,23 +152,28 @@ flowchart TB
   REG --- VU
   REG --- VA
   REG --- VB
-  AD -->|"ship and dock"| AQ
+  AD -->|"ship and dock: virtual balances only"| AQ
   TAKER -->|"swap"| RT
   TAKER -.->|"swap with FXSwap"| FXR
-  RT -->|"pull and push balances"| AQ
   RT -->|"maker hooks"| AD
+  RT -->|"fill accounting: tokens pass through, none held"| AQ
   FXR -.->|"reads BRL price"| RSA
   FXR -.->|"reads ARS price"| MFX
   FXR -.-> AQ
   FXR -.->|"maker hooks"| FXAD
   FXAD -.->|"ship and dock"| AQ
-  AD -->|"settleVenueOut and settleVenueCredit"| VU
+  AD -->|"just in time: settleVenueOut and settleVenueCredit"| VU
   AD --> VA
   AD --> VB
   FXAD -.->|"same vaults once wired"| CORE
 ```
 
-`packages/shared` is the one typed service behind the MCP, CLI and dashboard. The Graph is the read model for analytics. The Aqua0 vaults hold capital, and each AquaAdapter is the Aqua *maker* for the strategies on its router. Both venues share the same vaults and strategy classes. More: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+`packages/shared` is the one typed service behind the MCP, CLI and dashboard. The Graph is the read model for analytics. The Aqua0 vaults hold capital, and each AquaAdapter is the Aqua *maker* for the strategies on its router.
+
+> [!NOTE]
+> **Every fill has one liquidity path: the vaults, just in time.** On a USDC → BRL swap, the adapter's `preTransferOut` hook sources the BRL from the BRL AssetVault, and `postTransferIn` sweeps the taker's USDC into the USDC AssetVault and credits the LPs who sold. Aqua only records each strategy's virtual balances; no liquidity sits in Aqua or in the adapter. The venues differ only in the pricing program (fixed price or oracle curve), and all of them draw from the same vaults and strategy classes.
+
+More: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ### Shared backing
 
@@ -258,7 +263,7 @@ sequenceDiagram
   Adapter->>FXV: settleVenueOut(classId, adapter, amountOut)
   FXV-->>Adapter: ARGt just in time, plus the LP allocation that sold
   Router->>Aqua: pull(adapter, strategyHash, ARGt, amountOut, taker)
-  Aqua-->>Taker: ARGt
+  Aqua-->>Taker: the ARGt the adapter just sourced from the vault
   Router->>Aqua: take USDC from taker and push(adapter, router, strategyHash, USDC, amountIn)
   Router->>Adapter: postTransferIn hook
   Adapter->>UV: settleVenueCredit(classId, received, alloc, refPriceRay)
