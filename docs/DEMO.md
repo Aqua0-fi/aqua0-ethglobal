@@ -11,6 +11,22 @@ The demo is a conversation in an agentic terminal (Claude Code, Codex or any MCP
 | Hosted MCP endpoint (25 tools, prepare-only) and dashboard | **Live** |
 | Autonomous keeper: swap wake, signals bought with Nanopayments, model decision, rebalance | **Live** (keeper runs locally) |
 
+## Recording script (2.5 minutes)
+
+The pitch (about 1.5 minutes: problem, solution, how it works, the maths) comes first, from [`FX_OPCODE_HANDOFF.md`](FX_OPCODE_HANDOFF.md). The demo then runs about 2.5 minutes in two panes: the keeper on the left ([`scripts/demo/terminal-a-keeper.sh`](../scripts/demo/terminal-a-keeper.sh)) and Claude Code on the right ([`scripts/demo/terminal-b-agent.sh`](../scripts/demo/terminal-b-agent.sh)). Each prompt makes the agent chain several Aqua0 tools across The Graph, Arc and RedStone, which is the point to make out loud.
+
+| Time | Say or type | Tools the agent chains (measured answer time) | What to point at |
+| --- | --- | --- | --- |
+| 0:00-0:20 | Voice-over: an LP deposits USDC once; that one deposit backs peso and real strategies on 1inch Aqua, priced by our new SwapVM opcode; an agent runs it through the Aqua0 MCP, and a keeper on the left looks after the books by itself. | none | Both panes idle; the keeper's startup tick shows both books near 30 bps |
+| 0:20-0:55 | "Show my Aqua0 position on Arc: does my one USDC deposit back both FX strategies, and what are the live BRL and ARS rates?" | `get_shared_backing` → `get_fx_prices` (about 30 s) | One deposit, classes 6 and 7, not split. BRL signed by RedStone seconds ago; ARS is the demo feed. |
+| 0:55-1:30 | "Quote 0.1 USDC to reais at the live rate. If the spread is under 50 bps, swap it." | `quote_swap` → `swap`, which pushes the RedStone price, approves and swaps | The fill at about 30 bps on the forex curve. On the left, a `swap` tick within seconds, BRL in red at about 265 bps. |
+| 1:30-2:10 | "While the keeper works: benchmark my USDC/BRL strategy against onchain DEX liquidity from The Graph on Polygon and Base. Is 30 bps competitive?" | `benchmark_fx_strategy` over Messari standardized subgraphs and the Aqua0 subgraph (about 40 s) | Verdict thin: the deepest BRL pool is about $118k. On the left meanwhile: signal bought with a Nanopayment, `gpt-5-nano` decides `rebalance`, result 265 → 30 bps, Arcscan links. |
+| 2:10-2:30 | "Did the keeper rebalance my BRL book, what did it spend, and is the book healthy again?" | `keeper_status` → `get_signals` (about 20 s) | Before and after spread, fractions of a cent spent, back to 30 bps. Close: "One USDC, two currencies, our opcode, and a keeper that paid for data and fixed the book on its own." |
+
+- **Timing is tight.** Paste the prompts, talk while tools run, and cut or speed up the waits in editing.
+- **Before recording:** rehearse once so both books end at 30 bps, then move the keeper journal aside for a clean `keeper_status` and restart the left pane (see [two-session demo](#two-session-demo-autonomous-keeper)).
+- **Prize map:** the first two prompts show Arc (USDC-native FX, Circle wallet, RedStone) and 1inch (the `ForexCurve` opcode on Aqua); the left pane shows the Arc agentic stack (Nanopayments, model decision, ERC-8004 feedback); the benchmark shows The Graph composability; the whole flow runs through the Graph-backed MCP.
+
 ## Setup
 
 ### Local MCP (25 tools, 26 in execute mode)
