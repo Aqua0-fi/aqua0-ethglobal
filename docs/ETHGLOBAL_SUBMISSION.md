@@ -19,11 +19,12 @@ This page is the single reference for the submission portal and the pitch deck: 
 
 ## Proof files
 
-Everything below points into these four places; nothing else is needed.
+Everything below points into these places; nothing else is needed.
 
 | File | What it holds |
 | --- | --- |
 | [`README.md`](../README.md) | How it works, the architecture diagram, and proof for each prize under [Prize tracks](../README.md#prize-tracks) |
+| [`docs/FX_OPCODE_HANDOFF.md`](FX_OPCODE_HANDOFF.md) | Pitch context: the problem, the solution, how it works and the forex curve maths, with proof points |
 | [`docs/CONTINUITY.md`](CONTINUITY.md) | What pre-existed and what was built during the event |
 | [`docs/DEMO.md`](DEMO.md) | The demo runbook, including the two-session keeper demo |
 | [`deployments/`](../deployments) | Addresses and transactions: `arc-testnet.json` (contracts), `arc-testnet-strategies.json` (live runs, with the keeper run as `keeperRun`) |
