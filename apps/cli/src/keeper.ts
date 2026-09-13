@@ -13,7 +13,7 @@ import {
   summarizeKeeperStatus,
   type SignalName
 } from "@aqua0/shared";
-import { readKeeperConfig, runKeeper, setupKeeper, type Flags } from "@aqua0/keeper";
+import { colorEnabled, painter, readKeeperConfig, runKeeper, setupKeeper, type Flags } from "@aqua0/keeper";
 import { DEFAULT_SIGNALS_PORT, startSignalsServer } from "@aqua0/signals";
 
 const BOOLEAN_FLAGS = new Set(["once", "dry-run", "json", "no-feedback", "no-register"]);
@@ -67,7 +67,7 @@ async function keeperCommand(sub: string, flags: Flags): Promise<number> {
         config.signalsUrl = server.url;
       }
       try {
-        await runKeeper(config, { log: (line) => console.log(redact(line)), error: (line) => console.error(redact(line)), signal: controller.signal });
+        await runKeeper(config, { log: (line) => console.log(redact(line)), error: (line) => console.error(redact(line)), signal: controller.signal, color: colorEnabled() });
       } finally {
         await close?.();
       }
@@ -149,10 +149,15 @@ async function startSeller(flags: Flags) {
     sellerAddress,
     port,
     host,
-    log: (line) => console.log(`[signals] ${line}`)
+    log: (line) => console.log(`${signalsTag()} ${line}`)
   });
-  console.log(`[signals] selling oracle $0.0005, book $0.001, vault $0.0005 at ${server.url}/v1/{oracle,book,vault} to ${server.seller} (Circle Gateway, Arc Testnet)`);
+  console.log(`${signalsTag()} selling oracle $0.0005, book $0.001, vault $0.0005 at ${server.url}/v1/{oracle,book,vault} to ${server.seller} (Circle Gateway, Arc Testnet)`);
   return server;
+}
+
+/** The seller's log prefix, cyan in a terminal. */
+function signalsTag(): string {
+  return painter(colorEnabled()).cyan("[signals]");
 }
 
 async function resolveSellerAddress(): Promise<string> {

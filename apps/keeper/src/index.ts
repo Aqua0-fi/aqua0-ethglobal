@@ -1,3 +1,4 @@
+export * from "./color.js";
 export * from "./config.js";
 export * from "./erc8004.js";
 export * from "./executor.js";

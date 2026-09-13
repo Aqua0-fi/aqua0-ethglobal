@@ -34,7 +34,8 @@ import {
   type ActionResult,
   type ExecContext
 } from "./executor.js";
-import { formatTickLine } from "./format.js";
+import { painter } from "./color.js";
+import { formatTickBlock, formatTickLine } from "./format.js";
 import { checkDecision } from "./guard.js";
 import { LlmPolicy, type ResponsesClient } from "./llm-policy.js";
 import { batchSignerFor, createNanopayBuyer, readGatewayBalance, type NanopayBuyer } from "./nanopay.js";
@@ -46,6 +47,8 @@ export type KeeperIo = {
   log(line: string): void;
   error(line: string): void;
   signal?: AbortSignal;
+  /** Print each tick as a coloured block for a live terminal instead of one plain line. */
+  color?: boolean;
 };
 
 export type KeeperRuntime = {
@@ -324,9 +327,13 @@ export async function runTick(
     ...(errors.length > 0 ? { errors } : {})
   };
   appendKeeperJournal(entry, config.journalFile);
-  io.log(formatTickLine(entry));
-  for (const line of strategyLines(observation)) {
-    io.log(`           ${line}`);
+  if (io.color) {
+    io.log(formatTickBlock(entry, { color: true, tiltBps: config.limits.tiltThresholdBps }));
+  } else {
+    io.log(formatTickLine(entry));
+    for (const line of strategyLines(observation)) {
+      io.log(`           ${line}`);
+    }
   }
   return entry;
 }
@@ -379,7 +386,8 @@ async function recordFeedback(runtime: KeeperRuntime, pair: string, swapHash: st
 /** Long-running loop: swap-triggered ticks plus a heartbeat, backoff on errors, clean stop on abort. */
 export async function runKeeper(config: KeeperConfig, io: KeeperIo): Promise<void> {
   const runtime = await createKeeperRuntime(config);
-  const header = `keeper ${runtime.address} (Circle wallet ${runtime.walletId})${runtime.agentId ? ` ERC-8004 agent #${runtime.agentId}` : ""} | policy ${runtime.policy.name}${runtime.policy.model ? ` ${runtime.policy.model}` : ""} | ${config.dryRun ? "DRY RUN" : "live"} | signals ${config.signalsUrl} | journal ${config.journalFile}`;
+  const c = painter(io.color ?? false);
+  const header = `${c.cyan(c.bold("keeper"))} ${runtime.address} (Circle wallet ${runtime.walletId})${runtime.agentId ? ` ${c.bold(`ERC-8004 agent #${runtime.agentId}`)}` : ""} | policy ${c.magenta(`${runtime.policy.name}${runtime.policy.model ? ` ${runtime.policy.model}` : ""}`)} | ${config.dryRun ? c.yellow("DRY RUN") : c.green("live")} | signals ${config.signalsUrl} | journal ${c.dim(config.journalFile)}`;
   io.log(header);
   if (config.once) {
     await runTick(runtime, { kind: "manual", swaps: [] }, io);
