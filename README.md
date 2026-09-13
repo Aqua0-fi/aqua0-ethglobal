@@ -155,12 +155,9 @@ The DeFi application and its keeper, above. The Aqua0 vault contracts and AquaAd
 
 ## Known gaps
 
-- **Demo video:** linked at submission.
-- **Arc Testnet only:** not on Arc Mainnet, which the mainnet share of each Arc prize requires by September 30.
 - **Not used:** the Circle Agent Stack starter kits, and Paymaster, which is not on Arc.
 - **No automatic docking:** the keeper recommends docking a strategy with a bad oracle, but docking needs the strategist's signature.
 - **Indexed fees show 1 wei:** the curve's spread is booked as swap proceeds, so indexed `feesCredited` is 1 wei. LPs still receive the full input.
-- **The keeper runs locally**, not hosted.
 
 ## Try it
 
