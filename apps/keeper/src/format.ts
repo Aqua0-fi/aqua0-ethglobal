@@ -13,7 +13,10 @@ export function formatTickLine(entry: KeeperJournalEntry): string {
   const books = (entry.signals ?? [])
     .map((line) => {
       const name = line.pair.replace("USDC/", "");
-      const spread = line.spreadBps === null ? "n/a" : `${line.spreadBps >= 0 ? "+" : ""}${line.spreadBps.toFixed(1)}bps`;
+      const spread =
+        line.spreadBps === null
+          ? "n/a"
+          : `${line.spreadBps >= 0 ? "+" : ""}${line.spreadBps.toFixed(1)}bps${line.bookCached ? " (cached)" : ""}`;
       const oracle = line.oracleAgeSeconds === null ? "" : ` oracle ${line.oracleAgeSeconds}s ${line.oracleStatus ?? ""}`.trimEnd();
       return `${name} ${spread}${oracle}`;
     })

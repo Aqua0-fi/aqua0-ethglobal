@@ -275,15 +275,27 @@ export async function runTick(
   }
 
   const bought = observation.bought;
+  // A rebalance re-quotes its book, so the spread bought before it no longer describes that book.
+  const rebalancedId =
+    outcome.action === "rebalance" && !outcome.dryRun && !outcome.blocked && outcome.spreadAfterBps !== undefined
+      ? outcome.detail?.strategyId
+      : undefined;
   const signals: KeeperSignalLine[] = strategyViews(observation).map((view) => {
     const previous = derived.lastSignals.find((line) => line.strategyId === view.strategyId);
+    const oracleAgeSeconds = view.oracle?.ageSeconds ?? (bought.oracle ? null : (previous?.oracleAgeSeconds ?? null));
+    const oracleStatus = view.oracle?.status ?? (bought.oracle ? null : (previous?.oracleStatus ?? null));
+    if (typeof rebalancedId === "string" && rebalancedId === view.strategyId) {
+      return { pair: view.pair, strategyId: view.strategyId, spreadBps: outcome.spreadAfterBps ?? null, side: null, oracleAgeSeconds, oracleStatus };
+    }
+    const cached = view.book === null && !bought.book && previous !== undefined && previous.spreadBps !== null;
     return {
       pair: view.pair,
       strategyId: view.strategyId,
       spreadBps: view.book?.spreadBps ?? (bought.book ? null : (previous?.spreadBps ?? null)),
       side: view.book?.side ?? (bought.book ? null : (previous?.side ?? null)),
-      oracleAgeSeconds: view.oracle?.ageSeconds ?? (bought.oracle ? null : (previous?.oracleAgeSeconds ?? null)),
-      oracleStatus: view.oracle?.status ?? (bought.oracle ? null : (previous?.oracleStatus ?? null))
+      oracleAgeSeconds,
+      oracleStatus,
+      ...(cached ? { bookCached: true } : {})
     };
   });
   const entry: KeeperJournalEntry = {

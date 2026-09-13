@@ -39,6 +39,8 @@ export type KeeperSignalLine = {
   side: string | null;
   oracleAgeSeconds: number | null;
   oracleStatus: string | null;
+  /** The spread and side were carried over from an earlier tick: the book was not re-read this tick. */
+  bookCached?: boolean;
 };
 
 export type KeeperJournalEntry = {
