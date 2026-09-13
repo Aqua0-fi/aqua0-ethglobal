@@ -101,7 +101,7 @@ A pegged curve fixes a price, but FX rates move, so LPs lose to arbitrage. `Fore
 - **Tested:** it matches all 979 reference vectors, and [`test-arc-fork-forex.sh`](scripts/test-arc-fork-forex.sh) drives every regime on an Arc fork.
 - **Prices:** USDC/BRL uses RedStone data signed by 3 of its 5 signers, pushed on-chain before each swap. USDC/ARS uses a hand-set demo feed, because RedStone has no ARS feed.
 
-Deployment, per-pair defaults, gas and why RedStone: [forex curve on Arc](docs/ARCHITECTURE.md#forex-curve-on-arc). Maths and program layout: [`packages/contracts/README.md`](packages/contracts/README.md#forexcurve-maths).
+Try it: the [interactive ForexCurve simulator](https://ethglobal-demo.18-207-103-187.nip.io/forex-curve.html) (source [`apps/dashboard/public/forex-curve.html`](apps/dashboard/public/forex-curve.html)) moves the oracle, reserves, trade size, `β` and `α` and shows the quote cross the bands. Deployment, per-pair defaults, gas and why RedStone: [forex curve on Arc](docs/ARCHITECTURE.md#forex-curve-on-arc). Maths and program layout: [`packages/contracts/README.md`](packages/contracts/README.md#forexcurve-maths).
 
 ## Prize tracks
 
@@ -231,7 +231,7 @@ ARGt and BRAt are open-mint testnet tokens standing in for ARS and BRL stablecoi
 | System diagram, components, design decisions | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
 | Shared backing, strategy creation and swap sequences | [Shared backing](docs/ARCHITECTURE.md#shared-backing), [creating a strategy](docs/ARCHITECTURE.md#creating-a-strategy), [a swap through the maker hooks](docs/ARCHITECTURE.md#a-swap-through-the-maker-hooks) |
 | MCP tools, install modes, environment variables | [`apps/mcp/README.md`](apps/mcp/README.md#tools) |
-| Forex curve maths and program layout | [`packages/contracts/README.md`](packages/contracts/README.md#forexcurve-maths), [`docs/FX_CURVES.md`](docs/FX_CURVES.md) |
+| Forex curve maths and program layout | [`packages/contracts/README.md`](packages/contracts/README.md#forexcurve-maths), [`docs/FX_CURVES.md`](docs/FX_CURVES.md), the [interactive ForexCurve simulator](https://ethglobal-demo.18-207-103-187.nip.io/forex-curve.html) |
 | Forex curve on Arc: deployment, defaults, gas, tests | [Forex curve on Arc](docs/ARCHITECTURE.md#forex-curve-on-arc), [fork proofs](docs/ARCHITECTURE.md#fork-proofs) |
 | Pitch context: problem, solution, maths | [`docs/FX_OPCODE_HANDOFF.md`](docs/FX_OPCODE_HANDOFF.md) |
 | Demo runbook and the two-terminal keeper demo | [`docs/DEMO.md`](docs/DEMO.md) |

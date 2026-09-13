@@ -65,6 +65,8 @@ flowchart LR
 
 **Oracle safety.** Every swap checks the oracle's age against the strategy's staleness window and its value against a min/max price band. A stale or out-of-band price reverts the swap.
 
+**Show it live.** The [interactive ForexCurve simulator](https://ethglobal-demo.18-207-103-187.nip.io/forex-curve.html) runs the same solver as the reference implementation: move the oracle or the reserves and the quote walks from the flat band into the inventory fee and the halt.
+
 **Parameters (the MCP defaults):**
 
 | Parameter | Default | Plain meaning |

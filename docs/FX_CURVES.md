@@ -1,7 +1,7 @@
 # Forex curve for the SwapVM opcode
 
 Shell v1 curve with an oracle, as DFX v2 runs it in production for EURC, CADC and XSGD against USDC.
-Reference implementation: `scripts/fxforex_math.py`. Solidity port: `packages/contracts/src/instructions/ForexCurve.sol`.
+Reference implementation: `scripts/fxforex_math.py`. Solidity port: `packages/contracts/src/instructions/ForexCurve.sol`. Interactive: the [interactive ForexCurve simulator](https://ethglobal-demo.18-207-103-187.nip.io/forex-curve.html) ([source](../apps/dashboard/public/forex-curve.html)).
 
 ## The curve
 
