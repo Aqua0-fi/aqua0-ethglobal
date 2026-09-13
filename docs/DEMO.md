@@ -185,7 +185,7 @@ The keeper polls the forex router's `Swapped` logs every `--poll` seconds and wa
 
 ### Terminal B: Claude Code with the Aqua0 MCP
 
-`scripts/demo/terminal-b-agent.sh` starts Claude Code on Sonnet at low effort with only the local Aqua0 MCP: `SIGNER=circle`, `CIRCLE_WALLET_ID` of the demo wallet and `MCP_WRITE_MODE=execute`, the Aqua0 tools pre-approved, and no user hooks, plugins or other MCP servers. `MODEL=opus` switches to Opus (type `/fast` in the session for fast mode). Both scripts load keys from the gitignored `.secrets/` (`circle.env`, `openai.env`, `graph-gateway.env`, `demo.env`) and never print them.
+`scripts/demo/terminal-b-agent.sh` starts Claude Code on Sonnet at low effort with only the Aqua0 MCP, run as the published `@aqua0/mcp` package pinned to `apps/mcp`'s version (`AQUA0_MCP_SOURCE=local` uses the repo build): `SIGNER=circle`, `CIRCLE_WALLET_ID` of the demo wallet and `MCP_WRITE_MODE=execute`, the Aqua0 tools pre-approved, and no user hooks, plugins or other MCP servers. `MODEL=opus` switches to Opus (type `/fast` in the session for fast mode). Both scripts load keys from the gitignored `.secrets/` (`circle.env`, `openai.env`, `graph-gateway.env`, `demo.env`) and never print them.
 
 | Say | Tool call | Expect |
 | --- | --- | --- |
