@@ -176,15 +176,16 @@ aqua0 keeper setup   # keeper Circle wallet (refId aqua0-keeper), App Kit fundin
 ### Terminal A
 
 ```bash
-aqua0 signals serve                          # seller on http://127.0.0.1:8402, paid to the operator wallet
-aqua0 keeper run --interval 90 --poll 4      # second tab; or both in one process: aqua0 keeper demo
+scripts/demo/terminal-a-keeper.sh            # seller and keeper in one process: aqua0 keeper demo --interval 60 --poll 4
 ```
+
+By hand: `aqua0 signals serve` (seller on http://127.0.0.1:8402, paid to the operator wallet), then `aqua0 keeper run --interval 90 --poll 4` in a second tab.
 
 The keeper polls the forex router's `Swapped` logs every `--poll` seconds and wakes on a swap against a live forex strategy; a heartbeat every `--interval` seconds checks oracles and balances. Each tick prints one line: what woke it, the signals bought and their cost against the hourly budget, each book's spread and oracle age, who decided (model or rules) and why, the model's tokens and cost, spreads before and after, and Arcscan links. Ctrl+C stops after the current tick. The journal is `~/.aqua0/keeper/journal.jsonl` (`AQUA0_KEEPER_JOURNAL`).
 
 ### Terminal B: Claude Code with the Aqua0 MCP
 
-Local stdio server with `SIGNER=circle`, `CIRCLE_WALLET_ID` of the demo wallet and `MCP_WRITE_MODE=execute`.
+`scripts/demo/terminal-b-agent.sh` starts Claude Code on Sonnet at low effort with only the local Aqua0 MCP: `SIGNER=circle`, `CIRCLE_WALLET_ID` of the demo wallet and `MCP_WRITE_MODE=execute`, the Aqua0 tools pre-approved, and no user hooks, plugins or other MCP servers. `MODEL=opus` switches to Opus (type `/fast` in the session for fast mode). Both scripts load keys from the gitignored `.secrets/` (`circle.env`, `openai.env`, `graph-gateway.env`, `demo.env`) and never print them.
 
 | Say | Tool call | Expect |
 | --- | --- | --- |

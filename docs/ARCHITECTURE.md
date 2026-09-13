@@ -1,6 +1,6 @@
 # Architecture
 
-This file is also served by the judge dashboard at `/docs/ARCHITECTURE.md`. The [README](../README.md#how-it-works) has the full diagram set: shared backing, strategy creation, a swap through the maker hooks, the keeper, and forex-curve per-swap execution. **Live** means running on Arc Testnet or the public endpoints.
+This file is also served by the judge dashboard at `/docs/ARCHITECTURE.md`. It holds the full system diagram, shared backing, strategy creation and a swap through the maker hooks; the [README](../README.md#how-it-works) has the short version, and the forex curve's per-swap flowchart is in [`packages/contracts/README.md`](../packages/contracts/README.md#forexcurve-maths). **Live** means running on Arc Testnet or the public endpoints.
 
 ## System
 
@@ -148,6 +148,24 @@ An LP deposits once into a per-asset `AssetVault` and commits that principal to 
   - its `postTransferIn` hook calls `settleVenueCredit`, which sweeps the taker's input into the counter vault, credits the LPs that sold and books the spread as fees.
 - **Outflow is bounded at settle time** by the class's own idle debit and the vault's outflow limit, so shared backing never lets a vault pay out more than it holds.
 
+```mermaid
+flowchart LR
+  LP["LP deposits 2 USDC once"] --> UV["USDC AssetVault: principal 2 USDC"]
+  UV -->|"setCommitment true"| C2["Class 2 USDC/ARGt: committedBacking 2 USDC"]
+  UV -->|"setCommitment true"| C3["Class 3 USDC/BRAt: committedBacking 2 USDC"]
+  VA["ARGt AssetVault: ARGt leg"] --> C2
+  VB["BRAt AssetVault: BRAt leg"] --> C3
+  C2 --> S2["AquaAdapter ships the USDC/ARGt program into Aqua, 0.5 USDC"]
+  C3 --> S3["AquaAdapter ships the USDC/BRAt program into Aqua, 0.5 USDC"]
+  S2 --> F2["Fill: 0.1 USDC in, 138.912644 ARGt out"]
+  S3 --> F3["Fill: 0.1 USDC in, 0.545728 BRAt out"]
+  F2 --> AFTER["After both fills: both classes still show 2 USDC committedBacking"]
+  F3 --> AFTER
+  BOUND["Bound at settle time: own idle debit and the vault outflow limit"] -.-> UV
+```
+
+Figures from the live pegged run; the live forex run shows the same pattern, with one 1 USDC principal behind three classes. Class ids are assigned at registration, so they vary per strategist and chain.
+
 Evidence:
 
 - **Arc Testnet, live, forex:** with `SIGNER=circle`, the demo Circle wallet `0xb0c0…d952` ran `create_strategy` without an opcode, and it picked the forex curve for USDC/ARS (class 6) and USDC/BRL (class 7); the shared Circle operator sent the ships. 0.1 USDC → 139.58 ARGt at oracle 1400 (spread 29.99 bps). After a RedStone price push, 0.1 USDC → 0.513598 BRAt at oracle 5.15143 BRAt per USDC (spread 29.99 bps). The shared-backing read showed 1 USDC principal committed to three classes at once: class 4 (pegged USDC/BRL), 6 and 7. Hashes: [`deployments/arc-testnet-strategies.json`](../deployments/arc-testnet-strategies.json) (`forexLiveRun`).
@@ -155,3 +173,74 @@ Evidence:
 - **Arc fork, forex curve regimes that small live swaps do not reach:** [`scripts/test-arc-fork-forex.sh`](../scripts/test-arc-fork-forex.sh) deploys the forex router and an adapter on the fork and prices from the deployed RedStone BRL feed and ARS/USD feed. One 2 USDC deposit backs forex USDC/ARS and USDC/BRL. Inside the flat band a swap costs 30 bps, a trade past it paid 666 bps, and a trade past the halt band reverts with `ForexCurveUpperHalt()`. A +5% ARS/USD move moves the quote by exactly 5%, and `swap` pushes a signed RedStone BRL price before swapping.
 - **Arc fork, pegged:** [`packages/contracts/script/run-arc-fx-strategies.sh`](../packages/contracts/script/run-arc-fx-strategies.sh) (Foundry) and [`scripts/test-arc-fork-strategies.sh`](../scripts/test-arc-fork-strategies.sh) (MCP service path).
 - **Base fork, commitment invariant:** [`scripts/test-shared-backing-fork.sh`](../scripts/test-shared-backing-fork.sh). One 100 USDC principal shows 100 USDC `committedBacking` and `availableFor` on two classes.
+
+## Creating a strategy
+
+A single idempotent `create_strategy` call walks the whole sequence and reports steps that are already done as skipped. No tokens move when a strategy ships.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor User as User in a terminal
+  participant MCP as Aqua0 MCP create_strategy
+  participant Registry as VaultRegistry
+  participant UV as USDC AssetVault
+  participant FV as ARGt AssetVault
+  participant Adapter as AquaAdapter
+  participant Aqua as 1inch Aqua
+
+  User->>MCP: create a USDC/ARS strategy
+  Note over MCP: Pick the venue. Forex by default, pegged with an opcodeNote if forex cannot ship for this signer
+  MCP->>Registry: classForStrategy(strategyKey)
+  opt class not registered yet
+    MCP->>Registry: registerStrategyClass(strategyKey)
+  end
+  MCP->>UV: registerStrategy(classId, strategist)
+  MCP->>FV: registerStrategy(classId, strategist)
+  opt ARGt leg short of backing
+    MCP->>FV: deposit open-mint demo ARGt
+  end
+  MCP->>UV: setCommitment(classId, true)
+  MCP->>FV: setCommitment(classId, true)
+  Note over MCP: Strategist signs EIP-712 ShipStrategy(classId, strategyId, tokens, amounts, feePpb, nonce, deadline)
+  MCP->>Adapter: shipStrategyWithFee(classId, program, tokens, amounts, feePpb, nonce, deadline, signature)
+  Adapter->>Aqua: ship(router, program, tokens, amounts)
+  Aqua-->>Adapter: strategyHash
+  Note over UV,Aqua: Tokens stay in the vaults. Aqua records virtual balances for the adapter as maker.
+  MCP-->>User: steps sent or skipped, strategyId, live
+```
+
+- **Strategy key** is `keccak256(abi.encode(strategist, chainId, sorted token0/token1, keccak256(trimmed label)))`, so a class id is never guessed.
+- **Program** is `maker = AquaAdapter` with maker traits `useAqua | postTransferIn | preTransferOut`, the only combination the adapter accepts. Forex ships a `[ForexCurve]` program, which charges its own fee, to `AquaForexSwapVMRouter`; pegged ships `[FlatFeeAmountIn][PeggedSwap]` to `AquaSwapVMRouter`.
+- **Signature** uses EIP-712 domain `AquaAdapter` v`1`, is ERC-1271-aware and nonce-protected. In prepare mode the tool returns the calldata and typed data instead of sending.
+- **Forex by default, pegged on request.** Pass `opcode:"pegged"` for a `[FlatFeeAmountIn 30 bps][PeggedSwap]` program at a fixed FX price. If the forex venue cannot ship for a signer (for example it lacks `OPERATOR_ROLE`), `create_strategy` uses pegged and says why in `opcodeNote`.
+
+## A swap through the maker hooks
+
+The router runs the maker program, pulls the output just in time from the vault, and sweeps the taker's input into the counter vault, credited to the LPs that sold.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Taker
+  participant Router as AquaForexSwapVMRouter
+  participant Aqua as 1inch Aqua
+  participant Adapter as AquaAdapter
+  participant FXV as ARGt AssetVault
+  participant UV as USDC AssetVault
+
+  Taker->>Router: swap(order, USDC, ARGt, amountIn, takerData)
+  Router->>Router: run the maker program to get amountOut
+  Router->>Adapter: preTransferOut hook
+  Adapter->>FXV: settleVenueOut(classId, adapter, amountOut)
+  FXV-->>Adapter: ARGt just in time, plus the LP allocation that sold
+  Router->>Aqua: pull(adapter, strategyHash, ARGt, amountOut, taker)
+  Aqua-->>Taker: the ARGt the adapter just sourced from the vault
+  Router->>Aqua: take USDC from taker and push(adapter, router, strategyHash, USDC, amountIn)
+  Router->>Adapter: postTransferIn hook
+  Adapter->>UV: settleVenueCredit(classId, received, alloc, refPriceRay)
+  Note over UV: USDC is swept into the vault and credited to the LPs whose ARGt was sold
+  Router-->>Taker: Swapped(orderHash, maker, taker, tokenIn, tokenOut, amountIn, amountOut)
+```
+
+The adapter handles either transfer order; whichever hook runs second performs the counter vault's `settleVenueCredit`. The `swap` tool quotes first and enforces a minimum output on-chain (default 50 bps slippage). `quote_swap` and `swap` report the oracle price (or the fixed price for pegged), the execution price and the effective spread.
