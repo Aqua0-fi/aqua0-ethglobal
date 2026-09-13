@@ -2508,29 +2508,61 @@ async function pairForStrategy(client: ReadClient, adapter: string, strategyId: 
   return resolvePair(tokens.join("/"));
 }
 
-/** Aqua `Shipped` events made by the given adapters, newest first, in 10k-block windows. Best effort. */
-async function scanShippedStrategies(
+type ShippedStrategy = { strategyId: Hex; order: SwapVMOrder; maker: Lowercase<string> };
+
+/** Orders found in Aqua Shipped events, by strategy id. The id is the hash of the order, so an entry never goes stale. */
+const shippedOrders = new Map<string, ShippedStrategy>();
+
+/** Failed log pages one scan retries before giving up. */
+const SHIPPED_SCAN_RETRIES = 4;
+
+/**
+ * Aqua `Shipped` events made by the given adapters, newest first, in block windows. Best effort. A strategy id found
+ * before is served from memory. Arc's public RPC rejects bursts ("Request exceeds defined limit"), so a failed page is
+ * retried with half the window after a short pause, up to SHIPPED_SCAN_RETRIES times per scan. Exported for tests.
+ */
+export async function scanShippedStrategies(
   client: ReadClient,
   venue: SwapVMVenue,
   makers: readonly string[],
-  wanted?: Hex
+  wanted?: Hex,
+  options: { retryDelayMs?: number } = {}
 ): Promise<{
-  strategies: Array<{ strategyId: Hex; order: SwapVMOrder; maker: Lowercase<string> }>;
+  strategies: ShippedStrategy[];
   error?: string;
 }> {
-  const strategies: Array<{ strategyId: Hex; order: SwapVMOrder; maker: Lowercase<string> }> = [];
+  const strategies: ShippedStrategy[] = [];
   const makerSet = new Set(makers.map((maker) => normalizeAddress(maker)));
-  const window = 10_000n;
+  if (wanted) {
+    const known = shippedOrders.get(wanted.toLowerCase());
+    if (known && makerSet.has(known.maker)) {
+      return { strategies: [known] };
+    }
+  }
+  const retryDelayMs = options.retryDelayMs ?? 250;
+  const readPage = (fromBlock: bigint, toBlock: bigint) =>
+    client.getLogs({ address: getAddress(venue.aqua), event: aquaShippedEvent, fromBlock, toBlock });
+  let window = 10_000n;
+  let failures = 0;
   try {
     let toBlock = await client.getBlockNumber();
-    for (let page = 0; page < 500 && toBlock >= venue.aquaStartBlock; page += 1) {
+    for (let page = 0; page < 500 && toBlock >= venue.aquaStartBlock; ) {
       const fromBlock = toBlock - window + 1n > venue.aquaStartBlock ? toBlock - window + 1n : venue.aquaStartBlock;
-      const logs = await client.getLogs({
-        address: getAddress(venue.aqua),
-        event: aquaShippedEvent,
-        fromBlock,
-        toBlock
-      });
+      let logs: Awaited<ReturnType<typeof readPage>>;
+      try {
+        logs = await readPage(fromBlock, toBlock);
+      } catch (error) {
+        failures += 1;
+        if (failures > SHIPPED_SCAN_RETRIES) {
+          throw error;
+        }
+        if (window > 1_000n) {
+          window /= 2n;
+        }
+        await new Promise((resolve) => setTimeout(resolve, retryDelayMs * failures));
+        continue;
+      }
+      page += 1;
       for (const log of logs.reverse()) {
         const { maker, strategyHash, strategy } = log.args;
         if (!maker || !strategyHash || !strategy || !makerSet.has(normalizeAddress(maker))) {
@@ -2541,7 +2573,9 @@ async function scanShippedStrategies(
           continue;
         }
         try {
-          strategies.push({ strategyId, order: decodeSwapVMOrder(strategy), maker: normalizeAddress(maker) });
+          const found: ShippedStrategy = { strategyId, order: decodeSwapVMOrder(strategy), maker: normalizeAddress(maker) };
+          strategies.push(found);
+          shippedOrders.set(strategyId, found);
         } catch {
           continue;
         }

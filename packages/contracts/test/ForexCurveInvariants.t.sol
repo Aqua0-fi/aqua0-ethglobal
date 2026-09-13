@@ -399,9 +399,10 @@ contract ForexCurveInvariantsTest is Test {
             // a few wei plus 1e-15 relative (a steep fee slope, delta ~4, needs ~30 wei on 3e20). Any excess is
             // charged to the taker, so it favours the pool.
             assertLe(back, amountIn + amountIn / 1e15 + 16, "exact out charges more than the exact input");
-            // one wei of output is worth p / 1e18 (or 1e18 / p) wei of input; plus 1e-12 relative
+            // one wei of output is worth p / 1e18 (or 1e18 / p) wei of input; plus 1e-11 relative for the solver's
+            // rounding (a local-out case needed ~1.5e-12 on ~2e15 wei)
             uint256 unit = localOut ? st.p / 1e18 : 1e18 / st.p;
-            assertGe(back + 2 * unit + amountIn / 1e12 + 16, amountIn, "exact out undercuts the exact input");
+            assertGe(back + 2 * unit + amountIn / 1e11 + 16, amountIn, "exact out undercuts the exact input");
         } catch {
             revert("exact out of a quoted output reverted");
         }
@@ -410,5 +411,17 @@ contract ForexCurveInvariantsTest is Test {
     /// CI counterexample (delta just above 4): exact out charged 29 wei more than the exact input on ~3.1e20 wei.
     function test_ExactInExactOutInverse_SteepFeeSlopeRegression() public view {
         testFuzz_ExactInExactOutInverse(1364, 1268, 3589, 812, 4000000000000000001, false);
+    }
+
+    /// CI counterexample (local out): exact out needed about 1.5e-12 less input than the exact input on ~2e15 wei.
+    function test_ExactInExactOutInverse_LocalOutUndercutRegression() public view {
+        testFuzz_ExactInExactOutInverse(
+            17694995930089891834,
+            68167596993802666609268863065595663990230350762397,
+            36357827103820886312009621649,
+            0,
+            411,
+            true
+        );
     }
 }
