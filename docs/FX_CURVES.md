@@ -5,12 +5,12 @@ Reference implementation: `scripts/fxforex_math.py`. Solidity port: `packages/co
 
 ## The curve
 
-Everything in numeraire: `x = USDC`, `y = p·BRL` (`p` = USDC per BRL from Pyth), `g = x + y`, ideal `I = g/2`.
+Everything in numeraire: `x = USDC`, `y = p·BRL` (`p` = USDC per BRL from the oracle; RedStone on Arc), `g = x + y`, ideal `I = g/2`.
 
 - Within `±β` of the ideal: price = oracle, zero slippage.
 - Outside: each asset pays `μ = min(δ·m/I, MAX)·m`, `m` = distance to the band. `ψ = μ_x + μ_y`.
 - A trade retains `s = ψ_after − ψ_before` if the fee rises; if it falls, `λ·(ψ_before − ψ_after)` goes back to the taker.
-- Beyond `±α`: revert (halt). `ε` is a separate proportional fee; add Pyth's `conf/price` to it.
+- Beyond `±α`: revert (halt). `ε` is a separate proportional fee; an oracle that reports a confidence interval adds `conf/price` to it.
 
 Why this one: stateless, closed form, explicit inventory limits, bounded loss (`β band × oracle error`),
 and every parameter has a plain meaning. DFX solves the trade by iterating 32 times; here it is a
@@ -55,4 +55,4 @@ Recommended: `α=0.5 β=0.15 δ=0.5 MAX=0.25 λ=0.3 ε=30 bps` + `conf`.
 
 ## Demo
 
-Arc Testnet, USDC/BRL. Pyth has no ARS feed. Details in `docs/ARC_DEPLOYMENT.md`.
+Arc Testnet, USDC/ARS and USDC/BRL. BRL prices from RedStone signed data; ARS uses a hand-set feed, because RedStone has no ARS feed. Pitch context: [`FX_OPCODE_HANDOFF.md`](FX_OPCODE_HANDOFF.md). Deployment details: [`ARC_DEPLOYMENT.md`](ARC_DEPLOYMENT.md).
