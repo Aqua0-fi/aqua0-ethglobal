@@ -71,7 +71,7 @@ This is the flow the demo Circle wallet `0xb0c0687eb013a5ffde4d23a89398a11bc424d
 
 At steps 2 and 3, point out that no opcode was passed: the forex curve is the default.
 
-At step 9, the demo wallet's USDC also backs class 4, an earlier pegged USDC/BRL strategy, so the answer lists three classes. Ask about the two forex strategies by name, or skip this step on camera.
+At step 9, the answer lists the two forex classes, 6 and 7, on the same USDC. The demo wallet's earlier pegged class 4 was retired on 2026-09-13 (`peggedClass4Retirement` in [`deployments/arc-testnet-strategies.json`](../deployments/arc-testnet-strategies.json)).
 
 At steps 3 to 5, say where the BRL price comes from. `create_strategy` sizes the BRL leg from the live RedStone price. The feed quotes USD per BRL, which is already the curve's USDC-per-BRL price, so the invert-price flag stays off. `quote_swap` applies the latest signed payload as an `eth_call` state override and sends nothing. `swap` first pushes that payload on-chain (about 130k gas), because there is no keeper. BRL is never set by hand.
 
@@ -83,7 +83,7 @@ Live results (`forexLiveRun`):
 - `create_strategy` picked `opcode:"forex"` by default, with no fallback, and reused the existing classes: USDC/ARS class 6, strategy `0xc39dd71d…8597` ([ship tx](https://testnet.arcscan.app/tx/0xc74849a497ff73207e70872d3d83ed9d5cbc1babaa8f161ee716f444a9b7071e)); USDC/BRL class 7, strategy `0x87e021d4…2aa1` ([ship tx](https://testnet.arcscan.app/tx/0xb1d40beb277fda1516f39e59eacfd535c9199c0670d78d8181420289f88406b4)). The shared Circle operator sent both ships;
 - USDC/ARS: 0.1 USDC → 139.58 ARGt at oracle 1400, execution 1395.8, spread 29.99 bps ([tx](https://testnet.arcscan.app/tx/0x54f61cb5ddbeea9ea6cdeef75346aba69fe08c9f59f1d2f0eea4dd89e3ef7554));
 - USDC/BRL: `swap` pushed a signed RedStone price ([tx](https://testnet.arcscan.app/tx/0x46dbaaa5685b7365c30c0b815a32e0cb3f5efd856283993c6f11698d74d28bed)), then 0.1 USDC → 0.513598 BRAt at oracle 5.15143, execution 5.135976, spread 29.99 bps ([tx](https://testnet.arcscan.app/tx/0xe28f401465a86dd8557ddd8de548366b0ad5e1fe20db74f71e56cd4a6bcc172a));
-- `get_shared_backing`: 1 USDC principal committed to three classes at once, class 4 (pegged USDC/BRL), class 6 and class 7.
+- `get_shared_backing`: 1 USDC principal committed to three classes at once, class 4 (pegged USDC/BRL), class 6 and class 7. Class 4 has since been retired, so a new run lists classes 6 and 7.
 
 Fork results ([`scripts/test-arc-fork-forex.sh`](../scripts/test-arc-fork-forex.sh)), the repeatable proof of the curve regimes:
 - one 2 USDC deposit backs forex USDC/ARS and USDC/BRL;

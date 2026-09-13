@@ -873,5 +873,27 @@
       "The first live start hit the public Arc RPC rate limit ('rate limit exceeded'); viem now retries six times with backoff and signals are read one strategy at a time. That attempt sent no transaction.",
       "The Claude Code conversation in terminal B was not recorded; its tool calls (swap through the same executeFxSwap as the CLI, keeper_status and get_signals on the bundled MCP) were run as listed in driver."
     ]
+  },
+  "peggedClass4Retirement": {
+    "date": "2026-09-13",
+    "why": "Keep the demo forex-only: the demo Circle wallet stops backing its earlier pegged USDC/BRL class 4, so get_shared_backing lists only forex classes 6 and 7.",
+    "wallet": "0xb0c0687eb013a5ffde4d23a89398a11bc424d952",
+    "classId": "4",
+    "peggedStrategyId": "0xe16591490b549dd816c0d4cd2df92cfedbc0680eb295f4550cb47bd5f6d94be1",
+    "transactions": [
+      {
+        "stage": "USDC vault redeemComposition(4, 99999, wallet): 0.099999 USDC a pegged fill left in class 4",
+        "hash": "0xaeba41e7d63db0375a17754717dd51ca2d14c40eaf66ed6066ed424aadc23cfb"
+      },
+      {
+        "stage": "USDC vault setCommitment(4, false)",
+        "hash": "0x586e8e7302c23e1913bc309098b15db2523e54aef47ea02ab92d55faf124571e"
+      },
+      {
+        "stage": "BRAt vault setCommitment(4, false)",
+        "hash": "0x11eedce0107585cfe3d466f985ca9b912de7054962f8caee8ea20438f45e3635"
+      }
+    ],
+    "after": "get_shared_backing: 0.601639 USDC principal committed to class 6 (USDC/ARS forex) and class 7 (USDC/BRL forex); both books at about 30 bps."
   }
 }
