@@ -12,7 +12,7 @@ set -a
 . "$REPO/.secrets/graph-gateway.env"
 . "$REPO/.secrets/demo.env"
 set +a
-if [ ! -f "$REPO/apps/cli/dist/index.js" ] || [ ! -f "$REPO/apps/mcp/dist/index.js" ]; then
+if [ ! -f "$REPO/apps/cli/dist/index.js" ]; then
   echo "build first: pnpm install && pnpm build" >&2
   exit 1
 fi

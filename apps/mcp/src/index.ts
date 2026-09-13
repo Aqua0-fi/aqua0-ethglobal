@@ -32,7 +32,7 @@ function createAqua0McpServer(config: McpConfig): McpServer {
   const aqua0 = createAqua0Service(config);
   const server = new McpServer({
     name: "aqua0-continuity",
-    version: "0.1.2"
+    version: "0.1.3"
   });
 
   server.tool("health", {}, async () => jsonText(await aqua0.health()));
