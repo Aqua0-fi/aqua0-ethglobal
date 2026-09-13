@@ -18,6 +18,8 @@ For ETHGlobal we brought Aqua0 to **Arc** and made it agent-native. An agent in 
 
 Submission copy, links and proof: [`docs/ETHGLOBAL_SUBMISSION.md`](docs/ETHGLOBAL_SUBMISSION.md).
 
+**Navigate:** [Architecture](docs/ARCHITECTURE.md) · [Strategy and swap sequences](docs/ARCHITECTURE.md#creating-a-strategy) · [MCP tools](apps/mcp/README.md#tools) · [Forex curve maths](packages/contracts/README.md#forexcurve-maths) · [Demo runbook](docs/DEMO.md) · [Pitch context](docs/FX_OPCODE_HANDOFF.md) · [Everything else](#repository)
+
 ## What's live
 
 On Arc Testnet (chain `5042002`):
@@ -75,11 +77,9 @@ flowchart LR
   ADAPTER -->|"just in time"| VAULTS["Aqua0 AssetVaults"]
 ```
 
-- **One service** (`packages/shared`) sits behind the MCP server, CLI, dashboard and keeper. The Graph is its read model.
-- **Strategies hold no tokens.** The AquaAdapter ships only virtual balances into Aqua. On a swap, its hooks pull the output from one vault and sweep the input into the other, crediting the LPs who sold.
-- **One principal backs every strategy it is committed to.** Each swap is bounded at settle time by the strategy class's own balance and the vault's outflow limit.
-
-Full diagram, strategy creation and swap sequences: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+- **One service** (`packages/shared`) sits behind the MCP server, CLI, dashboard and keeper. The Graph is its read model. [Full system diagram](docs/ARCHITECTURE.md#system)
+- **Strategies hold no tokens.** The AquaAdapter ships only virtual balances into Aqua ([creating a strategy](docs/ARCHITECTURE.md#creating-a-strategy)). On a swap, its hooks pull the output from one vault and sweep the input into the other, crediting the LPs who sold ([a swap through the maker hooks](docs/ARCHITECTURE.md#a-swap-through-the-maker-hooks)).
+- **One principal backs every strategy it is committed to.** Each swap is bounded at settle time by the strategy class's own balance and the vault's outflow limit ([shared backing](docs/ARCHITECTURE.md#shared-backing)).
 
 ## Autonomous FX book keeper
 
@@ -101,7 +101,7 @@ A pegged curve fixes a price, but FX rates move, so LPs lose to arbitrage. `Fore
 - **Tested:** it matches all 979 reference vectors, and [`test-arc-fork-forex.sh`](scripts/test-arc-fork-forex.sh) drives every regime on an Arc fork.
 - **Prices:** USDC/BRL uses RedStone data signed by 3 of its 5 signers, pushed on-chain before each swap. USDC/ARS uses a hand-set demo feed, because RedStone has no ARS feed.
 
-Maths and program layout: [`packages/contracts/README.md`](packages/contracts/README.md#forexcurve-maths). Feeds: [`docs/ARC_DEPLOYMENT.md`](docs/ARC_DEPLOYMENT.md#6-redstone-price-feeds-live).
+Deployment, per-pair defaults, gas and why RedStone: [forex curve on Arc](docs/ARCHITECTURE.md#forex-curve-on-arc). Maths and program layout: [`packages/contracts/README.md`](packages/contracts/README.md#forexcurve-maths).
 
 ## Prize tracks
 
@@ -132,7 +132,7 @@ Aqua0 is in the **Continuity** track. Only work built during the event is submit
 ### Arc: Best DeFi / Onchain Finance Application
 
 - **USDC-native FX liquidity:** one USDC balance makes markets in several currencies; principal, fees and gas are all USDC.
-- **Atomic settlement and conditional fills:** one swap settles across two vaults, and the curve refuses stale prices and swaps past the halt band ([architecture](docs/ARCHITECTURE.md)).
+- **Atomic settlement and conditional fills:** one swap settles across two vaults, and the curve refuses stale prices and swaps past the halt band ([swap sequence](docs/ARCHITECTURE.md#a-swap-through-the-maker-hooks)).
 - **Circle Wallets:** users sign in with Privy and trade through Circle developer-controlled wallets.
 - **MVP:** the [judge dashboard](https://ethglobal-demo.18-207-103-187.nip.io/), the MCP server and API, an architecture diagram, and docs ([`docs/ARC_TRACK.md`](docs/ARC_TRACK.md)).
 
@@ -199,7 +199,7 @@ scripts/demo/terminal-a-keeper.sh   # left: the keeper and its signals seller
 scripts/demo/terminal-b-agent.sh    # right: Claude Code with the Aqua0 MCP
 ```
 
-Fork proofs, no keys needed: `scripts/test-arc-fork-strategies.sh` (pegged) and `scripts/test-arc-fork-forex.sh` (forex curve).
+Fork proofs, no keys needed: `scripts/test-arc-fork-strategies.sh` (pegged) and `scripts/test-arc-fork-forex.sh` (forex curve). What they assert: [fork proofs](docs/ARCHITECTURE.md#fork-proofs).
 
 ## Deployments
 
@@ -225,6 +225,21 @@ Arc Testnet, chain `5042002`. Everything else is in [`deployments/arc-testnet.js
 ARGt and BRAt are open-mint testnet tokens standing in for ARS and BRL stablecoins.
 
 ## Repository
+
+| Looking for | Go to |
+| --- | --- |
+| System diagram, components, design decisions | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
+| Shared backing, strategy creation and swap sequences | [Shared backing](docs/ARCHITECTURE.md#shared-backing), [creating a strategy](docs/ARCHITECTURE.md#creating-a-strategy), [a swap through the maker hooks](docs/ARCHITECTURE.md#a-swap-through-the-maker-hooks) |
+| MCP tools, install modes, environment variables | [`apps/mcp/README.md`](apps/mcp/README.md#tools) |
+| Forex curve maths and program layout | [`packages/contracts/README.md`](packages/contracts/README.md#forexcurve-maths), [`docs/FX_CURVES.md`](docs/FX_CURVES.md) |
+| Forex curve on Arc: deployment, defaults, gas, tests | [Forex curve on Arc](docs/ARCHITECTURE.md#forex-curve-on-arc), [fork proofs](docs/ARCHITECTURE.md#fork-proofs) |
+| Pitch context: problem, solution, maths | [`docs/FX_OPCODE_HANDOFF.md`](docs/FX_OPCODE_HANDOFF.md) |
+| Demo runbook and the two-terminal keeper demo | [`docs/DEMO.md`](docs/DEMO.md) |
+| Arc and The Graph track notes | [`docs/ARC_TRACK.md`](docs/ARC_TRACK.md), [`docs/THE_GRAPH_TRACK.md`](docs/THE_GRAPH_TRACK.md) |
+| Deployed addresses and transactions | [`docs/ARC_DEPLOYMENT.md`](docs/ARC_DEPLOYMENT.md), [`deployments/`](deployments) |
+| Submission copy and on-chain proof | [`docs/ETHGLOBAL_SUBMISSION.md`](docs/ETHGLOBAL_SUBMISSION.md) |
+| What pre-existed vs built at ETHGlobal | [`docs/CONTINUITY.md`](docs/CONTINUITY.md) |
+| Agent skill | [`skills/aqua0/SKILL.md`](skills/aqua0/SKILL.md) |
 
 ```text
 apps/mcp          MCP server, published as @aqua0/mcp

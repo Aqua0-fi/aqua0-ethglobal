@@ -244,3 +244,26 @@ sequenceDiagram
 ```
 
 The adapter handles either transfer order; whichever hook runs second performs the counter vault's `settleVenueCredit`. The `swap` tool quotes first and enforces a minimum output on-chain (default 50 bps slippage). `quote_swap` and `swap` report the oracle price (or the fixed price for pegged), the execution price and the effective spread.
+
+## Forex curve on Arc
+
+`ForexCurve` is a new SwapVM instruction, opcode 34 on `AquaForexSwapVMRouter`: Tomás's forex curve, the Shell v1 curve with an oracle as DFX v2 runs it, solved in closed form and stateless. On every swap it reads the oracle declared in the maker's program and checks its staleness and min/max price band, values both Aqua balances in USDC at the oracle price, prices at exactly the oracle inside the flat band `β`, charges an inventory fee past it (slope `δ`, capped at `maxFee` below 0.5, with a share `λ` returned to a rebalancing trade), reverts past the halt band `α`, and charges the proportional fee `ε`. Maths and the 123-byte program layout: [`packages/contracts/README.md`](../packages/contracts/README.md#forexcurve-maths).
+
+- **Deployment.** [`AquaForexSwapVMRouter`](../packages/contracts/src/routers/AquaForexSwapVMRouter.sol) at [`0x475d…187e`](https://testnet.arcscan.app/address/0x475d0E487779743Fb52c8E7729A1718934D4187e) is a modified swap-vm v1.0.2 router (24,418 bytes, under EIP-170); its AquaAdapter is [`0xc9cD…0EfB`](https://testnet.arcscan.app/address/0xc9cD056FCF2EF46116259fb094BD897c7E7C0EfB). Both are verified on Arcscan and wired into the three vaults.
+- **Live behaviour.** Swaps fill inside the flat band at 29.99 bps. When a swap tilted the USDC/BRL book, a live quote showed the inventory fee at 265.53 bps, and the keeper's rebalance brought it back to 29.99 bps.
+- **Tests.** The instruction matches all 979 reference vectors (Tomás's 968 plus the live DFX EURC/USDC pool) within a few wei of a 100-digit re-solve ([`ForexCurveVectors.t.sol`](../packages/contracts/test/ForexCurveVectors.t.sol)), alongside unit, invariant and Arc-fork Foundry tests.
+- **Gas.** About 108k per swap inside the flat band and 133k leaving it.
+- **MCP defaults.** `α` 0.5, `β` 0.15, `δ` 0.5, `maxFee` 0.25, `λ` 0.3, `ε` 30 bps. A strategy ships 1 USDC plus its value in FX at the live oracle price, so the book starts balanced. USDC/ARS: price band half to double 1400 ARS per USD, max feed age 7 days (the feed is set by hand). USDC/BRL: band 0.0909 to 0.3636 USD per BRL, max feed age 1 hour (`swap` refreshes the RedStone price first).
+- **Why RedStone.** Its gateways are free with no API key, and the on-chain adapter stores a price only when 3 of its 5 primary-prod signers agree. Pyth's free tier excludes FX feeds, Chainlink Data Feeds exist only on Arc mainnet, and Circle StableFX covers only USDC/EURC. RedStone has no ARS feed, so USDC/ARS uses a hand-set `ManualFxOracle`. Mechanics: [`ARC_DEPLOYMENT.md`](ARC_DEPLOYMENT.md#6-redstone-price-feeds-live).
+
+## Fork proofs
+
+```bash
+pnpm install
+./scripts/test-arc-fork-strategies.sh   # pegged venue, fork on 127.0.0.1:8579
+./scripts/test-arc-fork-forex.sh        # forex curve, fork on 127.0.0.1:8580
+```
+
+Both fork Arc, wire any missing adapter roles as impersonated admins on the fork only, then run deposit → two strategies → quote and swap each → shared backing through the MCP service path, and assert the result. The forex script first deploys the forex router and adapter, then covers every regime: 30 bps inside the flat band, 666 bps past it, `ForexCurveUpperHalt()` past the halt band, and a +5% ARS/USD move that moves the quote by exactly 5%; its quotes agree with the reference [`fxforex_math.py`](../scripts/fxforex_math.py) to about 1e-16. Only USDC is stubbed, because Arc's USDC calls native precompiles that a local fork lacks.
+
+The CLI mirrors every MCP tool under the same `MCP_WRITE_MODE` guard (`pnpm --filter @aqua0/cli dev help`). Environment variables are listed in [`.env.example`](../.env.example), and `pnpm check-env` validates them.
