@@ -11,6 +11,7 @@ This page is the single reference for the submission portal and the pitch deck: 
 | Repository | https://github.com/Aqua0-fi/aqua0-ethglobal |
 | Demo video | Added at submission |
 | Judge dashboard | https://ethglobal-demo.18-207-103-187.nip.io/ |
+| ForexCurve simulator | https://ethglobal-demo.18-207-103-187.nip.io/forex-curve.html |
 | Hosted MCP server (prepare-only) | https://ethglobal-mcp.18-207-103-187.nip.io/mcp |
 | npm package | https://www.npmjs.com/package/@aqua0/mcp (`claude mcp add aqua0 -- npx -y @aqua0/mcp`) |
 | Claude Code plugin | `/plugin marketplace add Aqua0-fi/aqua0-ethglobal`, then `/plugin install aqua0@aqua0` |
