@@ -7,6 +7,8 @@
 set -euo pipefail
 . "$(dirname "$0")/env.sh"
 export SIGNER=circle CIRCLE_WALLET_ID="$DEMO_CIRCLE_WALLET_ID" MCP_WRITE_MODE=execute
+# Load the Aqua0 tools up front instead of through tool search: a few seconds faster per answer.
+export ENABLE_TOOL_SEARCH="${ENABLE_TOOL_SEARCH:-false}"
 
 # Run outside the repo so its project config is not loaded.
 SESSION_DIR="${AQUA0_DEMO_DIR:-$HOME/.aqua0/demo-session}"
