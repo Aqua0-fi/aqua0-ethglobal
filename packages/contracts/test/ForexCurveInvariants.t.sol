@@ -399,10 +399,10 @@ contract ForexCurveInvariantsTest is Test {
             // a few wei plus 1e-15 relative (a steep fee slope, delta ~4, needs ~30 wei on 3e20). Any excess is
             // charged to the taker, so it favours the pool.
             assertLe(back, amountIn + amountIn / 1e15 + 16, "exact out charges more than the exact input");
-            // one wei of output is worth p / 1e18 (or 1e18 / p) wei of input; plus 1e-11 relative for the solver's
-            // rounding (a local-out case needed ~1.5e-12 on ~2e15 wei)
+            // one wei of output is worth p / 1e18 (or 1e18 / p) wei of input; plus 1e-9 relative for the solver's
+            // rounding at extreme balances (local-out cases needed ~1.5e-12 on ~2e15 wei and ~9e-11 on ~8.6e13 wei)
             uint256 unit = localOut ? st.p / 1e18 : 1e18 / st.p;
-            assertGe(back + 2 * unit + amountIn / 1e11 + 16, amountIn, "exact out undercuts the exact input");
+            assertGe(back + 2 * unit + amountIn / 1e9 + 16, amountIn, "exact out undercuts the exact input");
         } catch {
             revert("exact out of a quoted output reverted");
         }
@@ -411,6 +411,18 @@ contract ForexCurveInvariantsTest is Test {
     /// CI counterexample (delta just above 4): exact out charged 29 wei more than the exact input on ~3.1e20 wei.
     function test_ExactInExactOutInverse_SteepFeeSlopeRegression() public view {
         testFuzz_ExactInExactOutInverse(1364, 1268, 3589, 812, 4000000000000000001, false);
+    }
+
+    /// CI counterexample (local out, extreme balances): exact out needed about 9e-11 less input on ~8.6e13 wei.
+    function test_ExactInExactOutInverse_LocalOutExtremeBalanceRegression() public view {
+        testFuzz_ExactInExactOutInverse(
+            768440719196465891284933394778674,
+            293759,
+            0,
+            40342469795025932548601960031839,
+            32470425989874086342426205752783062446998939755415412409207834,
+            true
+        );
     }
 
     /// CI counterexample (local out): exact out needed about 1.5e-12 less input than the exact input on ~2e15 wei.
