@@ -1,14 +1,13 @@
 # ETHGlobal demo runbook
 
-The demo is a conversation in an agentic terminal (Claude Code, Codex or any MCP client) and needs no web UI. This runbook keeps live and fork-only work apart, so the demo never shows fake state. Agents can load [`skills/aqua0/SKILL.md`](../skills/aqua0/SKILL.md) for the tool map and safety rules.
+The demo is a conversation in an agentic terminal (Claude Code, Codex or any MCP client) and needs no web UI. It shows only the new `ForexCurve` SwapVM opcode; the pegged venue is also live but stays out of the video (see the [appendix](#appendix-pegged-venue-not-in-the-demo)). This runbook keeps live and fork-only work apart, so the demo never shows fake state. Agents can load [`skills/aqua0/SKILL.md`](../skills/aqua0/SKILL.md) for the tool map and safety rules.
 
 | Part | Status |
 | --- | --- |
-| Pegged flow on Arc Testnet: deposit, two strategies on one USDC, one swap each, shared-backing read | **Live** |
 | RedStone BRL and MXNe price feeds on Arc, read with `get_fx_prices` | **Live** |
 | Forex flow on Arc Testnet: two forex strategies by default on one USDC, one swap each with a RedStone price push, shared-backing read | **Live** |
 | Forex curve regimes past the flat band: inventory fee fills, halt band, `set_fx_price` → `quote_swap` on ARS | On an Arc fork |
-| Graph reads from Subgraph Studio, including Aqua strategies and fills for both venues | **Live** |
+| Graph reads from Subgraph Studio, including Aqua strategies and fills | **Live** |
 | Hosted MCP endpoint (25 tools, prepare-only) and dashboard | **Live** |
 | Autonomous keeper: swap wake, signals bought with Nanopayments, model decision, rebalance | **Live** (keeper runs locally) |
 
@@ -48,60 +47,7 @@ claude mcp add --transport http aqua0 https://ethglobal-mcp.18-207-103-187.nip.i
 
 It serves the same 25 tools in prepare mode with no signer, so write tools return calldata. Sign-in and `keeper_status` belong on a local server.
 
-## Part 1: pegged flow, live on Arc Testnet
-
-This is the flow the demo wallet `0xAFF7Da673820fAA38289de8B03984A9cf20fb02c` ran on 2026-09-12. It was driven through the `aqua0` CLI in execute mode, which uses the same service functions as the MCP tools. Hashes are in [`deployments/arc-testnet-strategies.json`](../deployments/arc-testnet-strategies.json) under `liveVenueRun`.
-
-### Step 1: query state
-
-> "What does Aqua0 hold on Arc, and what is my USDC backing? Tell me which data came from The Graph."
-
-- **Tools:** `health`, `protocol_snapshot`, `get_balance` (The Graph, Subgraph Studio); `get_shared_backing` (on-chain reads).
-- **Status:** **Live**.
-
-Deposit once first: *"Deposit 2 USDC."* → `deposit {"token":"USDC","amount":"2"}` ([tx](https://testnet.arcscan.app/tx/0x088fb34b8147f936b7c10ac8066de4a59773f7d393f33eda64a4defeb8f6c6bd)).
-
-### Step 2: USDC / Argentine peso strategy
-
-> "Create a fixed-rate USDC to Argentine peso strategy with half a USDC."
-
-`create_strategy {"pair":"USDC/ARS","opcode":"pegged","params":{"usdcAmount":"0.5"}}` runs:
-1. register the class;
-2. register the vault legs;
-3. fund the ARGt leg (open-mint demo token);
-4. commit;
-5. sign EIP-712;
-6. call `AquaAdapter.shipStrategyWithFee`.
-
-With `opcode:"pegged"` it ships a `[FlatFeeAmountIn 30 bps][PeggedSwap]` program at a fixed price; without it, `create_strategy` ships the forex curve (Part 2). Say which one you used out loud. The live run registered class 2, strategy `0x384f3266…3c3c` ([ship tx](https://testnet.arcscan.app/tx/0x97d5fea443f9090f6b9dd2432036bdfbc2ed58d636e8ac802742d2e499968471)). A re-run reports every step as skipped. **Live**.
-
-### Step 3: USDC / Brazilian real strategy on the same USDC
-
-> "Now the same USDC with Brazilian reais."
-
-`create_strategy {"pair":"usdc to brl","opcode":"pegged","params":{"usdcAmount":"0.5"}}` registers class 3, strategy `0x3fbcd975…716e`, and commits the **same** USDC deposit to it ([ship tx](https://testnet.arcscan.app/tx/0x7571eea087df535b0a4391a48d510abeb9ed0084cc3816946040c05214aa2293)). Nothing is withdrawn or split. **Live**.
-
-### Step 4: swap and query again
-
-> "Swap 0.1 USDC on each, then query my backing again."
-
-| Call | Live result |
-| --- | --- |
-| `quote_swap` then `swap {"pair":"USDC/ARS","opcode":"pegged","amount":"0.1"}` | 0.1 USDC → 138.912644 ARGt ([tx](https://testnet.arcscan.app/tx/0x24d95d61c83e3dfdf5ffa8530350635eb9c9b5f71b51835f31b98eb61c5102fb)) |
-| `quote_swap` then `swap {"pair":"USDC/BRL","opcode":"pegged","amount":"0.1"}` | 0.1 USDC → 0.545728 BRAt ([tx](https://testnet.arcscan.app/tx/0x811e5fd474e554e7a3330f09f34edb09f40ca50475028be89c4de3e6cfd32539)) |
-| `get_shared_backing {"address":"0xAFF7Da673820fAA38289de8B03984A9cf20fb02c"}` | 2 USDC principal counted once; 2 USDC committed to class 2 and to class 3 |
-
-`swap` enforces a minimum output on-chain (default 50 bps slippage). Both tools report the fixed price, execution price and effective spread.
-
-Closing line: *"One capital, Argentine pesos and Brazilian reais, both live on Arc, all from a terminal."*
-
-### Step 5 (optional): the real BRL rate
-
-> "What's the real BRL rate right now?"
-
-`get_fx_prices {"pair":"BRL"}` shows the latest RedStone price signed by 3 of its 5 primary-prod signers (signing time, the three signer values, also as BRL per USD) and the value stored on-chain. The pegged strategy above sits at a fixed 5.5 BRL per USD whatever that rate does; forex strategies trade at the signed price (Part 2). **Live**.
-
-## Part 2: forex-curve flow, live on Arc Testnet
+## Part 1: forex curve, live on Arc Testnet
 
 `create_strategy` ships forex strategies by default. The forex venue is **Live** on Arc:
 - `AquaForexSwapVMRouter` `0x475d0E487779743Fb52c8E7729A1718934D4187e` (ForexCurve, opcode 34), verified on Arcscan;
@@ -121,9 +67,11 @@ This is the flow the demo Circle wallet `0xb0c0687eb013a5ffde4d23a89398a11bc424d
 | 6 | "Swap 0.1 USDC for pesos. Show the oracle price and spread." | `quote_swap` then `swap {"pair":"USDC/ARS","amount":"0.1"}` |
 | 7 | On the fork: "And for 0.3 USDC? And 0.8?" | `quote_swap {"pair":"USDC/ARS","amount":"0.3"}`, then `quote_swap {"pair":"USDC/ARS","amount":"0.8"}` |
 | 8 | On the fork: "Push the ARS/USD price up 5% and quote again." | `set_fx_price {"pair":"ARS","changePercent":5}`, then `quote_swap {"pair":"USDC/ARS","amount":"0.1"}` |
-| 9 | "Is my USDC still backing everything?" | `get_shared_backing {}` |
+| 9 | "Is my USDC backing both FX strategies?" | `get_shared_backing {}` |
 
 At steps 2 and 3, point out that no opcode was passed: the forex curve is the default.
+
+At step 9, the demo wallet's USDC also backs class 4, an earlier pegged USDC/BRL strategy, so the answer lists three classes. Ask about the two forex strategies by name, or skip this step on camera.
 
 At steps 3 to 5, say where the BRL price comes from. `create_strategy` sizes the BRL leg from the live RedStone price. The feed quotes USD per BRL, which is already the curve's USDC-per-BRL price, so the invert-price flag stays off. `quote_swap` applies the latest signed payload as an `eth_call` state override and sends nothing. `swap` first pushes that payload on-chain (about 130k gas), because there is no keeper. BRL is never set by hand.
 
@@ -226,8 +174,8 @@ Keeper transactions: [mint BRAt](https://testnet.arcscan.app/tx/0xad87d8270d80d2
 
 ## Fallbacks
 
-- **Forex cannot ship for the presenter's signer** (`opcodeNote` says forex was not used, for example no `OPERATOR_ROLE`): use `opcode:"pegged"` for the live part. Say explicitly that this curve sits at a fixed price and does not track a moving FX rate, and show the forex curve from the recorded `forexLiveRun` hashes or on the fork.
-- **Arc RPC or execute key unavailable:** run [`scripts/test-arc-fork-strategies.sh`](../scripts/test-arc-fork-strategies.sh) and point at the recorded live hashes in [`deployments/arc-testnet-strategies.json`](../deployments/arc-testnet-strategies.json).
+- **Forex cannot ship for the presenter's signer** (`opcodeNote` says forex was not used, for example no `OPERATOR_ROLE`): do not switch to pegged. Use the demo Circle wallet, whose forex strategies are already live, or show the recorded `forexLiveRun` hashes and the fork.
+- **Arc RPC or execute key unavailable:** run [`scripts/test-arc-fork-forex.sh`](../scripts/test-arc-fork-forex.sh) and point at the recorded live hashes in [`deployments/arc-testnet-strategies.json`](../deployments/arc-testnet-strategies.json).
 - **Hosted endpoint only:** use the read steps; `create_strategy`, `deposit` and `swap` return calldata there, and sending needs a local execute-mode server.
 
 ## Close the loop
@@ -236,4 +184,8 @@ After any real transaction is mined:
 
 > "Query The Graph again and explain what changed in Aqua0's vault and strategy state."
 
-Natural-language request → typed tool → Arc → The Graph → natural-language explanation. Studio serves the Aqua strategies and fills of both venues, so the venue side can come from `graph_query`; `get_shared_backing` adds the on-chain view of commitments.
+Natural-language request → typed tool → Arc → The Graph → natural-language explanation. Studio serves the Aqua strategies and fills, so the venue side can come from `graph_query`; `get_shared_backing` adds the on-chain view of commitments.
+
+## Appendix: pegged venue (not in the demo)
+
+The pegged venue (`AquaSwapVMRouter`, `[FlatFeeAmountIn][PeggedSwap]` at a fixed price) is live on the same vaults, but a fixed price does not track FX, so the video leaves it out. On 2026-09-12 the demo wallet `0xAFF7…b02c` [deposited 2 USDC](https://testnet.arcscan.app/tx/0x088fb34b8147f936b7c10ac8066de4a59773f7d393f33eda64a4defeb8f6c6bd), shipped [USDC/ARS](https://testnet.arcscan.app/tx/0x97d5fea443f9090f6b9dd2432036bdfbc2ed58d636e8ac802742d2e499968471) and [USDC/BRL](https://testnet.arcscan.app/tx/0x7571eea087df535b0a4391a48d510abeb9ed0084cc3816946040c05214aa2293) on that one deposit, and swapped [0.1 USDC → 138.912644 ARGt](https://testnet.arcscan.app/tx/0x24d95d61c83e3dfdf5ffa8530350635eb9c9b5f71b51835f31b98eb61c5102fb) and [0.1 USDC → 0.545728 BRAt](https://testnet.arcscan.app/tx/0x811e5fd474e554e7a3330f09f34edb09f40ca50475028be89c4de3e6cfd32539). To run it, pass `opcode:"pegged"` to `create_strategy`, `quote_swap` and `swap`. Hashes: `liveVenueRun` in [`deployments/arc-testnet-strategies.json`](../deployments/arc-testnet-strategies.json); fork proof: [`scripts/test-arc-fork-strategies.sh`](../scripts/test-arc-fork-strategies.sh).
